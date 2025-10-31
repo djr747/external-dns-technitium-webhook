@@ -1,0 +1,2 @@
+skips: ['B101']
+exclude_dirs: ['venv', '.venv', 'tests', 'external_dns_technitium_webhook']

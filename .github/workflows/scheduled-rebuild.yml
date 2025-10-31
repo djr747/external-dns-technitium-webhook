@@ -1,0 +1,200 @@
+name: Scheduled Security Rebuild
+
+on:
+  schedule:
+    # Weekly rebuild every Monday at 2 AM UTC for security patches
+    - cron: '0 2 * * 1'
+  workflow_dispatch:  # Allow manual trigger
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  check-for-updates:
+    name: Check for Base Image Updates
+    runs-on: ubuntu-latest
+    outputs:
+      rebuild-needed: ${{ steps.check.outputs.rebuild }}
+      base-image-digest: ${{ steps.base-digest.outputs.digest }}
+
+    steps:
+      - name: Check base image for updates
+        id: base-digest
+        run: |
+          # Pull latest UBI10 digest
+          DIGEST=$(docker manifest inspect registry.access.redhat.com/ubi10/ubi-minimal:latest | jq -r '.manifests[0].digest')
+          echo "digest=$DIGEST" >> $GITHUB_OUTPUT
+          echo "Current UBI10 digest: $DIGEST"
+
+      - name: Compare with last build
+        id: check
+        run: |
+          # This is a simple approach - in production you'd store the last digest
+          # For now, always rebuild on schedule
+          echo "rebuild=true" >> $GITHUB_OUTPUT
+
+  rebuild-image:
+    name: Rebuild and Push Updated Image
+    runs-on: ubuntu-latest
+    needs: check-for-updates
+    if: needs.check-for-updates.outputs.rebuild-needed == 'true'
+    permissions:
+      contents: read
+      packages: write
+      security-events: write
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Get current version
+        id: version
+        run: |
+          # Get latest tag or use commit sha
+          VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "latest")
+          REBUILD_TAG="${VERSION}-patched-$(date +%Y%m%d)"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "rebuild-tag=$REBUILD_TAG" >> $GITHUB_OUTPUT
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest-patched
+            type=raw,value=${{ steps.version.outputs.rebuild-tag }}
+            type=raw,value=latest
+          labels: |
+            org.opencontainers.image.title=ExternalDNS Technitium Webhook
+            org.opencontainers.image.description=ExternalDNS webhook provider for Technitium DNS Server (Security Patched)
+            org.opencontainers.image.vendor=Red Hat UBI10
+            org.opencontainers.image.version=${{ steps.version.outputs.rebuild-tag }}
+            io.github.rebuild-date=${{ github.event.repository.updated_at }}
+            io.github.base-image-digest=${{ needs.check-for-updates.outputs.base-image-digest }}
+
+      - name: Build and push patched image
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: true
+          sbom: true
+          no-cache: true  # Force rebuild to pull latest base image
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+
+      - name: Upload Trivy results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      - name: Generate vulnerability report
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
+          format: 'json'
+          output: 'trivy-report.json'
+
+      - name: Check vulnerability status
+        id: vuln-check
+        run: |
+          CRITICAL=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity == "CRITICAL")] | length' trivy-report.json)
+          HIGH=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity == "HIGH")] | length' trivy-report.json)
+          MEDIUM=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity == "MEDIUM")] | length' trivy-report.json)
+          
+          echo "critical=$CRITICAL" >> $GITHUB_OUTPUT
+          echo "high=$HIGH" >> $GITHUB_OUTPUT
+          echo "medium=$MEDIUM" >> $GITHUB_OUTPUT
+          
+          echo "### Vulnerability Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- **Critical**: $CRITICAL" >> $GITHUB_STEP_SUMMARY
+          echo "- **High**: $HIGH" >> $GITHUB_STEP_SUMMARY
+          echo "- **Medium**: $MEDIUM" >> $GITHUB_STEP_SUMMARY
+
+      - name: Comment on latest commit
+        if: github.event_name == 'schedule'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const critical = ${{ steps.vuln-check.outputs.critical }};
+            const high = ${{ steps.vuln-check.outputs.high }};
+            const medium = ${{ steps.vuln-check.outputs.medium }};
+            
+            let emoji = '✅';
+            if (critical > 0) emoji = '🔴';
+            else if (high > 0) emoji = '🟡';
+            
+            const body = `${emoji} **Scheduled Security Rebuild Complete**
+            
+            Built image: \`${{ steps.version.outputs.rebuild-tag }}\`
+            
+            **Vulnerability Scan Results:**
+            - Critical: ${critical}
+            - High: ${high}
+            - Medium: ${medium}
+            
+            Base Image Digest: \`${{ needs.check-for-updates.outputs.base-image-digest }}\`
+            
+            [View full scan results](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})`;
+            
+            // Create an issue if critical vulnerabilities found
+            if (critical > 0) {
+              github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: `🔴 Critical Vulnerabilities Found in Scheduled Rebuild`,
+                body: body,
+                labels: ['security', 'critical']
+              });
+            }
+
+  snyk-monitor:
+    name: Snyk Container Monitoring
+    runs-on: ubuntu-latest
+    needs: rebuild-image
+    if: needs.check-for-updates.outputs.rebuild-needed == 'true'
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Monitor with Snyk
+        uses: snyk/actions/docker@master
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-patched
+          command: monitor
+          args: --project-name=${{ github.repository }}-patched

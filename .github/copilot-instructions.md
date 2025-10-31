@@ -1,0 +1,266 @@
+# Copilot Instructions: ExternalDNS Technitium Webhook
+
+## Project Overview
+This is a high-performance **ExternalDNS webhook provider** for Technitium DNS Server, built with FastAPI. It runs as a **sidecar container** alongside ExternalDNS in Kubernetes to automatically sync DNS records from Kubernetes resources (Ingress, Service) to Technitium DNS.
+
+## Architecture & Component Flow
+```
+K8s Resources → ExternalDNS → Webhook (FastAPI) → Technitium DNS Server
+```
+
+Key components in `external_dns_technitium_webhook/`:
+- **`main.py`** - FastAPI app with lifecycle management, signal handling, and async context
+- **`handlers.py`** - ExternalDNS webhook endpoints (`/health`, `/`, `/records`, `/adjustendpoints`)
+- **`technitium_client.py`** - Async HTTP client with auto-authentication and zone management
+- **`models.py`** - Pydantic models for ExternalDNS protocol and DNS record types
+- **`config.py`** - Environment-based configuration with Pydantic Settings
+- **`app_state.py`** - Application state management with async initialization
+- **`middleware.py`** - Rate limiting and request size validation middleware
+
+## Development Workflow
+```bash
+# Setup (Python 3.11+)
+make install-dev          # Install with dev dependencies
+
+# Development cycle
+make format               # Ruff formatter (black-style)
+make lint                 # Ruff linter (replaces flake8, isort)
+make type-check          # mypy with strict settings
+make test                # pytest with async support
+make test-cov            # Coverage with HTML reports
+make security            # bandit scans
+
+make all                 # Run full CI pipeline locally
+
+# Docker workflow
+make docker-build        # Build Docker image
+make docker-run          # Run container with example config
+make docker-compose-up   # Start with docker-compose
+make docker-compose-logs # View logs
+make docker-compose-down # Stop services
+```
+
+**Important:** Always use `make` commands, not direct tool invocation. The project uses:
+- **ruff** for linting and formatting (not black/flake8/isort)
+- **mypy** for type checking with strict configuration
+- **pyright** for additional type checking (Pylance-compatible)
+- All three tools must pass for code to be merged
+
+## Core Patterns & Conventions
+
+### 1. Async-First Architecture
+All I/O operations use async/await:
+```python
+async def handler(state: AppState) -> ExternalDNSResponse:
+    await state.ensure_ready()  # Async initialization
+    records = await state.client.get_records(zone)
+    return ExternalDNSResponse(content=records)
+```
+
+### 2. Dependency Injection via FastAPI State
+Application state is injected through FastAPI dependency system:
+```python
+def get_app_state(app: FastAPI) -> AppState:
+    return app.state.app_state
+```
+
+async def my_handler(state: AppState = Depends(get_app_state)):
+    # Handler logic here
+```
+
+### 3. ExternalDNS Protocol Compliance
+Use custom JSON response with specific media type:
+```python
+class ExternalDNSResponse(JSONResponse):
+    media_type = "application/external.dns.webhook+json;version=1"
+```
+
+### 4. Error Handling & Security
+- Sanitize error messages to prevent information disclosure (see `sanitize_error_message()`)
+- Use structured exceptions with context (`TechnitiumError`, `InvalidTokenError`)
+- Log at appropriate levels (DEBUG for API calls, WARNING for retries, ERROR for failures)
+
+### 5. Pydantic Model Patterns
+Models use `alias` for ExternalDNS camelCase and validation:
+```python
+class Endpoint(BaseModel):
+    dns_name: str = Field(..., alias="dnsName")
+    record_ttl: Optional[int] = Field(None, alias="recordTTL", ge=0, le=2147483647)
+    model_config = {"populate_by_name": True}  # Accept both snake_case and camelCase
+```
+
+## Key Integration Points
+
+### Environment Configuration
+Required vars (see `config.py`):
+- `TECHNITIUM_URL` - DNS server endpoint
+- `TECHNITIUM_USERNAME/PASSWORD` - Auth credentials  
+- `ZONE` - Primary DNS zone
+- `DOMAIN_FILTERS` - Semicolon-separated domain list
+
+### Technitium API Integration
+- **Auto-authentication**: Client handles token renewal transparently
+- **Zone auto-creation**: Missing zones are created automatically
+- **10 DNS record types**: A, AAAA, CNAME, TXT, ANAME, CAA, URI, SSHFP, SVCB, HTTPS
+- **Advanced options**: Comments, expiry TTL, PTR records via provider-specific properties
+
+### Testing Patterns
+- Use `pytest-asyncio` for async tests
+- `conftest.py` resets environment variables between tests
+- Mock external HTTP calls with `pytest-mock`
+- Test both success and error scenarios for all handlers
+
+### Type Checking Standards
+The project uses **three** type checkers to ensure type safety:
+1. **ruff** - Fast linting with type-aware rules (F401, F841, etc.)
+2. **mypy** - Strict type checking with `--strict` mode
+3. **pyright** - VS Code/Pylance compatible type checking (basic mode)
+
+**Before committing code:**
+- Run `make lint` to verify ruff + pyright pass
+- Run `make type-check` to verify mypy + pyright pass
+- Fix all errors (zero tolerance for type errors in source code)
+- Warnings in tests are acceptable if they don't affect functionality
+
+**Common type issues to avoid:**
+- Missing type hints on function parameters and return types
+- Using `Any` when a more specific type is available
+- Unused imports (caught by both ruff and pyright)
+- Missing return type annotations on async functions
+- Untyped decorators (use `# type: ignore[misc]` for FastAPI routes if needed)
+
+**Pyright-specific notes:**
+- Configured in `pyproject.toml` under `[tool.pyright]`
+- Uses "basic" type checking mode (less strict than mypy)
+- Reports unused imports, variables, and functions
+- Test files have relaxed settings for test fixtures
+- FastAPI route handlers ignore "unused function" warnings
+
+## Deployment Context
+- **Sidecar deployment**: Runs alongside ExternalDNS in same pod
+- **Port 3000**: Default listen port (configurable via `LISTEN_PORT`)
+- **Health checks**: `/health` endpoint for Kubernetes probes
+- **Docker**: Multi-stage build with Red Hat UBI 10 base (Python 3.12), non-root user, minimal image
+- **Middleware**: Rate limiting (60 req/min, 10 burst) and request size limits (1MB default)
+
+## Common Tasks
+
+### Adding New DNS Record Type
+1. Add data model in `models.py` following existing patterns
+2. Update `technitium_client.py` to handle the new type in `add_record()`
+3. Add validation logic in `handlers.py` if needed
+4. Write tests covering creation, validation, and error cases
+
+### Extending Technitium Client
+- Follow async patterns with proper error handling
+- Use `TechnitiumError` for API errors with context
+- Add request logging at DEBUG level
+- Handle authentication renewal transparently
+
+### Configuration Changes
+- Add new settings to `Config` class in `config.py`
+- Use Pydantic validators for complex validation
+- Document in README and environment examples
+- Ensure proper handling in Docker/K8s deployment examples
+
+When working on this codebase, prioritize async/await patterns, comprehensive error handling, and ExternalDNS protocol compliance. The webhook must be reliable in production Kubernetes environments.
+
+## API Endpoints Reference
+The webhook implements the ExternalDNS webhook specification:
+- **`GET /health`** - Health check (200 OK when ready, 503 otherwise)
+- **`GET /`** - Negotiate domain filters (returns `filters` and `exclude` arrays)
+- **`GET /records`** - Retrieve current DNS records from Technitium
+- **`POST /adjustendpoints`** - Adjust endpoints before processing (validate/transform)
+- **`POST /records`** - Apply DNS record changes (create/delete operations)
+
+All responses use custom media type: `application/external.dns.webhook+json;version=1`
+
+## Troubleshooting & Debugging
+- Set `LOG_LEVEL=DEBUG` in environment for detailed API call traces
+- Health endpoint `/health` returns 503 if not ready (check logs for initialization errors)
+- Validate required env vars: `TECHNITIUM_URL`, `TECHNITIUM_USERNAME`, `TECHNITIUM_PASSWORD`, `ZONE`
+- Use `make test` to verify code changes before deployment
+- Check Technitium API connectivity with curl: `curl -X POST http://<server>:5380/api/user/login`
+- Rate limiting: default 1000 req/min with burst of 10; override via `REQUESTS_PER_MINUTE` and `RATE_LIMIT_BURST`
+- Request size limit: 1MB default (adjust via `RequestSizeLimitMiddleware`)
+
+## Security Best Practices
+- **Never log passwords**: Config class redacts password in `__repr__()` and `model_dump()`
+- **Sanitize errors**: Use `sanitize_error_message()` to strip sensitive patterns before client response
+- **Token renewal**: Client handles auth token refresh transparently on 401 errors
+- **Middleware protection**: Rate limiting and request size validation prevent abuse
+- **Container security**: Runs as non-root user (UID 1000), read-only filesystem recommended
+
+## Code Quality Standards
+- **Type safety**: Strict mypy configuration enforced (`disallow_untyped_defs`, `check_untyped_defs`)
+- **Linting**: Ruff with pycodestyle, pyflakes, isort, flake8-bugbear, pyupgrade rules
+- **Test coverage**: pytest with asyncio support, mock external HTTP calls with pytest-mock
+- **Security scanning**: bandit for code analysis
+- **Formatting**: Ruff format (black-compatible, 100 char line length)
+- **Python version**: 3.11+ required (uses modern type hints like `dict[str, Any]`)
+
+## Provider-Specific Properties
+Advanced Technitium features via `providerSpecific` in Endpoint model:
+```python
+# Example: Record with comment and expiry
+{
+  "dnsName": "test.example.com",
+  "recordType": "A",
+  "targets": ["192.0.2.1"],
+  "providerSpecific": [
+    {"name": "comment", "value": "Auto-generated by ExternalDNS"},
+    {"name": "expiryTtl", "value": "86400"},  # Auto-delete after 24h
+    {"name": "createPtrZone", "value": "true"}  # Auto-create PTR record
+  ]
+}
+```
+
+Supported properties: `comment`, `expiryTtl`, `disabled`, `createPtrZone` (see handlers.py)
+
+## Implementation Guidelines
+
+### Code Quality & Testing
+- **Test coverage**: Ensure all new code has corresponding tests (aim for 55%+ coverage)
+- **PEP 8 compliance**: Follow Python style guide and project-specific ruff rules
+- **Type hints**: Use strict typing for all functions (mypy enforces this)
+- **Async patterns**: All I/O operations must use async/await consistently
+- **Mock external calls**: Use `pytest-mock` to mock Technitium API in tests
+- **Test isolation**: Ensure tests do not depend on each other (use fixtures)
+- **Performance testing**: Include performance tests to identify bottlenecks
+- **Type checking**: Ensure ruff, mypy, and pyright pass without errors before merging and do not introduce new type errors or warnings. Ignoring type errors is not allowed in source code.
+
+### Documentation & Maintenance
+- **Update docs**: Document new features in README.md and relevant docs/ files
+- **CHANGELOG.md**: Add entries for each release following semantic versioning
+- **Inline comments**: Document complex logic, especially DNS record transformations
+- **API compatibility**: Maintain backward compatibility with ExternalDNS protocol
+
+### Development Workflow
+- **GitHub Issues**: Track bugs and features using issue templates
+- **Pull requests**: Thoroughly review for code quality, security, and pattern adherence
+- **CI/CD**: All tests must pass before merge (format, lint, type-check, test, security)
+- **Dependencies**: Regularly update with `pip list --outdated` and check for CVEs
+
+### Security & Production
+- **Credential handling**: Never log passwords or tokens (use Config redaction patterns)
+- **Dependency scanning**: Run `make security` (bandit) before releases
+- **Container security**: Follow non-root user pattern, minimal base images
+- **Kubernetes best practices**: Resource limits, health probes, graceful shutdown
+
+### Performance & Reliability
+- **Graceful shutdown**: Use signal handlers in main.py to cleanup connections
+- **Connection pooling**: httpx.AsyncClient reuses connections to Technitium
+- **Error recovery**: Implement retry logic for transient failures
+- **Resource management**: Use async context managers for proper cleanup
+
+### Monitoring & Observability
+- **Structured logging**: Use appropriate log levels (DEBUG/INFO/WARNING/ERROR)
+- **Health checks**: `/health` endpoint must accurately reflect readiness state
+- **Performance**: Monitor response times and optimize for production workloads
+- **Future**: Plan for Prometheus metrics and OpenTelemetry tracing integration
+
+## Additional Resources
+- [FastAPI Documentation](https://fastapi.tiangolo.com/)
+- [Pydantic Documentation](https://pydantic.dev/)
+- [Technitium DNS Server API](https://technitium.com/dns/docs/api/)
+- [ExternalDNS Webhook Protocol](https://external-dns.readthedocs.io/en/latest/)
