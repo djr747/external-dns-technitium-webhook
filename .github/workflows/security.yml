@@ -262,7 +262,7 @@ jobs:
           retention-days: 90
 
       - name: Scan SBOM with Grype
-        uses: anchore/scan-action@v3
+        uses: anchore/scan-action@v7
         id: grype
         with:
           sbom: sbom.spdx.json
