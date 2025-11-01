@@ -37,9 +37,14 @@ class AppState:
             timeout=config.technitium_timeout,
             verify_ssl=config.technitium_verify_ssl,
         )
-        middleware.rate_limiter = RateLimiter(
-            requests_per_minute=config.requests_per_minute,
-            burst=config.rate_limit_burst,
+        # Use provided helper to replace the module-level rate limiter.
+        # This avoids a direct module-level assignment which some static
+        # analysis tools may flag as an ineffectual statement.
+        middleware.set_rate_limiter(
+            RateLimiter(
+                requests_per_minute=config.requests_per_minute,
+                burst=config.rate_limit_burst,
+            )
         )
         self._lock = asyncio.Lock()
         self._token_task: asyncio.Task[None] | None = None

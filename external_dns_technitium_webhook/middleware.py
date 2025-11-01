@@ -69,6 +69,19 @@ class RateLimiter:
 rate_limiter = RateLimiter(requests_per_minute=1000, burst=10)
 
 
+def set_rate_limiter(rl: RateLimiter) -> None:
+    """Replace the module-level rate_limiter with a new instance.
+
+    Static analysis tools may flag direct assignments to module-level variables
+    (e.g., `middleware.rate_limiter = ...`) as potentially ineffective ("ineffectual statement")
+    since they could be overlooked or misunderstood. This helper function makes the
+    replacement explicit and intentional, and is the supported way for other modules
+    to replace the global RateLimiter instance.
+    """
+    global rate_limiter
+    rate_limiter = rl
+
+
 async def rate_limit_middleware(
     request: Request, call_next: Callable[[Request], Awaitable[Response]]
 ) -> Response:

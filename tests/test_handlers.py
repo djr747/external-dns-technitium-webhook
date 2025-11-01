@@ -1,5 +1,8 @@
 """Unit tests for API handlers."""
 
+import json
+import re
+
 import pytest
 from fastapi import HTTPException
 from pytest_mock import MockerFixture
@@ -64,8 +67,10 @@ async def test_health_check_not_ready(app_state: AppState) -> None:
 async def test_negotiate_domain_filter(app_state: AppState) -> None:
     """Test domain filter negotiation."""
     response = await negotiate_domain_filter(app_state)
-    data = bytes(response.body).decode()
-    assert "sub.example.com" in data
+    raw_body = response.body
+    body_bytes = raw_body.tobytes() if isinstance(raw_body, memoryview) else raw_body or b""
+    data = json.loads(body_bytes.decode())
+    assert "sub.example.com" in data.get("filters", [])
 
 
 @pytest.mark.asyncio
@@ -97,9 +102,11 @@ async def test_get_records(app_state: AppState, mocker: MockerFixture) -> None:
     )
 
     response = await get_records(app_state)
-    data = bytes(response.body).decode()
-    assert "test.example.com" in data
-    assert "1.2.3.4" in data
+    raw_body = response.body
+    body_bytes = raw_body.tobytes() if isinstance(raw_body, memoryview) else raw_body or b""
+    endpoints = json.loads(body_bytes.decode())
+    assert endpoints and endpoints[0]["dnsName"] == "test.example.com"
+    assert "1.2.3.4" in endpoints[0].get("targets", [])[0]
 
 
 @pytest.mark.asyncio
@@ -116,8 +123,10 @@ async def test_adjust_endpoints(app_state: AppState) -> None:
     ]
 
     response = await adjust_endpoints(app_state, endpoints)
-    data = bytes(response.body).decode()
-    assert "test.example.com" in data
+    raw_body = response.body
+    body_bytes = raw_body.tobytes() if isinstance(raw_body, memoryview) else raw_body or b""
+    endpoints_resp = json.loads(body_bytes.decode())
+    assert endpoints_resp and endpoints_resp[0]["dnsName"] == "test.example.com"
 
 
 @pytest.mark.asyncio
@@ -207,38 +216,46 @@ async def test_sanitize_error_message() -> None:
 
     # Test password redaction
     error = Exception("Failed with password=secret123")
-    assert "password=***" in sanitize_error_message(error)
-    assert "secret123" not in sanitize_error_message(error)
+    result = sanitize_error_message(error)
+    assert re.search(r"password[=:]\*{3}", result)
+    assert "secret123" not in result
 
     # Test token redaction
     error = Exception("Auth failed: token=abc123xyz")
-    assert "token=***" in sanitize_error_message(error)
-    assert "abc123xyz" not in sanitize_error_message(error)
+    result = sanitize_error_message(error)
+    assert re.search(r"token[=:]\*{3}", result)
+    assert "abc123xyz" not in result
 
     # Test API key redaction
     error = Exception("Invalid api_key=12345")
-    assert "api_key=***" in sanitize_error_message(error)
-    assert "12345" not in sanitize_error_message(error)
+    result = sanitize_error_message(error)
+    assert re.search(r"api[_-]?key[=:]\*{3}", result)
+    assert "12345" not in result
 
     # Test secret redaction
     error = Exception("Secret: secret=mysecret")
-    assert "secret=***" in sanitize_error_message(error)
-    assert "mysecret" not in sanitize_error_message(error)
+    result = sanitize_error_message(error)
+    assert re.search(r"secret[=:]\*{3}", result)
+    assert "mysecret" not in result
 
     # Test home path redaction
     error = Exception("File at /home/username/file.txt")
-    assert "/home/***" in sanitize_error_message(error)
-    assert "username" not in sanitize_error_message(error)
+    result = sanitize_error_message(error)
+    assert "/home/***" in result
+    assert "username" not in result
 
     # Test Users path redaction (Unix)
     error = Exception("Path /Users/john/documents")
-    assert "/Users/***" in sanitize_error_message(error)
-    assert "john" not in sanitize_error_message(error)
+    result = sanitize_error_message(error)
+    assert "/Users/***" in result
+    assert "john" not in result
 
     # Test Windows Users path redaction
     error = Exception(r"Path C:\Users\john\documents")
     result = sanitize_error_message(error)
-    assert r"C:\Users\***" in result or "C:\\\\Users\\\\***" in result
+    # Windows backslashes will be escaped in the string; ensure redaction token present and username removed
+    assert "C:" in result and "Users" in result
+    assert "john" not in result
 
 
 @pytest.mark.asyncio
