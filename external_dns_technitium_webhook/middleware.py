@@ -69,6 +69,17 @@ class RateLimiter:
 rate_limiter = RateLimiter(requests_per_minute=1000, burst=10)
 
 
+def set_rate_limiter(rl: RateLimiter) -> None:
+    """Replace the module-level rate_limiter with a new instance.
+
+    This function is the supported way for other modules to replace the
+    global RateLimiter instance so that tools like CodeQL don't flag a
+    direct module-level assignment as an ineffectual statement.
+    """
+    global rate_limiter
+    rate_limiter = rl
+
+
 async def rate_limit_middleware(
     request: Request, call_next: Callable[[Request], Awaitable[Response]]
 ) -> Response:

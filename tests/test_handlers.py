@@ -212,6 +212,7 @@ async def test_apply_record_empty_changes(app_state: AppState) -> None:
 async def test_sanitize_error_message() -> None:
     """Test error message sanitization."""
     from external_dns_technitium_webhook.handlers import sanitize_error_message
+
     # Test password redaction
     error = Exception("Failed with password=secret123")
     result = sanitize_error_message(error)
