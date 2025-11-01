@@ -3,7 +3,8 @@
 FROM registry.access.redhat.com/ubi10/ubi-minimal:latest AS builder
 
 # Install Python 3.12 and build tools
-RUN microdnf install -y python3.12 python3.12-pip python3.12-devel gcc && \
+RUN microdnf update -y && \
+    microdnf install -y python3.12 python3.12-pip python3.12-devel gcc && \
     microdnf clean all && \
     rm -rf /var/cache/yum
 
@@ -34,7 +35,8 @@ LABEL org.opencontainers.image.title="ExternalDNS Technitium Webhook" \
       org.opencontainers.image.base.name="registry.access.redhat.com/ubi10/ubi-minimal"
 
 # Install Python 3.12 and shadow-utils for user management
-RUN microdnf install -y python3.12 shadow-utils && \
+RUN microdnf update -y && \
+    microdnf install -y python3.12 shadow-utils && \
     microdnf clean all && \
     rm -rf /var/cache/yum
 

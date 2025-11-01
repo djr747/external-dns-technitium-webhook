@@ -139,7 +139,7 @@ jobs:
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
-          args: --severity-threshold=high --sarif-file-output=snyk-code.sarif
+          args: "--severity-threshold=high --sarif-file-output=snyk-code.sarif"
 
       - name: Upload Snyk results to GitHub Code Scanning
         uses: github/codeql-action/upload-sarif@v3
@@ -189,8 +189,8 @@ jobs:
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
-          image: external-dns-technitium-webhook:test-${{ github.sha }}
-          args: --severity-threshold=high --sarif-file-output=snyk-container.sarif
+          image: "external-dns-technitium-webhook:test-${{ github.sha }}"
+          args: "--severity-threshold=high --sarif-file-output=snyk-container.sarif"
 
       - name: Upload Snyk Container results
         uses: github/codeql-action/upload-sarif@v3
