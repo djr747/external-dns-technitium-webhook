@@ -212,7 +212,7 @@ jobs:
           output: 'trivy-release-scan.sarif'
 
       - name: Upload Trivy results
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: 'trivy-release-scan.sarif'
 
