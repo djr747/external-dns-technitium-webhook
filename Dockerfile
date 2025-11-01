@@ -1,13 +1,15 @@
 # Multi-stage build with Red Hat UBI10 for enterprise support and CVE remediation
-FROM registry.access.redhat.com/ubi10/python-312:latest AS builder
+# Using ubi10/ubi-minimal as base and installing Python 3.12 from AppStream
+FROM registry.access.redhat.com/ubi10/ubi-minimal:latest AS builder
 
-# Switch to root for package installation
-USER root
+# Install Python 3.12 and build tools
+RUN microdnf install -y python3.12 python3.12-pip python3.12-devel gcc && \
+    microdnf clean all && \
+    rm -rf /var/cache/yum
 
-# Install build dependencies
-RUN dnf install -y gcc && \
-    dnf clean all && \
-    rm -rf /var/cache/dnf
+# Ensure python3.12 is the default python
+RUN ln -sf /usr/bin/python3.12 /usr/bin/python && \
+    ln -sf /usr/bin/pip3.12 /usr/bin/pip
 
 # Create virtual environment
 RUN python -m venv /opt/venv
@@ -31,8 +33,8 @@ LABEL org.opencontainers.image.title="ExternalDNS Technitium Webhook" \
       org.opencontainers.image.vendor="Red Hat" \
       org.opencontainers.image.base.name="registry.access.redhat.com/ubi10/ubi-minimal"
 
-# Install Python 3.12 (microdnf is available in ubi-minimal)
-RUN microdnf install -y python3.12 && \
+# Install Python 3.12 and shadow-utils for user management
+RUN microdnf install -y python3.12 shadow-utils && \
     microdnf clean all && \
     rm -rf /var/cache/yum
 
