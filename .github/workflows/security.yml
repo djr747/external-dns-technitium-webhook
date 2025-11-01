@@ -225,7 +225,7 @@ jobs:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
           command: monitor
-          args: --all-projects --project-name=${{ github.repository }}
+          args: --project-name=${{ github.repository }}
 
   sbom-generation:
     name: SBOM Generation and Analysis
