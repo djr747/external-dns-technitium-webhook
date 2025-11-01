@@ -1,5 +1,6 @@
 # Multi-stage build with Chainguard Python for minimal attack surface and daily security updates
 # Chainguard images: ultra-minimal, zero CVEs, updated daily, SLSA Level 3 provenance
+# Use -dev variant for builder (includes pip, build tools), minimal runtime for final stage
 FROM cgr.dev/chainguard/python:latest-dev AS builder
 
 # Set working directory
@@ -9,9 +10,9 @@ WORKDIR /build
 COPY pyproject.toml ./
 
 # Install dependencies (production only, no dev deps)
-# Chainguard's dev variant includes pip and build tools
-RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
-    pip install --no-cache-dir .
+# Chainguard images have no shell - use exec form (JSON array) for RUN
+RUN ["python", "-m", "pip", "install", "--no-cache-dir", "--upgrade", "pip", "setuptools", "wheel"]
+RUN ["python", "-m", "pip", "install", "--no-cache-dir", "."]
 
 # Final stage - Chainguard Python (minimal runtime, non-root by default)
 FROM cgr.dev/chainguard/python:latest
@@ -20,8 +21,8 @@ LABEL org.opencontainers.image.title="ExternalDNS Technitium Webhook" \
       org.opencontainers.image.description="ExternalDNS webhook provider for Technitium DNS Server" \
       org.opencontainers.image.source="https://github.com/djr747/external-dns-technitium-webhook" \
       org.opencontainers.image.licenses="MIT" \
-      org.opencontainers.image.vendor="Chainguard" \
-      org.opencontainers.image.base.name="cgr.dev/chainguard/python:latest"
+    org.opencontainers.image.vendor="Chainguard" \
+    org.opencontainers.image.base.name="cgr.dev/chainguard/python:latest"
 
 # Chainguard images run as non-root (UID 65532) by default - no need to create user
 
@@ -45,8 +46,9 @@ COPY --chown=nonroot:nonroot external_dns_technitium_webhook ./external_dns_tech
 USER nonroot
 
 # Health check
+# Chainguard images have no shell - use exec form with python
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=2 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8888/health', timeout=3)" || exit 1
+    CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8888/health', timeout=3)"]
 
 # Expose port
 EXPOSE 8888

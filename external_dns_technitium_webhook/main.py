@@ -36,6 +36,36 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncGenerator:
+    """Application lifespan manager.
+
+    Args:
+        app: FastAPI application
+
+    Yields:
+        None
+    """
+    # Startup
+    config = AppConfig()
+
+    # Configure logging level
+    logging.getLogger().setLevel(config.log_level)
+    logger.setLevel(config.log_level)
+
+    state = AppState(config)
+    app.state.app_state = state
+
+    # Setup Technitium connection
+    await setup_technitium_connection(state)
+
+    yield
+
+    # Shutdown
+    logger.info("Shutting down application...")
+    await state.close()
+
+
 @dataclass
 class ZonePreparationResult:
     """Result of zone preparation on a Technitium endpoint."""
@@ -316,36 +346,6 @@ async def auto_renew_technitium_token(state: AppState) -> None:
                 exc,
             )
             sleep_for = DURATION_FAILURE
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    """Application lifespan manager.
-
-    Args:
-        app: FastAPI application
-
-    Yields:
-        None
-    """
-    # Startup
-    config = AppConfig()
-
-    # Configure logging level
-    logging.getLogger().setLevel(config.log_level)
-    logger.setLevel(config.log_level)
-
-    state = AppState(config)
-    app.state.app_state = state
-
-    # Setup Technitium connection
-    await setup_technitium_connection(state)
-
-    yield
-
-    # Shutdown
-    logger.info("Shutting down application...")
-    await state.close()
 
 
 def create_app() -> FastAPI:

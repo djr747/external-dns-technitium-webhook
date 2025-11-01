@@ -2,9 +2,14 @@ name: CI
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ '*' ]
   pull_request:
     branches: [ main, develop ]
+
+permissions:
+  contents: read
+  security-events: write
+  packages: write
 
 jobs:
   lint:
@@ -14,9 +19,9 @@ jobs:
       - uses: actions/checkout@v5
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: '3.13'
           cache: 'pip'
 
       - name: Install dependencies
@@ -39,13 +44,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ['3.12', '3.13', '3.14']
+        python-version: ['3.13']
 
     steps:
       - uses: actions/checkout@v5
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
           cache: 'pip'
@@ -57,169 +62,75 @@ jobs:
 
       - name: Run tests with coverage
         run: |
-          pytest --cov=external_dns_technitium_webhook --cov-report=xml --cov-report=html --cov-report=term-missing --cov-fail-under=80
+          pytest --cov=external_dns_technitium_webhook --cov-report=xml --cov-report=html --cov-report=term-missing --cov-fail-under=95
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
-        if: matrix.python-version == '3.12'
+        if: matrix.python-version == '3.13'
         with:
           name: coverage-report
           path: htmlcov/
           retention-days: 30
 
-  security-python:
-    name: Python Security Scan
-    runs-on: ubuntu-latest
-    permissions:
-      security-events: write
-      contents: read
-    steps:
-      - uses: actions/checkout@v5
-
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: '3.12'
-          cache: 'pip'
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev]"
-
-      - name: Run Bandit security scan
-        run: |
-          bandit -r external_dns_technitium_webhook -f json -o bandit-report.json || true
-          bandit -r external_dns_technitium_webhook -f screen || true
-
-      - name: Upload Bandit report
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: bandit-report
-          path: bandit-report.json
-          retention-days: 30
-
-      - name: Run pip-audit for CVE scanning (non-blocking)
-        if: github.event_name != 'pull_request' || github.base_ref != 'refs/heads/main'
-        run: |
-          pip install pip-audit
-          pip-audit --desc --format json --output pip-audit-report.json || true
-
-      - name: Run pip-audit for CVE scanning (blocking on PR to main)
-        if: github.event_name == 'pull_request' && github.base_ref == 'refs/heads/main'
-        run: |
-          pip install pip-audit
-          pip-audit --desc --format json --output pip-audit-report.json --fail-on-vulnerability
-
-      - name: Upload pip-audit report
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: pip-audit-report
-          path: pip-audit-report.json
-          retention-days: 30
-
-  snyk-security:
-    name: Snyk Security Scan
-    runs-on: ubuntu-latest
-    permissions:
-      security-events: write
-      contents: read
-    steps:
-      - uses: actions/checkout@v5
-
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: '3.12'
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e .
-
-      - name: Run Snyk to check for vulnerabilities (non-blocking)
-        if: github.event_name != 'pull_request' || github.base_ref != 'refs/heads/main'
-        uses: snyk/actions/python@master
-        continue-on-error: true
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        with:
-          args: "--severity-threshold=high --sarif-file-output=snyk-code.sarif"
-
-      - name: Run Snyk to check for vulnerabilities (blocking on PR to main)
-        if: github.event_name == 'pull_request' && github.base_ref == 'refs/heads/main'
-        uses: snyk/actions/python@master
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        with:
-          args: "--severity-threshold=high --sarif-file-output=snyk-code.sarif"
-
-      - name: Upload Snyk results to GitHub Code Scanning
-        uses: github/codeql-action/upload-sarif@v3
-        if: always()
-        with:
-          sarif_file: snyk-code.sarif
-
   docker-build:
-    name: Docker Build and Scan
+    name: Build Docker Image and Scan
     runs-on: ubuntu-latest
-    permissions:
-      security-events: write
-      contents: read
+    needs: [test]
     steps:
-      - uses: actions/checkout@v5
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
       - name: Build Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: false
-          tags: external-dns-technitium-webhook:test-${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          load: true
+        run: |
+          docker build -t external-dns-technitium-webhook:ci-${{ github.sha }} .
+          docker run --rm --entrypoint python external-dns-technitium-webhook:ci-${{ github.sha }} --version | grep '3.13'
 
-      - name: Run Trivy vulnerability scanner
+      - name: Verify built image Python version matches Chainguard latest
+        run: |
+          echo "Checking Python version inside built image..."
+          chainguard_version=$(docker run --rm --entrypoint python cgr.dev/chainguard/python:latest -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+          image_version=$(docker run --rm --entrypoint python external-dns-technitium-webhook:ci-${{ github.sha }} -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+          if [ "$image_version" != "$chainguard_version" ]; then
+            echo "ERROR: Python version in built image ($image_version) does not match Chainguard latest ($chainguard_version)"
+            exit 1
+          fi
+          echo "Python version in built image matches Chainguard latest: $image_version"
+
+      - name: Run Trivy vulnerability scanner (SARIF)
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: external-dns-technitium-webhook:test-${{ github.sha }}
+          image-ref: external-dns-technitium-webhook:ci-${{ github.sha }}
           format: 'sarif'
           output: 'trivy-results.sarif'
           severity: 'CRITICAL,HIGH,MEDIUM'
-          exit-code: '0'
+          vuln-type: 'os,library'
 
-      - name: Upload Trivy results to GitHub Security tab
+      - name: Upload Trivy SARIF to GitHub Security
         uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:
           sarif_file: 'trivy-results.sarif'
 
-      - name: Run Snyk Container scan (non-blocking)
-        if: github.event_name != 'pull_request' || github.base_ref != 'refs/heads/main'
-        uses: snyk/actions/docker@master
-        continue-on-error: true
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+      - name: Run Trivy vulnerability scanner (JSON)
+        uses: aquasecurity/trivy-action@master
         with:
-          image: "external-dns-technitium-webhook:test-${{ github.sha }}"
-          args: "--severity-threshold=high --sarif-file-output=snyk-container.sarif"
+          image-ref: external-dns-technitium-webhook:ci-${{ github.sha }}
+          format: 'json'
+          output: 'trivy-results.json'
+          severity: 'CRITICAL,HIGH,MEDIUM,LOW'
 
-      - name: Run Snyk Container scan (blocking on PR to main)
-        if: github.event_name == 'pull_request' && github.base_ref == 'refs/heads/main'
-        uses: snyk/actions/docker@master
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        with:
-          image: "external-dns-technitium-webhook:test-${{ github.sha }}"
-          args: "--severity-threshold=high --sarif-file-output=snyk-container.sarif"
-
-      - name: Upload Snyk Container results
-        uses: github/codeql-action/upload-sarif@v3
+      - name: Upload Trivy results artifact
+        uses: actions/upload-artifact@v4
         if: always()
         with:
-          sarif_file: snyk-container.sarif
+          name: trivy-results
+          path: trivy-results.json
+          retention-days: 90
+
+

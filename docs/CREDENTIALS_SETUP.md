@@ -221,3 +221,14 @@ Before deploying to production, verify:
 - [Kubernetes Secrets Management](https://kubernetes.io/docs/concepts/configuration/secret/)
 - [OWASP Secrets Management Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html)
 - [12-Factor App: Config](https://12factor.net/config)
+
+## High Availability (HA) deployments — important note
+
+When running the webhook in a highly-available configuration (multiple ExternalDNS replicas / multiple webhook sidecar replicas), ensure the Technitium service account credentials are identical across all replicas:
+
+- `TECHNITIUM_USERNAME` must be the same for every replica
+- `TECHNITIUM_PASSWORD` must be the same for every replica
+
+Reason: the webhook manages tokens and authentication state with the Technitium API; if replicas use different credentials or different service accounts, the tokens may not be interchangeable and authentication failures can occur during failover or rolling updates. Use a single Kubernetes Secret (referenced by all replicas) or a centralized secrets manager (HashiCorp Vault, ExternalSecrets) to ensure all replicas use the same credentials.
+
+See `docs/deployment/kubernetes.md` for examples of how to mount or inject a single credential secret into all webhook sidecars.

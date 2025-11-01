@@ -19,16 +19,16 @@ Key components in `external_dns_technitium_webhook/`:
 
 ## Development Workflow
 ```bash
-# Setup (Python 3.11+)
+# Setup (Python 3.14)
 make install-dev          # Install with dev dependencies
 
 # Development cycle
 make format               # Ruff formatter (black-style)
 make lint                 # Ruff linter (replaces flake8, isort)
-make type-check          # mypy with strict settings
-make test                # pytest with async support
-make test-cov            # Coverage with HTML reports
-make security            # bandit scans
+make type-check           # mypy with strict settings
+make test                 # pytest with async support
+make test-cov             # Coverage with HTML reports (CI gates at 95%)
+make security             # bandit scans
 
 make all                 # Run full CI pipeline locally
 
@@ -41,10 +41,10 @@ make docker-compose-down # Stop services
 ```
 
 **Important:** Always use `make` commands, not direct tool invocation. The project uses:
-- **ruff** for linting and formatting (not black/flake8/isort)
+- **ruff** for linting and formatting
 - **mypy** for type checking with strict configuration
 - **pyright** for additional type checking (Pylance-compatible)
-- All three tools must pass for code to be merged
+- All three tools must pass for code to be merged. CI test coverage is required to be >= 95%.
 
 ## Core Patterns & Conventions
 
@@ -140,8 +140,10 @@ The project uses **three** type checkers to ensure type safety:
 - **Sidecar deployment**: Runs alongside ExternalDNS in same pod
 - **Port 3000**: Default listen port (configurable via `LISTEN_PORT`)
 - **Health checks**: `/health` endpoint for Kubernetes probes
-- **Docker**: Multi-stage build with Red Hat UBI 10 base (Python 3.12), non-root user, minimal image
+- **Container image**: Multi-stage build using Chainguard Python 3.14 base images (minimal, non-root, curated by Chainguard)
 - **Middleware**: Rate limiting (60 req/min, 10 burst) and request size limits (1MB default)
+
+Note: We require the security workflow (`.github/workflows/security.yml`) to run on every pull request and on a schedule. Protect the `main` branch with branch protection rules that require the security workflow to pass before merging.
 
 ## Common Tasks
 
@@ -220,7 +222,7 @@ Supported properties: `comment`, `expiryTtl`, `disabled`, `createPtrZone` (see h
 ## Implementation Guidelines
 
 ### Code Quality & Testing
-- **Test coverage**: Ensure all new code has corresponding tests (aim for 55%+ coverage)
+- **Test coverage**: Ensure all new code has corresponding tests (CI enforces >= 95% coverage)
 - **PEP 8 compliance**: Follow Python style guide and project-specific ruff rules
 - **Type hints**: Use strict typing for all functions (mypy enforces this)
 - **Async patterns**: All I/O operations must use async/await consistently

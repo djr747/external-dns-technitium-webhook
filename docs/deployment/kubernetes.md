@@ -16,6 +16,10 @@ Deploy the Technitium webhook as a sidecar container next to ExternalDNS. This g
 
 - Credentials created per `docs/CREDENTIALS_SETUP.md`## Prerequisites## Prerequisites ✅
 
+## High Availability (HA) credential note
+
+If you plan to run ExternalDNS with multiple replicas (for HA), ensure the Technitium credentials are consistent across replicas. The webhook expects a single Technitium service account (username/password) to be used by all sidecars. Store the credentials in one Kubernetes Secret and reference the same secret in your Helm values so all replicas read the identical values. See `docs/CREDENTIALS_SETUP.md` for details.
+
 
 
 ## Step 1 – Prepare Secrets and Namespace
