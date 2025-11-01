@@ -139,18 +139,11 @@ jobs:
           sbom: true
           provenance: true
 
-      - name: Set attestation subject
-        if: success()
-        id: attestation-subject
-        run: |
-          FIRST_TAG=$(echo "${{ steps.meta.outputs.tags }}" | cut -d',' -f1)
-          echo "subject=$FIRST_TAG" >> $GITHUB_OUTPUT
-
       - name: Generate artifact attestation
         if: success()
         uses: actions/attest-build-provenance@v1
         with:
-          subject-name: ${{ steps.attestation-subject.outputs.subject }}
+          subject-name: ghcr.io/${{ github.repository }}
           subject-digest: ${{ steps.build.outputs.digest }}
           push-to-registry: true
 
