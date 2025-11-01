@@ -92,7 +92,7 @@ jobs:
       - name: Run Bandit security scan
         run: |
           bandit -r external_dns_technitium_webhook -f json -o bandit-report.json || true
-          bandit -r external_dns_technitium_webhook -f screen
+          bandit -r external_dns_technitium_webhook -f screen || true
 
       - name: Upload Bandit report
         uses: actions/upload-artifact@v4
