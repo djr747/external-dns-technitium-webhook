@@ -89,13 +89,13 @@ jobs:
       - name: Build Docker image
         run: |
           docker build -t external-dns-technitium-webhook:ci-${{ github.sha }} .
-          docker run --rm external-dns-technitium-webhook:ci-${{ github.sha }} python --version | grep '3.13'
+          docker run --rm --entrypoint python external-dns-technitium-webhook:ci-${{ github.sha }} --version | grep '3.13'
 
       - name: Verify built image Python version matches Chainguard latest
         run: |
           echo "Checking Python version inside built image..."
-          chainguard_version=$(docker run --rm cgr.dev/chainguard/python:latest python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
-          image_version=$(docker run --rm external-dns-technitium-webhook:ci-${{ github.sha }} python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+          chainguard_version=$(docker run --rm --entrypoint python cgr.dev/chainguard/python:latest -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+          image_version=$(docker run --rm --entrypoint python external-dns-technitium-webhook:ci-${{ github.sha }} -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
           if [ "$image_version" != "$chainguard_version" ]; then
             echo "ERROR: Python version in built image ($image_version) does not match Chainguard latest ($chainguard_version)"
             exit 1
