@@ -28,7 +28,7 @@ make lint                 # Ruff linter (replaces flake8, isort)
 make type-check           # mypy with strict settings
 make test                 # pytest with async support
 make test-cov             # Coverage with HTML reports (CI gates at 95%)
-make security             # bandit scans
+make security             
 
 make all                 # Run full CI pipeline locally
 
@@ -197,7 +197,7 @@ All responses use custom media type: `application/external.dns.webhook+json;vers
 - **Type safety**: Strict mypy configuration enforced (`disallow_untyped_defs`, `check_untyped_defs`)
 - **Linting**: Ruff with pycodestyle, pyflakes, isort, flake8-bugbear, pyupgrade rules
 - **Test coverage**: pytest with asyncio support, mock external HTTP calls with pytest-mock
-- **Security scanning**: bandit for code analysis
+- **Security scanning**: semgrep for code analysis
 - **Formatting**: Ruff format (black-compatible, 100 char line length)
 - **Python version**: 3.11+ required (uses modern type hints like `dict[str, Any]`)
 
@@ -245,7 +245,7 @@ Supported properties: `comment`, `expiryTtl`, `disabled`, `createPtrZone` (see h
 
 ### Security & Production
 - **Credential handling**: Never log passwords or tokens (use Config redaction patterns)
-- **Dependency scanning**: Run `make security` (bandit) before releases
+- **Dependency scanning**: Run `make security` before releases
 - **Container security**: Follow non-root user pattern, minimal base images
 - **Kubernetes best practices**: Resource limits, health probes, graceful shutdown
 

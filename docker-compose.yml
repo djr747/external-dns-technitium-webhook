@@ -5,6 +5,9 @@ services:
     image: technitium/dns-server:latest
     container_name: technitium-dns
     hostname: dns-server
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
     ports:
       - "5380:5380/tcp"  # Web UI
       - "53:53/udp"      # DNS

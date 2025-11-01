@@ -153,3 +153,10 @@ Thumbs.db
 *.log
 .env.local
 .env.*.local
+
+# Code QL
+*.sarif
+.codeql-db/
+.codeql-venv/
+# Trivy
+trivy-results.sarif

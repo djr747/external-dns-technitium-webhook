@@ -15,13 +15,24 @@ endif
 VENV_PYTHON = $(VENV_DIR)/bin/python
 VENV_PIP = $(VENV_DIR)/bin/pip
 
-.PHONY: help install install-dev test test-cov lint format format-check type-check security clean docker-build docker-run check-deps all
+.PHONY: help install install-dev test test-cov lint format format-check type-check security clean docker-build docker-run check-deps all codeql-scan
 
 help: ## Show this help message
 	@echo 'Usage: make [target]'
 	@echo ''
 	@echo 'Available targets:'
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  %-20s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+
+codeql-scan: ## Run a comprehensive CodeQL security scan
+	@echo "--- Creating CodeQL database ---"
+	@codeql database create .codeql-db --language=python --command='make test' --overwrite --search-path=codeql/python-all --search-path=codeql/python-all
+	@echo "\n--- Analyzing database with security-extended and security-and-quality suites ---"
+	@codeql database analyze .codeql-db \
+		/Users/drobson/.codeql/packages/codeql/python-queries/1.6.7/codeql-suites/python-security-extended.qls \
+		/Users/drobson/.codeql/packages/codeql/python-queries/1.6.7/codeql-suites/python-security-and-quality.qls \
+		--format=sarif-latest \
+		--output=codeql-results-extended.sarif
+	@echo "\n--- Scan complete. Results are in codeql-results-extended.sarif ---"
 
 install: ## Install package
 	$(VENV_PIP) install -e .
@@ -50,7 +61,7 @@ type-check: ## Run type checking
 	$(VENV_PYTHON) -m pyright
 
 security: ## Run security scans
-	$(VENV_PYTHON) -m bandit -r external_dns_technitium_webhook
+	$(VENV_DIR)/bin/semgrep scan --config auto
 
 check-deps: ## Check for outdated dependencies and vulnerabilities
 	@echo "Checking dependencies..."

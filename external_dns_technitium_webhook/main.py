@@ -339,12 +339,8 @@ async def auto_renew_technitium_token(state: AppState) -> None:
             state.client.token = login_response.token
             logger.debug("Successfully renewed Technitium DNS server access token")
             sleep_for = DURATION_SUCCESS
-        except Exception as exc:  # noqa: BLE001 - log and retry with backoff
-            logger.error(
-                "Failed to renew Technitium DNS server access token on %s: %s",
-                state.active_endpoint,
-                exc,
-            )
+        except Exception:  # noqa: BLE001 - log and retry with backoff
+            logger.error("Technitium DNS server renewal failed.")
             sleep_for = DURATION_FAILURE
 
 
@@ -388,7 +384,10 @@ def create_app() -> FastAPI:
     # TODO: Configure allow_origins with specific domains for production
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],  # TODO: Restrict to specific origins in production
+        allow_origins=[
+            "http://localhost",
+            "http://127.0.0.1",
+        ],  # TODO: Restrict to specific origins in production
         allow_credentials=False,  # No cookies needed for webhook
         allow_methods=["GET", "POST"],  # Only methods we use
         allow_headers=["Content-Type"],

@@ -1,12 +1,13 @@
 import sys
 
 
-def test_python_version_is_3_13() -> None:
-    """Ensure tests run under Python 3.13 as the project specifies.
+def test_python_version_is_supported() -> None:
+    """Ensure tests run under a supported Python runtime (3.13 or 3.14).
 
-    This gives an early, explicit failure if CI or a contributor uses the
-    wrong Python runtime. It's intentionally strict: require exactly 3.13.
+    This keeps a clear early failure if CI or a contributor uses an
+    unsupported Python runtime while allowing local development on 3.14.
     """
     major = sys.version_info.major
     minor = sys.version_info.minor
-    assert major == 3 and minor == 13, f"Expected Python 3.13, got {major}.{minor}"
+    supported = major == 3 and minor in (13, 14)
+    assert supported, f"Expected Python 3.13 or 3.14, got {major}.{minor}"

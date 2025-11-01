@@ -34,7 +34,7 @@ class Endpoint(BaseModel):
     @field_validator("dns_name")
     @classmethod
     def validate_dns_name(cls, v: str) -> str:
-        """Validate DNS name format (RFC 1035/1123).
+        """Validate DNS name format (RFC 1035/1123), allowing leading underscores.
 
         Args:
             v: DNS name to validate
@@ -48,25 +48,25 @@ class Endpoint(BaseModel):
         if not v:
             raise ValueError("DNS name cannot be empty")
 
-        # Check total length (max 253 characters)
         if len(v) > 253:
-            raise ValueError("DNS name too long (max 253 characters)")
+            raise ValueError("DNS name exceeds maximum length of 253 characters")
 
-        # Allow wildcard subdomain
-        v_check = v[2:] if v.startswith("*.") else v
+        # Allow leading underscores for service records (e.g., _https._tcp)
+        # and wildcard records (*.example.com)
+        normalized_v = v
+        if normalized_v.startswith("*."):
+            normalized_v = normalized_v[2:]
 
-        # DNS label pattern (alphanumeric, hyphens, dots)
-        # Labels must start and end with alphanumeric, hyphens only in middle
-        dns_pattern = r"^([a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.?$"
+        # Each label must be between 1 and 63 characters long
+        labels = normalized_v.split(".")
+        if not all(1 <= len(label) <= 63 for label in labels if label):
+            raise ValueError("Invalid label length in DNS name")
 
-        if not re.match(dns_pattern, v_check):
-            raise ValueError(f"Invalid DNS name format: {v}")
-
-        # Check individual label length (max 63 characters)
-        labels = v_check.rstrip(".").split(".")
-        for label in labels:
-            if len(label) > 63:
-                raise ValueError(f"DNS label too long (max 63 characters): {label}")
+        # Regex for valid hostname characters (alphanumeric, hyphen, underscore)
+        # allowing leading underscore.
+        label_regex = re.compile(r"^(?!-)[a-zA-Z0-9_-]{1,63}(?<!-)$")
+        if not all(label_regex.match(label) for label in labels if label):
+            raise ValueError("Invalid characters in DNS name label")
 
         return v
 
