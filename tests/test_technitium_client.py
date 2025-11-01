@@ -169,9 +169,7 @@ async def test_client_add_record(client: TechnitiumClient, mocker: MockerFixture
 
 
 @pytest.mark.asyncio
-async def test_client_add_aname_record(
-    client: TechnitiumClient, mocker: MockerFixture
-) -> None:
+async def test_client_add_aname_record(client: TechnitiumClient, mocker: MockerFixture) -> None:
     """add_record should support Technitium ANAME records."""
 
     mock_response = {
@@ -215,9 +213,7 @@ async def test_client_add_aname_record(
 
 
 @pytest.mark.asyncio
-async def test_client_add_caa_record(
-    client: TechnitiumClient, mocker: MockerFixture
-) -> None:
+async def test_client_add_caa_record(client: TechnitiumClient, mocker: MockerFixture) -> None:
     """add_record should handle CAA payloads."""
 
     mock_response = {
@@ -274,9 +270,7 @@ async def test_client_context_manager(mocker: MockerFixture) -> None:
 
 
 @pytest.mark.asyncio
-async def test_post_json_parse_error(
-    client: TechnitiumClient, mocker: MockerFixture
-) -> None:
+async def test_post_json_parse_error(client: TechnitiumClient, mocker: MockerFixture) -> None:
     """Test JSON parse error in _post method."""
     mocker.patch.object(
         client._client,
@@ -293,9 +287,7 @@ async def test_post_json_parse_error(
 
 
 @pytest.mark.asyncio
-async def test_post_http_status_error(
-    client: TechnitiumClient, mocker: MockerFixture
-) -> None:
+async def test_post_http_status_error(client: TechnitiumClient, mocker: MockerFixture) -> None:
     """Test HTTP status error in _post method."""
     import httpx
 
@@ -332,9 +324,7 @@ async def test_post_request_error(client: TechnitiumClient, mocker: MockerFixtur
 
 
 @pytest.mark.asyncio
-async def test_list_zones_with_pagination(
-    client: TechnitiumClient, mocker: MockerFixture
-) -> None:
+async def test_list_zones_with_pagination(client: TechnitiumClient, mocker: MockerFixture) -> None:
     """Test list_zones with pagination parameters."""
     mock_response = {
         "status": "ok",
@@ -369,9 +359,7 @@ async def test_list_zones_with_pagination(
 
 
 @pytest.mark.asyncio
-async def test_add_record_with_all_options(
-    client: TechnitiumClient, mocker: MockerFixture
-) -> None:
+async def test_add_record_with_all_options(client: TechnitiumClient, mocker: MockerFixture) -> None:
     """Test add_record with all optional parameters."""
     mock_response = {
         "status": "ok",
@@ -432,9 +420,7 @@ async def test_add_record_with_all_options(
 
 
 @pytest.mark.asyncio
-async def test_client_add_uri_record(
-    client: TechnitiumClient, mocker: MockerFixture
-) -> None:
+async def test_client_add_uri_record(client: TechnitiumClient, mocker: MockerFixture) -> None:
     """add_record should serialize URI record data fields."""
 
     mock_response = {
@@ -486,9 +472,7 @@ async def test_client_add_uri_record(
 
 
 @pytest.mark.asyncio
-async def test_client_add_svcb_record(
-    client: TechnitiumClient, mocker: MockerFixture
-) -> None:
+async def test_client_add_svcb_record(client: TechnitiumClient, mocker: MockerFixture) -> None:
     """add_record should honor SVCB hint settings."""
 
     mock_response = {
@@ -544,9 +528,7 @@ async def test_client_add_svcb_record(
 
 
 @pytest.mark.asyncio
-async def test_post_invalid_token_status(
-    client: TechnitiumClient, mocker: MockerFixture
-) -> None:
+async def test_post_invalid_token_status(client: TechnitiumClient, mocker: MockerFixture) -> None:
     """Test invalid-token status in _post method."""
     mock_response = {
         "status": "invalid-token",
@@ -631,9 +613,7 @@ async def test_get_records_with_optional_params(
 
 
 @pytest.mark.asyncio
-async def test_delete_record_with_zone(
-    client: TechnitiumClient, mocker: MockerFixture
-) -> None:
+async def test_delete_record_with_zone(client: TechnitiumClient, mocker: MockerFixture) -> None:
     """Test delete_record with optional zone parameter."""
     mock_response = {
         "status": "ok",
@@ -686,9 +666,7 @@ async def test_post_raw_unexpected_response_format(
 
 
 @pytest.mark.asyncio
-async def test_post_raw_unexpected_status(
-    client: TechnitiumClient, mocker: MockerFixture
-) -> None:
+async def test_post_raw_unexpected_status(client: TechnitiumClient, mocker: MockerFixture) -> None:
     """_post_raw should raise when status is unrecognised."""
 
     mocker.patch.object(

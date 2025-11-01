@@ -58,6 +58,7 @@ async def test_start_token_renewal_idempotent(config: Config) -> None:
 
     state = AppState(config)
     try:
+
         async def _dummy(_state: AppState) -> None:
             await asyncio.sleep(0)
 

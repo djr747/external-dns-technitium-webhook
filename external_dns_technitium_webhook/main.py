@@ -189,9 +189,7 @@ async def ensure_zone_ready(state: AppState) -> ZonePreparationResult:
         zone_created = True
         zone_options = await _fetch_zone_options(state, zone_name)
         if zone_options is None:
-            raise RuntimeError(
-                f"Unable to load configuration for zone {zone_name} after creation"
-            )
+            raise RuntimeError(f"Unable to load configuration for zone {zone_name} after creation")
 
     membership = _normalize_zone_name(zone_options.catalog_zone_name)
     server_role = "secondary" if zone_options.is_read_only else "primary"
@@ -207,9 +205,7 @@ async def ensure_zone_ready(state: AppState) -> ZonePreparationResult:
     )
 
 
-async def _fetch_zone_options(
-    state: AppState, zone: str
-) -> GetZoneOptionsResponse | None:
+async def _fetch_zone_options(state: AppState, zone: str) -> GetZoneOptionsResponse | None:
     """Fetch zone options, returning None when zone is missing."""
 
     try:
@@ -250,8 +246,7 @@ async def ensure_catalog_membership(
     available = {
         name
         for name in (
-            _normalize_zone_name(candidate)
-            for candidate in options.available_catalog_zone_names
+            _normalize_zone_name(candidate) for candidate in options.available_catalog_zone_names
         )
         if name is not None
     }

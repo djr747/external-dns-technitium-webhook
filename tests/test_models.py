@@ -17,8 +17,8 @@ def test_endpoint_serialization() -> None:
         dnsName="example.com",
         targets=["1.2.3.4"],
         recordType="A",
-    recordTTL=300,
-    setIdentifier="",
+        recordTTL=300,
+        setIdentifier="",
     )
 
     data = endpoint.model_dump(by_alias=True)

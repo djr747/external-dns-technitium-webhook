@@ -20,6 +20,8 @@ from .models import (
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T", bound=BaseModel)
+
+
 class TechnitiumError(Exception):
     """Base exception for Technitium API errors."""
 
@@ -160,9 +162,7 @@ class TechnitiumClient:
 
         return result
 
-    async def _post(
-        self, endpoint: str, payload: dict[str, Any], response_model: type[T]
-    ) -> T:
+    async def _post(self, endpoint: str, payload: dict[str, Any], response_model: type[T]) -> T:
         """Make an authenticated POST request.
 
         Args:
@@ -377,9 +377,7 @@ class TechnitiumClient:
         if zone:
             payload["zone"] = zone
 
-        return await self._post(
-            self.ENDPOINT_DELETE_RECORD, payload, DeleteRecordResponse
-        )
+        return await self._post(self.ENDPOINT_DELETE_RECORD, payload, DeleteRecordResponse)
 
     async def list_catalog_zones(self) -> ListCatalogZonesResponse:
         """List available catalog zones on the server."""

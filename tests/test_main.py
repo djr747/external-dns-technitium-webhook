@@ -225,7 +225,9 @@ async def test_ensure_zone_ready_invokes_catalog_membership(mocker: MockerFixtur
         availableCatalogZoneNames=["catalog.example.com"],
     )
 
-    mocker.patch.object(state.client, "get_zone_options", new_callable=AsyncMock, return_value=options)
+    mocker.patch.object(
+        state.client, "get_zone_options", new_callable=AsyncMock, return_value=options
+    )
     catalog_mock = mocker.patch(
         "external_dns_technitium_webhook.main.ensure_catalog_membership",
         new_callable=AsyncMock,
@@ -474,7 +476,9 @@ async def test_setup_technitium_connection_uses_failover(mocker: MockerFixture) 
     await setup_technitium_connection(state)
 
     assert login_mock.await_count == 2
-    assert [call.args[0] for call in set_endpoint_mock.await_args_list] == config.technitium_endpoints
+    assert [
+        call.args[0] for call in set_endpoint_mock.await_args_list
+    ] == config.technitium_endpoints
     update_mock.assert_awaited_once()
     start_mock.assert_called_once()
 
@@ -628,7 +632,6 @@ async def test_ensure_zone_ready_raises_when_zone_missing_after_create(
 
     with pytest.raises(RuntimeError):
         await ensure_zone_ready(state)
-
 
     await state.close()
 

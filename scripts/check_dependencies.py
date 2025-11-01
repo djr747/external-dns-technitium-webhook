@@ -76,9 +76,6 @@ def check_outdated_packages() -> None:
         print(f"Error parsing output: {e}", file=sys.stderr)
 
 
-
-
-
 def check_dependency_conflicts() -> None:
     """Check for dependency conflicts."""
     print("\n" + "=" * 80)

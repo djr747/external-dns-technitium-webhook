@@ -119,9 +119,7 @@ class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self.max_size = max_size
 
-    async def dispatch(
-        self, request: Request, call_next: RequestResponseEndpoint
-    ) -> Response:
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         """Validate incoming requests before passing to the application."""
 
         content_length = request.headers.get("content-length")

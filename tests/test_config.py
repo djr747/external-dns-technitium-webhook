@@ -67,6 +67,7 @@ def test_technitium_endpoints_normalization() -> None:
         "http://secondary:5380",
     ]
 
+
 def test_technitium_endpoints_skip_blank_entries() -> None:
     """Whitespace-only failover entries should be ignored."""
     config = Config(
