@@ -1,6 +1,7 @@
 # Multi-stage build with Chainguard Python for minimal attack surface and daily security updates
 # Chainguard images: ultra-minimal, zero CVEs, updated daily, SLSA Level 3 provenance
-FROM cgr.dev/chainguard/python:latest AS builder
+# Use -dev variant for builder (includes pip, build tools), minimal runtime for final stage
+FROM cgr.dev/chainguard/python:latest-dev AS builder
 
 # Set working directory
 WORKDIR /build
