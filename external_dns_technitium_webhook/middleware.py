@@ -72,9 +72,11 @@ rate_limiter = RateLimiter(requests_per_minute=1000, burst=10)
 def set_rate_limiter(rl: RateLimiter) -> None:
     """Replace the module-level rate_limiter with a new instance.
 
-    This function is the supported way for other modules to replace the
-    global RateLimiter instance so that tools like CodeQL don't flag a
-    direct module-level assignment as an ineffectual statement.
+    Static analysis tools may flag direct assignments to module-level variables
+    (e.g., `middleware.rate_limiter = ...`) as potentially ineffective ("ineffectual statement")
+    since they could be overlooked or misunderstood. This helper function makes the
+    replacement explicit and intentional, and is the supported way for other modules
+    to replace the global RateLimiter instance.
     """
     global rate_limiter
     rate_limiter = rl
