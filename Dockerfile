@@ -10,11 +10,12 @@ COPY pyproject.toml ./
 
 # Install dependencies (production only, no dev deps)
 # Chainguard's dev variant includes pip and build tools
-RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
-    pip install --no-cache-dir .
+# Note: Chainguard images have no shell - use python -m pip instead of RUN pip
+RUN python -m pip install --no-cache-dir --upgrade pip setuptools wheel
+RUN python -m pip install --no-cache-dir .
 
 # Final stage - Chainguard Python (minimal runtime, non-root by default)
-FROM chainguard/python:latest
+FROM cgr.dev/chainguard/python:latest
 
 LABEL org.opencontainers.image.title="ExternalDNS Technitium Webhook" \
       org.opencontainers.image.description="ExternalDNS webhook provider for Technitium DNS Server" \
@@ -45,8 +46,9 @@ COPY --chown=nonroot:nonroot external_dns_technitium_webhook ./external_dns_tech
 USER nonroot
 
 # Health check
+# Chainguard images have no shell - use exec form with python
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=2 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8888/health', timeout=3)" || exit 1
+    CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8888/health', timeout=3)"]
 
 # Expose port
 EXPOSE 8888
