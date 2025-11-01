@@ -111,7 +111,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: '3.12'
+          python-version: '3.14'
 
       - name: Install dependencies
         run: |
@@ -151,13 +151,13 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: '3.12'
+          python-version: '3.14'
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           # Install a pinned Bandit version and Semgrep. Use the same Bandit
-          # version we validate locally (compatible with Python 3.12).
+          # version we validate locally (compatible with Python 3.14).
           pip install 'bandit[toml]==1.8.6' semgrep
 
       - name: Run Bandit security linter
@@ -196,7 +196,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: '3.12'
+          python-version: '3.14'
 
       - name: Install dependencies
         run: |
