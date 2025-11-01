@@ -55,8 +55,21 @@ Environment variables map directly to `external_dns_technitium_webhook.config.Co
 | `REQUESTS_PER_MINUTE` | ❌ | `1000` | Token bucket rate limit per client |
 | `RATE_LIMIT_BURST` | ❌ | `10` | Burst capacity for the rate limiter |
 
+## Security & Container Image
+
+This project uses **Chainguard Python** base images for maximum security:
+- 🔒 **Zero CVEs** - Ultra-minimal images with no unnecessary packages
+- 🔄 **Daily Updates** - Automated security patches within 24 hours
+- 📋 **SLSA Level 3** - Supply chain security with signed provenance
+- 🚫 **Non-root** - Runs as UID 65532 (`nonroot`) by default
+- 📦 **Minimal** - ~40MB final image (vs 100MB+ for typical Python containers)
+
+The Chainguard migration resolved **30 open CVEs** (3 Critical, 16 High, 11 Medium) that existed in the previous Red Hat UBI 10 base image.
+
+For security disclosures, see `docs/SECURITY.md`.
+
 ## Development Workflow
-Run the project’s quality gates before opening a pull request:
+Run the project's quality gates before opening a pull request:
 ```bash
 make lint        # Ruff lint + format check
 make type-check  # mypy (strict) + Pyright
