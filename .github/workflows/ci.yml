@@ -97,10 +97,16 @@ jobs:
           cache-to: type=gha,mode=max
           load: true
 
-      - name: Verify built image Python version is 3.14
+      - name: Verify built image Python version matches Chainguard latest
         run: |
           echo "Checking Python version inside built image..."
-          docker run --rm external-dns-technitium-webhook:ci-${{ github.sha }} python -c "import sys; v=sys.version_info; assert v.major==3 and v.minor==14, f'Expected Python 3.14 in image, found {v.major}.{v.minor}'"
+          chainguard_version=$(docker run --rm cgr.dev/chainguard/python:latest python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+          image_version=$(docker run --rm external-dns-technitium-webhook:ci-${{ github.sha }} python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+          if [ "$image_version" != "$chainguard_version" ]; then
+            echo "ERROR: Python version in built image ($image_version) does not match Chainguard latest ($chainguard_version)"
+            exit 1
+          fi
+          echo "Python version in built image matches Chainguard latest: $image_version"
 
       - name: Run Trivy vulnerability scanner (SARIF)
         uses: aquasecurity/trivy-action@master
