@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to release (e.g., v1.2.3)'
+        description: 'Release version (e.g. v1.2.3)'
         required: true
         type: string
 
@@ -22,30 +22,34 @@ jobs:
     name: Validate Version
     runs-on: ubuntu-latest
     outputs:
-      version: ${{ steps.version.outputs.version }}
-      version-number: ${{ steps.version.outputs.version-number }}
+      version: ${{ steps.set_version.outputs.version }}
+      version-number: ${{ steps.set_version.outputs.version-number }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
-      - name: Extract version
-        id: version
+      - name: Set VERSION
+        id: set_version
+        env:
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_EVENT_INPUTS_VERSION: ${{ github.event.inputs.version }}
+          GITHUB_REF: ${{ github.ref }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            VERSION="${{ github.event.inputs.version }}"
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            VERSION="$GITHUB_EVENT_INPUTS_VERSION"
           else
             VERSION="${GITHUB_REF#refs/tags/}"
           fi
-          VERSION_NUMBER="${VERSION#v}"
+          VERSION_NUMBER="$VERSION"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "version-number=$VERSION_NUMBER" >> $GITHUB_OUTPUT
           echo "Releasing version: $VERSION"
 
       - name: Validate semantic version
         run: |
-          VERSION="${{ steps.version.outputs.version-number }}"
+          VERSION="${{ steps.set_version.outputs.version-number }}"
           if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
             echo "Error: Invalid semantic version format: $VERSION"
             exit 1

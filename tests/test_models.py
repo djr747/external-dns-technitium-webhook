@@ -127,8 +127,7 @@ def test_endpoint_validation_rejects_long_label(mocker: MockerFixture) -> None:
     """Endpoint DNS name validator rejects labels longer than 63 characters."""
     long_label = "a" * 64
     dns_name = f"{long_label}.example.com"
-    mocker.patch("external_dns_technitium_webhook.models.re.match", return_value=True)
-    with pytest.raises(ValueError, match="DNS label too long"):
+    with pytest.raises(ValueError, match="Invalid label length in DNS name"):
         Endpoint.model_validate(
             {
                 "dnsName": dns_name,
@@ -156,11 +155,11 @@ def test_endpoint_ttl_logs_warning_for_high_value(caplog: pytest.LogCaptureFixtu
 
 def test_endpoint_validation_rejects_excessive_length() -> None:
     """Endpoint DNS name validator rejects names longer than 253 characters."""
-    long_name = "a" * 254
-    with pytest.raises(ValueError, match="DNS name too long"):
+    long_name = "a." * 127
+    with pytest.raises(ValueError, match="DNS name exceeds maximum length of 253 characters"):
         Endpoint.model_validate(
             {
-                "dnsName": f"{long_name}.com",
+                "dnsName": f"{long_name}com",
                 "targets": ["1.2.3.4"],
                 "recordType": "A",
                 "setIdentifier": "",
@@ -170,7 +169,7 @@ def test_endpoint_validation_rejects_excessive_length() -> None:
 
 def test_endpoint_validation_rejects_invalid_format() -> None:
     """Endpoint DNS name validator rejects names with invalid characters."""
-    with pytest.raises(ValueError, match="Invalid DNS name format"):
+    with pytest.raises(ValueError, match="Invalid characters in DNS name label"):
         Endpoint.model_validate(
             {
                 "dnsName": "invalid_name!",
@@ -179,3 +178,16 @@ def test_endpoint_validation_rejects_invalid_format() -> None:
                 "setIdentifier": "",
             }
         )
+
+
+def test_endpoint_validation_accepts_wildcard_dns_name() -> None:
+    """Endpoint DNS name validator accepts wildcard DNS names."""
+    endpoint = Endpoint.model_validate(
+        {
+            "dnsName": "*.example.com",
+            "targets": ["1.2.3.4"],
+            "recordType": "A",
+            "setIdentifier": "",
+        }
+    )
+    assert endpoint.dns_name == "*.example.com"

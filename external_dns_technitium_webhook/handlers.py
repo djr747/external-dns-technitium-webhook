@@ -315,7 +315,10 @@ def _get_record_data(record_type: str, target: str) -> dict[str, Any] | None:
         parts = target.split(maxsplit=2)
         if len(parts) < 3:
             return None
-        flags = int(parts[0])
+        try:
+            flags = int(parts[0])
+        except ValueError:
+            return None
         tag = parts[1]
         value = parts[2].strip('"')
         return {"flags": flags, "tag": tag, "value": value}

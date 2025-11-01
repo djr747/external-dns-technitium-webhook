@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/djr747/external-dns-technitium-webhook/actions/workflows/ci.yml/badge.svg)](https://github.com/djr747/external-dns-technitium-webhook/actions/workflows/ci.yml)
 [![Security](https://github.com/djr747/external-dns-technitium-webhook/actions/workflows/security.yml/badge.svg)](https://github.com/djr747/external-dns-technitium-webhook/actions/workflows/security.yml)
+[![codecov](https://codecov.io/gh/djr747/external-dns-technitium-webhook/branch/main/graph/badge.svg)](https://codecov.io/gh/djr747/external-dns-technitium-webhook)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 FastAPI webhook provider that lets [ExternalDNS](https://github.com/kubernetes-sigs/external-dns) manage records on a [Technitium DNS Server](https://technitium.com/dns/). Deploy it as a sidecar next to ExternalDNS to translate webhook events into Technitium API calls.
