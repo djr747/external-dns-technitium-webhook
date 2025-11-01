@@ -15,7 +15,7 @@ class Config(BaseSettings):
         extra="ignore",
     )
 
-    listen_address: str = "0.0.0.0"
+    listen_address: str = "0.0.0.0"  # nosec B104
     listen_port: int = 3000
     technitium_url: str
     technitium_username: str
@@ -104,5 +104,5 @@ class Config(BaseSettings):
         """
         data = super().model_dump(**kwargs)
         if "technitium_password" in data:
-            data["technitium_password"] = "***REDACTED***"
+            data["technitium_password"] = "***REDACTED***"  # nosec B105
         return data

@@ -73,7 +73,9 @@ class TechnitiumClient:
     ENDPOINT_GET_ZONE_OPTIONS = "/api/zones/options/get"
     ENDPOINT_SET_ZONE_OPTIONS = "/api/zones/options/set"
 
-    def __init__(self, base_url: str, token: str = "", timeout: float = 10.0) -> None:
+    def __init__(
+        self, base_url: str, token: str = "", timeout: float = 10.0  # nosec B107
+    ) -> None:
         """Initialize the Technitium client.
 
         Args:
