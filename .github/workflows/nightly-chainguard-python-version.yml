@@ -21,7 +21,7 @@ jobs:
         run: |
           echo "${{ steps.get_version.outputs.python_version }}" > chainguard_python_version.txt
       - name: Upload version artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: chainguard-python-version
           path: chainguard_python_version.txt
@@ -59,7 +59,7 @@ jobs:
         run: |
           echo "Python version updated to ${{ steps.get_version.outputs.python_version }}. PR #${{ steps.create-pull-request.outputs.pull-request-number }} created." > notification.txt
       - name: Send notification
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: python-version-notification
           path: notification.txt
