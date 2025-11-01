@@ -22,7 +22,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install ruff mypy
+          pip install -e ".[dev]"
 
       - name: Run Ruff format check
         run: ruff format --check .
@@ -31,9 +31,7 @@ jobs:
         run: ruff check .
 
       - name: Run mypy
-        run: |
-          pip install -e ".[dev]"
-          mypy external_dns_technitium_webhook
+        run: mypy external_dns_technitium_webhook
 
   test:
     name: Test Python ${{ matrix.python-version }}
@@ -41,7 +39,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ['3.11', '3.12', '3.13']
+        python-version: ['3.12', '3.13', '3.14']
 
     steps:
       - uses: actions/checkout@v5
@@ -102,10 +100,17 @@ jobs:
           path: bandit-report.json
           retention-days: 30
 
-      - name: Run pip-audit for CVE scanning
+      - name: Run pip-audit for CVE scanning (non-blocking)
+        if: github.event_name != 'pull_request' || github.base_ref != 'refs/heads/main'
         run: |
           pip install pip-audit
           pip-audit --desc --format json --output pip-audit-report.json || true
+
+      - name: Run pip-audit for CVE scanning (blocking on PR to main)
+        if: github.event_name == 'pull_request' && github.base_ref == 'refs/heads/main'
+        run: |
+          pip install pip-audit
+          pip-audit --desc --format json --output pip-audit-report.json --fail-on-vulnerability
 
       - name: Upload pip-audit report
         uses: actions/upload-artifact@v4
@@ -134,7 +139,17 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e .
 
-      - name: Run Snyk to check for vulnerabilities
+      - name: Run Snyk to check for vulnerabilities (non-blocking)
+        if: github.event_name != 'pull_request' || github.base_ref != 'refs/heads/main'
+        uses: snyk/actions/python@master
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: "--severity-threshold=high --sarif-file-output=snyk-code.sarif"
+
+      - name: Run Snyk to check for vulnerabilities (blocking on PR to main)
+        if: github.event_name == 'pull_request' && github.base_ref == 'refs/heads/main'
         uses: snyk/actions/python@master
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
@@ -184,7 +199,18 @@ jobs:
         with:
           sarif_file: 'trivy-results.sarif'
 
-      - name: Run Snyk Container scan
+      - name: Run Snyk Container scan (non-blocking)
+        if: github.event_name != 'pull_request' || github.base_ref != 'refs/heads/main'
+        uses: snyk/actions/docker@master
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          image: "external-dns-technitium-webhook:test-${{ github.sha }}"
+          args: "--severity-threshold=high --sarif-file-output=snyk-container.sarif"
+
+      - name: Run Snyk Container scan (blocking on PR to main)
+        if: github.event_name == 'pull_request' && github.base_ref == 'refs/heads/main'
         uses: snyk/actions/docker@master
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
