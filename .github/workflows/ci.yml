@@ -65,7 +65,7 @@ jobs:
           pytest --cov=external_dns_technitium_webhook --cov-report=xml --cov-report=html --cov-report=term-missing --cov-fail-under=95
 
       - name: Upload coverage report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         if: matrix.python-version == '3.13'
         with:
           name: coverage-report
@@ -126,7 +126,7 @@ jobs:
           severity: 'CRITICAL,HIGH,MEDIUM,LOW'
 
       - name: Upload Trivy results artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         if: always()
         with:
           name: trivy-results
