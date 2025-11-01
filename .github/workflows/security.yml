@@ -243,6 +243,40 @@ jobs:
         with:
           sarif_file: snyk-container.sarif
 
+      - name: Set up Node.js for Snyk CLI
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install Snyk CLI
+        run: npm install -g snyk
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+      - name: Run Snyk container test (JSON)
+        id: snyk-json
+        run: |
+          # run test and write JSON output; allow non-zero exit so we can inspect results
+          snyk container test external-dns-technitium-webhook:${{ github.sha }} --json > snyk-container.json || true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+      - name: Upload Snyk JSON results
+        uses: actions/upload-artifact@v4
+        with:
+          name: snyk-container-json
+          path: snyk-container.json
+
+      - name: Fail on HIGH or CRITICAL Snyk vulnerabilities
+        run: |
+          if [ ! -f snyk-container.json ]; then echo "snyk-container.json not found"; exit 0; fi
+          HIGH_COUNT=$(jq '[.vulnerabilities[]? | select(.severity=="high" or .severity=="critical")] | length' snyk-container.json)
+          echo "Found $HIGH_COUNT high/critical Snyk vulnerabilities"
+          if [ "$HIGH_COUNT" -gt 0 ]; then
+            echo "Failing because high/critical vulnerabilities found by Snyk"
+            exit 1
+          fi
+
       - name: Run Snyk container monitor (track over time)
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: snyk/actions/docker@master
