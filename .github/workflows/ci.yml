@@ -153,9 +153,12 @@ jobs:
         run: |
           echo "Checking Python version inside built image..."
           chainguard_version=$(docker run --rm --entrypoint python cgr.dev/chainguard/python:latest -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
-          # Pull the image we just built
-          docker pull ${{ steps.build.outputs.image }}
-          image_version=$(docker run --rm --entrypoint python ${{ steps.build.outputs.image }} -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+          # Construct an explicit image reference using the pushed digest (repository@digest).
+          # For multi-platform builds the 'image' output may be empty; the digest is a reliable identifier.
+          IMAGE_REF="ghcr.io/${{ github.repository }}@${{ steps.build.outputs.digest }}"
+          echo "Pulling built image by digest: $IMAGE_REF"
+          docker pull "$IMAGE_REF"
+          image_version=$(docker run --rm --entrypoint python "$IMAGE_REF" -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
           if [ "$image_version" != "$chainguard_version" ]; then
             echo "ERROR: Python version in built image ($image_version) does not match Chainguard latest ($chainguard_version)"
             exit 1
