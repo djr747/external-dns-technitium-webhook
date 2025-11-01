@@ -96,6 +96,7 @@ jobs:
       packages: write
       security-events: write
       id-token: write
+      attestations: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
