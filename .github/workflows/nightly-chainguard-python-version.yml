@@ -1,0 +1,65 @@
+name: Nightly Chainguard Python Version Check
+
+on:
+  schedule:
+    - cron: '0 3 * * *' # Every day at 03:00 UTC
+  workflow_dispatch:
+
+jobs:
+  check-python-version:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Pull Chainguard Python latest image
+        run: |
+          docker pull cgr.dev/chainguard/python:latest
+      - name: Get Python version from image
+        id: get_version
+        run: |
+          PY_VER=$(docker run --rm cgr.dev/chainguard/python:latest python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+          echo "python_version=$PY_VER" >> $GITHUB_OUTPUT
+      - name: Save Python version to artifact
+        run: |
+          echo "${{ steps.get_version.outputs.python_version }}" > chainguard_python_version.txt
+      - name: Upload version artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: chainguard-python-version
+          path: chainguard_python_version.txt
+      - name: Print detected version
+        run: |
+          echo "Detected Chainguard Python version: ${{ steps.get_version.outputs.python_version }}"
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ steps.get_version.outputs.python_version }}
+      - name: Update version in pyproject.toml and config files
+        run: |
+          VERSION=${{ steps.get_version.outputs.python_version }}
+          sed -i "s/^requires-python = .*/requires-python = \">=$VERSION,<4\"/" pyproject.toml
+          sed -i "s/^target-version = .*/target-version = \"py$VERSION\"/" pyproject.toml
+          sed -i "s/^python_version = .*/python_version = \"$VERSION\"/" pyproject.toml
+          sed -i "s/^pythonVersion = .*/pythonVersion = $VERSION/" pyproject.toml
+          # Update runtime test if present
+          if [ -f tests/test_python_version.py ]; then
+            sed -i "s/assert sys.version_info.major == .*/assert sys.version_info.major == ${VERSION%%.*}/" tests/test_python_version.py
+            sed -i "s/assert sys.version_info.minor == .*/assert sys.version_info.minor == ${VERSION#*.}/" tests/test_python_version.py
+          fi
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v5
+        with:
+          commit-message: "chore: update Python version to ${{ steps.get_version.outputs.python_version }} from Chainguard image"
+          title: "Update Python version to ${{ steps.get_version.outputs.python_version }} (nightly)"
+          body: "Automated update: Detected Python version ${{ steps.get_version.outputs.python_version }} in Chainguard 'latest' image. This PR updates pyproject.toml, config, and runtime test."
+          branch: "chore/update-python-version-nightly"
+          labels: "automation,python-version"
+      - name: Notify maintainers if version changed
+        if: ${{ steps.create-pull-request.outputs.pull-request-number }}
+        run: |
+          echo "Python version updated to ${{ steps.get_version.outputs.python_version }}. PR #${{ steps.create-pull-request.outputs.pull-request-number }} created." > notification.txt
+      - name: Send notification
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-version-notification
+          path: notification.txt
