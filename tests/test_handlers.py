@@ -1,8 +1,9 @@
 """Unit tests for API handlers."""
 
-import pytest
 import json
 import re
+
+import pytest
 from fastapi import HTTPException
 from pytest_mock import MockerFixture
 
