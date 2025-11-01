@@ -28,6 +28,7 @@ class Config(BaseSettings):
     rate_limit_burst: int = 10
     technitium_failover_urls: str | None = None
     catalog_zone: str | None = None
+    technitium_verify_ssl: bool = True
 
     def __init__(self, **values: Any) -> None:
         """Allow instantiation without explicit arguments for env loading."""

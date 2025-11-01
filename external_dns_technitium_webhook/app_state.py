@@ -35,6 +35,7 @@ class AppState:
         self.client = TechnitiumClient(
             base_url=config.technitium_url,
             timeout=config.technitium_timeout,
+            verify_ssl=config.technitium_verify_ssl,
         )
         middleware.rate_limiter = RateLimiter(
             requests_per_minute=config.requests_per_minute,
@@ -83,6 +84,7 @@ class AppState:
         self.client = TechnitiumClient(
             base_url=normalized,
             timeout=self.config.technitium_timeout,
+            verify_ssl=self.config.technitium_verify_ssl,
         )
         self.active_endpoint = normalized
         await old_client.close()

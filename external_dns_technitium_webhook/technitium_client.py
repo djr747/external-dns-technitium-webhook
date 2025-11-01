@@ -74,7 +74,11 @@ class TechnitiumClient:
     ENDPOINT_SET_ZONE_OPTIONS = "/api/zones/options/set"
 
     def __init__(
-        self, base_url: str, token: str = "", timeout: float = 10.0  # nosec B107
+        self,
+        base_url: str,
+        token: str = "",
+        timeout: float = 10.0,
+        verify_ssl: bool = True,
     ) -> None:
         """Initialize the Technitium client.
 
@@ -82,11 +86,13 @@ class TechnitiumClient:
             base_url: Base URL of the Technitium DNS server
             token: Authentication token (optional, can be set later)
             timeout: Request timeout in seconds
+            verify_ssl: Verify SSL certificates
         """
         self.base_url = base_url.rstrip("/")
         self.token = token
         self.timeout = timeout
-        self._client = httpx.AsyncClient(timeout=timeout)
+        self.verify_ssl = verify_ssl
+        self._client = httpx.AsyncClient(timeout=timeout, verify=verify_ssl)
 
     async def close(self) -> None:
         """Close the HTTP client."""
