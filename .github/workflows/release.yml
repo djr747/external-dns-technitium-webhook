@@ -115,7 +115,7 @@ jobs:
 
       - name: Create Release
         id: create-release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.validate-version.outputs.version }}
           name: Release ${{ needs.validate-version.outputs.version }}
@@ -197,7 +197,7 @@ jobs:
           output-file: sbom-${{ needs.validate-version.outputs.version }}.spdx.json
 
       - name: Upload SBOM to release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.validate-version.outputs.version }}
           files: sbom-${{ needs.validate-version.outputs.version }}.spdx.json
