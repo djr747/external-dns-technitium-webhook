@@ -1,7 +1,7 @@
 # ExternalDNS Technitium Webhook
 
 [![CI](https://github.com/djr747/external-dns-technitium-webhook/actions/workflows/ci.yml/badge.svg)](https://github.com/djr747/external-dns-technitium-webhook/actions/workflows/ci.yml)
-[![Docker](https://github.com/djr747/external-dns-technitium-webhook/actions/workflows/docker.yml/badge.svg)](https://github.com/djr747/external-dns-technitium-webhook/actions/workflows/docker.yml)
+[![Security](https://github.com/djr747/external-dns-technitium-webhook/actions/workflows/security.yml/badge.svg)](https://github.com/djr747/external-dns-technitium-webhook/actions/workflows/security.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 FastAPI webhook provider that lets [ExternalDNS](https://github.com/kubernetes-sigs/external-dns) manage records on a [Technitium DNS Server](https://technitium.com/dns/). Deploy it as a sidecar next to ExternalDNS to translate webhook events into Technitium API calls.
@@ -66,7 +66,7 @@ This project uses **Chainguard Python** base images for maximum security:
 
 The Chainguard migration resolved **30 open CVEs** (3 Critical, 16 High, 11 Medium) that existed in the previous Red Hat UBI 10 base image.
 
-For security disclosures, see `docs/SECURITY.md`.
+For security disclosures, see [docs/SECURITY.md](docs/SECURITY.md).
 
 ## Development Workflow
 Run the project's quality gates before opening a pull request:
@@ -78,13 +78,13 @@ make test-cov    # pytest with coverage
 See `docs/DEVELOPMENT.md` for contributor tips and Docker usage.
 
 ## Documentation Map
-- `docs/API.md` – Webhook endpoints and payload examples
-- `docs/CREDENTIALS_SETUP.md` – Create Technitium credentials and Kubernetes secrets
-- `docs/deployment/kubernetes.md` – Helm-based sidecar deployment
-- `docs/DEVELOPMENT.md` – Extended development guidance
-- `docs/CICD_SECURITY.md` – Overview of GitHub Actions CI/CD and security tooling
-- `docs/architecture/ARCHITECTURE.md` – System diagram and runtime details
-- `docs/SECURITY.md` – Security policy and disclosure process
+- [API reference](docs/API.md) – Webhook endpoints and payload examples
+- [Credentials setup](docs/CREDENTIALS_SETUP.md) – Create Technitium credentials and Kubernetes secrets
+- [Kubernetes deployment (Helm)](docs/deployment/kubernetes.md) – Helm-based sidecar deployment
+- [Development guide](docs/DEVELOPMENT.md) – Extended development guidance
+- [CI/CD & security](docs/CICD_SECURITY.md) – Overview of GitHub Actions CI/CD and security tooling
+- [Architecture](docs/architecture/ARCHITECTURE.md) – System diagram and runtime details
+- [Security policy](docs/SECURITY.md) – Security policy and disclosure process
 
 ## Contributing & License
 Bug reports and pull requests are welcome—see `docs/CONTRIBUTING.md` for expectations. Licensed under the MIT License (`LICENSE`).

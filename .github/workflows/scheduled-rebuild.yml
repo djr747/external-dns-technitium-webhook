@@ -2,8 +2,8 @@ name: Scheduled Security Rebuild
 
 on:
   schedule:
-    # Weekly rebuild every Monday at 2 AM UTC for security patches
-    - cron: '0 2 * * 1'
+    # Daily rebuild every day at 02:00 UTC to pick up Chainguard base updates
+    - cron: '0 2 * * *'
   workflow_dispatch:  # Allow manual trigger
 
 env:
@@ -22,10 +22,10 @@ jobs:
       - name: Check base image for updates
         id: base-digest
         run: |
-          # Pull latest UBI10 digest
-          DIGEST=$(docker manifest inspect registry.access.redhat.com/ubi10/ubi-minimal:latest | jq -r '.manifests[0].digest')
+          # Pull latest Chainguard Python 3.14 digest
+          DIGEST=$(docker manifest inspect cgr.dev/chainguard/python:3.14 | jq -r '.digest') || true
           echo "digest=$DIGEST" >> $GITHUB_OUTPUT
-          echo "Current UBI10 digest: $DIGEST"
+          echo "Current Chainguard python:3.14 digest: $DIGEST"
 
       - name: Compare with last build
         id: check
@@ -85,7 +85,7 @@ jobs:
           labels: |
             org.opencontainers.image.title=ExternalDNS Technitium Webhook
             org.opencontainers.image.description=ExternalDNS webhook provider for Technitium DNS Server (Security Patched)
-            org.opencontainers.image.vendor=Red Hat UBI10
+            org.opencontainers.image.vendor=Chainguard
             org.opencontainers.image.version=${{ steps.version.outputs.rebuild-tag }}
             io.github.rebuild-date=${{ github.event.repository.updated_at }}
             io.github.base-image-digest=${{ needs.check-for-updates.outputs.base-image-digest }}
