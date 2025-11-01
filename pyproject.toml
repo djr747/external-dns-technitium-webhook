@@ -7,7 +7,7 @@ name = "external-dns-technitium-webhook"
 version = "0.1.0"
 description = "ExternalDNS webhook provider for Technitium DNS"
 readme = "README.md"
-requires-python = ">=3.14, <4"
+requires-python = ">=3.13,<3.14"
 license = {text = "MIT"}
 authors = [
     {name = "Derek Robson", email = "djr747@users.noreply.github.com"}
@@ -22,7 +22,7 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Internet :: Name Service (DNS)",
     "Topic :: System :: Systems Administration",
 ]
@@ -63,7 +63,7 @@ include = ["external_dns_technitium_webhook*"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py314"
+target-version = "py313"
 
 [tool.ruff.lint]
 select = [
@@ -88,7 +88,7 @@ ignore = [
 "tests/*" = ["ARG", "S101"]
 
 [tool.mypy]
-python_version = "3.14"
+python_version = "3.13"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
@@ -119,7 +119,7 @@ exclude = [
 stubPath = ""
 venvPath = "."
 venv = "venv"
-pythonVersion = "3.14"
+pythonVersion = "3.13"
 pythonPlatform = "All"
 typeCheckingMode = "basic"
 reportMissingImports = true

@@ -19,9 +19,9 @@ jobs:
       - uses: actions/checkout@v5
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.14'
+          python-version: '3.13'
           cache: 'pip'
 
       - name: Install dependencies
@@ -44,13 +44,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ['3.14']
+        python-version: ['3.13']
 
     steps:
       - uses: actions/checkout@v5
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
           cache: 'pip'
@@ -66,7 +66,7 @@ jobs:
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
-        if: matrix.python-version == '3.14'
+        if: matrix.python-version == '3.13'
         with:
           name: coverage-report
           path: htmlcov/
@@ -87,15 +87,9 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Build Docker image
-        id: build
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: false
-          tags: external-dns-technitium-webhook:ci-${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          load: true
+        run: |
+          docker build -t external-dns-technitium-webhook:ci-${{ github.sha }} .
+          docker run --rm external-dns-technitium-webhook:ci-${{ github.sha }} python --version | grep '3.13'
 
       - name: Verify built image Python version matches Chainguard latest
         run: |
