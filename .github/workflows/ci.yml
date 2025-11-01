@@ -97,6 +97,11 @@ jobs:
           cache-to: type=gha,mode=max
           load: true
 
+      - name: Verify built image Python version is 3.14
+        run: |
+          echo "Checking Python version inside built image..."
+          docker run --rm external-dns-technitium-webhook:ci-${{ github.sha }} python -c "import sys; v=sys.version_info; assert v.major==3 and v.minor==14, f'Expected Python 3.14 in image, found {v.major}.{v.minor}'"
+
       - name: Run Trivy vulnerability scanner (SARIF)
         uses: aquasecurity/trivy-action@master
         with:
