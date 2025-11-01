@@ -1,6 +1,6 @@
 # Multi-stage build with Chainguard Python for minimal attack surface and daily security updates
 # Chainguard images: ultra-minimal, zero CVEs, updated daily, SLSA Level 3 provenance
-FROM python:3.14-slim AS builder
+FROM chainguard/python:latest-dev AS builder
 
 # Set working directory
 WORKDIR /build
@@ -14,14 +14,14 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
     pip install --no-cache-dir .
 
 # Final stage - Chainguard Python (minimal runtime, non-root by default)
-FROM cgr.dev/chainguard/python:3.14
+FROM chainguard/python:latest
 
 LABEL org.opencontainers.image.title="ExternalDNS Technitium Webhook" \
       org.opencontainers.image.description="ExternalDNS webhook provider for Technitium DNS Server" \
       org.opencontainers.image.source="https://github.com/djr747/external-dns-technitium-webhook" \
       org.opencontainers.image.licenses="MIT" \
     org.opencontainers.image.vendor="Chainguard" \
-    org.opencontainers.image.base.name="cgr.dev/chainguard/python:3.14"
+    org.opencontainers.image.base.name="cgr.dev/chainguard/python:latest"
 
 # Chainguard images run as non-root (UID 65532) by default - no need to create user
 

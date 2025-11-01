@@ -23,7 +23,7 @@ jobs:
         id: base-digest
         run: |
           # Pull latest Chainguard Python 3.14 digest
-          DIGEST=$(docker manifest inspect cgr.dev/chainguard/python:3.14 | jq -r '.digest') || true
+          DIGEST=$(docker manifest inspect cgr.dev/chainguard/python:latest | jq -r '.digest') || true
           echo "digest=$DIGEST" >> $GITHUB_OUTPUT
           echo "Current Chainguard python:3.14 digest: $DIGEST"
 
