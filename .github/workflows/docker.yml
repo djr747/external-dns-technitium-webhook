@@ -57,7 +57,9 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
-            type=sha,prefix={{branch}}-
+            # Use a short SHA tag (no branch prefix) to avoid creating invalid tags
+            # when running in a pull-request merge ref where branch may be empty.
+            type=sha,format=short
             type=raw,value=latest,enable={{is_default_branch}}
             type=raw,value={{date 'YYYY-MM-DD'}}-{{sha}},enable={{is_default_branch}}
           labels: |
