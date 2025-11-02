@@ -242,11 +242,38 @@ Supported properties: `comment`, `expiryTtl`, `disabled`, `createPtrZone` (see h
 - **Inline comments**: Document complex logic, especially DNS record transformations
 - **API compatibility**: Maintain backward compatibility with ExternalDNS protocol
 
+### Release Process (Version-Driven Automation)
+The project uses **version-driven releases** controlled entirely through `pyproject.toml`:
+
+**Release Workflow:**
+1. **Before PR**: Update `version = "X.Y.Z"` in `pyproject.toml` (follow semantic versioning)
+2. **Update CHANGELOG.md**: Add entry under new version with all changes
+3. **PR & Merge**: Create PR, pass all tests, merge to main
+4. **Auto-Tag Workflow** (auto-tag-on-main.yml): Automatically detects `pyproject.toml` change on main:
+   - Extracts version from `pyproject.toml`
+   - Creates git tag `vX.Y.Z`
+   - Creates draft GitHub Release with basic info
+5. **Release Workflow** (release.yml): Triggers on release publication:
+   - Builds Docker image
+   - Publishes to registry
+   - Updates release notes with artifacts
+
+**Dependabot Integration:**
+When Dependabot creates PRs to update dependencies, merging them will also trigger releases (patch version bump in PR description). This is expected behavior and enables automated security updates.
+
+**Key Points:**
+- **Single source of truth**: `pyproject.toml` version field
+- **No manual tag creation**: Automation handles it
+- **Version bump in PR**: Makes release intent clear during review
+- **CHANGELOG first**: Always document changes before release
+- **For every release**: Remember to update `pyproject.toml` version AND `CHANGELOG.md`
+
 ### Development Workflow
 - **GitHub Issues**: Track bugs and features using issue templates
 - **Pull requests**: Thoroughly review for code quality, security, and pattern adherence
 - **CI/CD**: All tests must pass before merge (format, lint, type-check, test, security)
 - **Dependencies**: Regularly update with `pip list --outdated` and check for CVEs
+- **Releases**: Update `pyproject.toml` version field to trigger release automation
 
 ### Security & Production
 - **Credential handling**: Never log passwords or tokens (use Config redaction patterns)
