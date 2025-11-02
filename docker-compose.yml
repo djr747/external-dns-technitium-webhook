@@ -26,7 +26,7 @@ services:
       dockerfile: Dockerfile
     container_name: external-dns-webhook
     ports:
-      - "3000:3000"
+      - "8888:8888"
     environment:
       - TECHNITIUM_URL=http://technitium-dns:5380
       - TECHNITIUM_USERNAME=admin

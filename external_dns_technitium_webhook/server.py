@@ -44,7 +44,8 @@ def run_health_server(health_app: FastAPI, config: AppConfig) -> None:
 
         try:
             loop.run_until_complete(health_server.serve())
-        except Exception as e:
+        except BaseException as e:
+            # Catch BaseException to handle SystemExit raised by uvicorn
             logging.error(f"[HEALTH] Health server serve error: {e}", exc_info=True)
             sys.stderr.write(f"[HEALTH] Error: {e}\n")
             sys.stderr.flush()
@@ -89,7 +90,8 @@ def run_servers(app: FastAPI, health_app: FastAPI, config: AppConfig) -> None:
     logging.info(f"Starting health server on {config.listen_address}:{config.health_port}")
 
     health_server_ready = threading.Event()
-    health_server_error: Exception | None = None
+    # Use BaseException type because we may capture SystemExit from uvicorn
+    health_server_error: BaseException | None = None
 
     def run_health_server_inline() -> None:
         nonlocal health_server_error
@@ -134,7 +136,9 @@ def run_servers(app: FastAPI, health_app: FastAPI, config: AppConfig) -> None:
                     logging.error(f"Health server serve error: {serve_error}", exc_info=True)
 
             loop.run_until_complete(serve_and_signal())
-        except Exception as e:
+        except BaseException as e:
+            # Catch BaseException (including SystemExit) so thread doesn't propagate
+            # unhandled BaseException to pytest as a thread exception.
             health_server_error = e
             sys.stderr.write(f"[HEALTH] Error: {e}\n")
             sys.stderr.flush()

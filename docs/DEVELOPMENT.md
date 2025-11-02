@@ -18,7 +18,7 @@ make all
 
 ## Prerequisites
 
-- Python 3.11+
+- Python 3.13+ (3.14 supported for local development, production uses Chainguard Python 3.13)
 - pip and virtualenv
 - Git
 - (Optional) Docker + Docker Compose
@@ -79,28 +79,27 @@ make test
 # Specific test
 pytest tests/test_handlers.py::test_health_endpoint -v
 
-# With coverage
-pytest --cov=external_dns_technitium_webhook tests/
-
-# HTML report
-pytest --cov=external_dns_technitium_webhook --cov-report=html tests/
+# With coverage report
+make test-cov
 # Open htmlcov/index.html
 ```
-
-Coverage requirement: CI gates at >= 95%.
 
 ### Running Locally
 
 ```bash
-# Start webhook server
+# Start webhook server (port 8888 for main API, port 8080 for health)
 python -m uvicorn external_dns_technitium_webhook.main:app \
   --host 0.0.0.0 \
-  --port 3000 \
+  --port 8888 \
   --reload
 
-# Test endpoints
-curl http://127.0.0.1:3000/health
-curl http://127.0.0.1:3000/
+# Test main API endpoints
+curl http://127.0.0.1:8888/
+curl http://127.0.0.1:8888/records
+
+# Test health check endpoints (separate thread on port 8080)
+curl http://127.0.0.1:8080/health
+curl http://127.0.0.1:8080/healthz
 ```
 
 ### Docker Development
@@ -123,13 +122,23 @@ external-dns-technitium-webhook/
 │   ├── handlers.py            # ExternalDNS webhook endpoints
 │   ├── technitium_client.py   # Async HTTP client for Technitium
 │   ├── models.py              # Pydantic request/response models
-│   └── middleware.py          # Rate limiting, security middleware
+│   ├── middleware.py          # Rate limiting, security middleware
+│   ├── server.py              # Health server thread management
+│   ├── health.py              # Health check endpoint logic
+│   └── __init__.py            # Package initialization
 ├── tests/
 │   ├── conftest.py            # Pytest fixtures
 │   ├── test_config.py         # Configuration tests
 │   ├── test_handlers.py       # Webhook endpoint tests
 │   ├── test_technitium_client.py  # Client tests
-│   └── ...
+│   ├── test_models.py         # Model validation tests
+│   ├── test_app_state.py      # Application state tests
+│   ├── test_middleware.py     # Middleware tests
+│   ├── test_server.py         # Server thread tests
+│   ├── test_health.py         # Health endpoint tests
+│   ├── test_main.py           # Main app tests
+│   ├── test_python_version.py # Python version compatibility test
+│   └── __init__.py            # Test package initialization
 ├── docs/                      # Documentation
 ├── Dockerfile                 # Container image
 ├── docker-compose.yml         # Development stack
@@ -155,10 +164,20 @@ external-dns-technitium-webhook/
 - TechnitiumClient instances
 
 ### `handlers.py`
-- `/health` - Health/readiness probes
-- `GET /` - Domain filter negotiation
-- `GET /records` - Retrieve DNS records
-- `POST /records` - Apply record changes
+- `negotiate_domain_filter()` - `GET /` - Domain filter negotiation (port 8888)
+- `get_records()` - `GET /records` - Retrieve DNS records from Technitium (port 8888)
+- `adjust_endpoints()` - `POST /adjustendpoints` - Validate/transform endpoints (port 8888)
+- `apply_record()` - `POST /records` - Apply DNS record changes (create/delete) (port 8888)
+
+### `server.py`
+- Health server thread management (port 8080)
+- Graceful shutdown coordination
+- Thread exception handling
+
+### `health.py`
+- Health check endpoint logic (`GET /health`, `GET /healthz`)
+- Main API server readiness validation (socket connectivity check)
+- Runs on separate thread isolated from main API load
 
 ### `technitium_client.py`
 - Async HTTP client using httpx
@@ -170,6 +189,11 @@ external-dns-technitium-webhook/
 - Pydantic models for ExternalDNS protocol
 - Technitium API responses
 - DNS record types
+
+### `middleware.py`
+- Rate limiting (1000 req/min, burst of 10)
+- Request size validation (1MB default)
+- Security headers
 
 ## Coding Conventions
 
@@ -228,7 +252,7 @@ logger.error("Error condition")
 - ✅ Use type hints
 - ✅ Validate input with Pydantic
 - ✅ Use async clients
-- ✅ No `# nosec` comments
+- ✅ No `# nosec` comments - fix unsafe code instead of masking it
 
 ## Debugging
 
@@ -252,11 +276,20 @@ Create `.vscode/launch.json`:
       "type": "python",
       "request": "launch",
       "module": "uvicorn",
-      "args": ["external_dns_technitium_webhook.main:app"],
+      "args": ["external_dns_technitium_webhook.main:app", "--host", "0.0.0.0", "--port", "8888"],
       "console": "integratedTerminal"
     }
   ]
 }
+```
+
+Then test with:
+```bash
+# Main API (port 8888)
+curl http://127.0.0.1:8888/
+
+# Health check (port 8080, separate thread)
+curl http://127.0.0.1:8080/health
 ```
 
 ### Breakpoints

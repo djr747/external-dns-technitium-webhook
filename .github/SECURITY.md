@@ -13,9 +13,10 @@ Chainguard Python base image for runtime to reduce OS-level CVEs.
 
 ## Reporting a Vulnerability
 
-Please report security issues privately by opening a GitHub Security Advisory
-or emailing security@your-org.example (replace with your contact) if you need
-privacy. If you open a public issue, sensitive details may be exposed.
+Please report security issues privately by opening a GitHub Security Advisory.
+Go to: https://github.com/djr747/external-dns-technitium-webhook/security/advisories/new
+
+**Important:** If you open a public issue, sensitive details may be exposed.
 
 When reporting, include:
 - A brief summary
@@ -44,8 +45,9 @@ also run daily dependency scans and will triage new findings in priority order.
 
 ## Disclosure and coordination
 
-If you need coordinated disclosure, please use GitHub Security Advisories or the
-email above. We will work with reporters to coordinate a fix and public
-notification.
+If you need coordinated disclosure, please use GitHub Security Advisories:
+https://github.com/djr747/external-dns-technitium-webhook/security/advisories
+
+We will work with reporters to coordinate a fix and public notification.
 
 Thank you — maintainers.

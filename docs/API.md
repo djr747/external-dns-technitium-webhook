@@ -2,8 +2,9 @@
 
 The Technitium webhook implements the [ExternalDNS webhook specification](https://github.com/kubernetes-sigs/external-dns/blob/master/docs/tutorials/webhook-provider.md). All responses use the media type `application/external.dns.webhook+json;version=1` unless stated otherwise.
 
-## Base URL
-Default bind address is `http://0.0.0.0:3000`. The port is hardcoded to 3000; adjust the bind address with the `LISTEN_ADDRESS` environment variable if needed.
+## Base URLs
+- **Main API Server:** `http://0.0.0.0:8888` (default bind address and port)
+- **Health Check Server:** `http://0.0.0.0:8080` (separate thread)
 
 ## Supported Record Types
 `A`, `AAAA`, `CNAME`, `TXT`, `ANAME`, `CAA`, `URI`, `SSHFP`, `SVCB`, `HTTPS`
@@ -12,20 +13,34 @@ Provider-specific options (e.g., comments, expiry TTL, PTR creation, SVCB hints)
 
 ## Endpoints
 
+### Main API Server (port 8888)
+
 | Method | Path | Purpose |
 | --- | --- | --- |
-| `GET` | `/health` | Readiness probe; returns `503` until initialization completes |
-| `GET` | `/` | Domain filter negotiation (startup only) |
+| `GET` | `/` | Domain filter negotiation (ExternalDNS startup) |
 | `GET` | `/records` | Fetch current records for the configured zone |
 | `POST` | `/adjustendpoints` | Optional endpoint rewrites (no-op in this provider) |
 | `POST` | `/records` | Apply create/update/delete operations |
 
-### `GET /health`
-- `200 OK` when the Technitium connection is initialized and writable (if required)
-- `503 Service Unavailable` with a sanitized error message otherwise
+### Health Check Server (port 8080, separate thread)
 
-### `GET /`
-Returns the negotiated domain filters based on `DOMAIN_FILTERS`:
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/health` | Readiness probe; returns `200 OK` when ready, `503` if not |
+| `GET` | `/healthz` | Kubernetes-style readiness probe; same behavior as `/health` |
+
+---
+
+## API Endpoints Reference
+
+### `GET /` (Main API, port 8888)
+Domain filter negotiation with ExternalDNS at startup.
+
+**Returns:** 
+- `200 OK` with domain filter response when ready
+- `503 Service Unavailable` if Technitium is unreachable
+
+**Response body:**
 ```json
 {
   "filters": ["example.com"],
@@ -33,8 +48,14 @@ Returns the negotiated domain filters based on `DOMAIN_FILTERS`:
 }
 ```
 
-### `GET /records`
-Returns an array of ExternalDNS endpoints sourced from Technitium:
+### `GET /records` (Main API, port 8888)
+Returns an array of ExternalDNS endpoints currently in Technitium for the configured zone.
+
+**Returns:**
+- `200 OK` with array of endpoints when ready
+- `503 Service Unavailable` if Technitium is unreachable
+
+**Response body:**
 ```json
 [
   {
@@ -47,13 +68,27 @@ Returns an array of ExternalDNS endpoints sourced from Technitium:
 ]
 ```
 
-### `POST /adjustendpoints`
-Accepts an array of desired endpoints and returns the same payload unchanged. The hook exists for compatibility and validation only.
+### `POST /adjustendpoints` (Main API, port 8888)
+Accepts an array of desired endpoints and returns the same payload unchanged. Provided for ExternalDNS compatibility and validation only.
 
-### `POST /records`
-Accepts an object with `create`, `updateOld`, `updateNew`, and `delete` arrays. All fields are optional; missing keys default to empty lists. A successful request returns `204 No Content`.
+**Request body:**
+```json
+[
+  {
+    "dnsName": "blue.example.com",
+    "recordType": "A",
+    "targets": ["192.0.2.20"],
+    "providerSpecific": []
+  }
+]
+```
 
-Example: create a disabled A record with metadata
+**Returns:** `200 OK` with the same endpoint array
+
+### `POST /records` (Main API, port 8888)
+Applies DNS record changes (create, update, delete operations). Accepts an object with `create`, `updateOld`, `updateNew`, and `delete` arrays. All fields are optional; missing keys default to empty lists.
+
+**Request body:**
 ```json
 {
   "create": [
@@ -63,19 +98,59 @@ Example: create a disabled A record with metadata
       "targets": ["192.0.2.20"],
       "providerSpecific": [
         {"name": "comment", "value": "staging"},
-        {"name": "disable", "value": "true"},
+        {"name": "disabled", "value": "true"},
         {"name": "expiryTtl", "value": "86400"}
       ]
     }
-  ]
+  ],
+  "delete": [],
+  "updateOld": [],
+  "updateNew": []
 }
 ```
 
-Errors are reported as sanitized JSON messages with appropriate HTTP status codes (`400`, `500`, `503`).
+**Returns:**
+- `204 No Content` on success
+- `400 Bad Request` for invalid input
+- `500 Internal Server Error` if Technitium API call fails
+- `503 Service Unavailable` if Technitium is unreachable
+
+**Error response:**
+```json
+{
+  "detail": "Failed to create record: Invalid zone name"
+}
+```
+
+### `GET /health` (Health Server, port 8080)
+Kubernetes liveness/readiness probe endpoint.
+
+**Returns:**
+- `200 OK` if main API server is ready and responding
+- `503 Service Unavailable` if not ready or Technitium is unreachable
+
+**Response body (success):**
+```json
+{
+  "status": "ok"
+}
+```
+
+**Response body (failure):**
+```json
+{
+  "detail": "Main application not responding"
+}
+```
+
+### `GET /healthz` (Health Server, port 8080)
+Alternative health check endpoint (same as `/health`). Provided for Kubernetes probe flexibility.
+
+**Returns:** Same as `/health`
 
 ## Rate Limiting & Payload Limits
 - Requests are limited using a token bucket (`REQUESTS_PER_MINUTE` and `RATE_LIMIT_BURST`). 429 responses include a descriptive error string.
 - The request body size is capped (default 1 MB) and returns `413` when exceeded.
 
 ## Authentication
-The webhook listens on localhost inside the ExternalDNS pod and does not expose additional authentication. It authenticates to Technitium using the configured credentials and refreshes tokens automatically.
+The webhook does not expose endpoint-level authentication (relies on network isolation in Kubernetes). It authenticates to Technitium using the configured credentials (username/password) and automatically refreshes tokens as needed. Default bind address is `0.0.0.0` (all interfaces); it's typically deployed as a sidecar with ExternalDNS in the same pod.

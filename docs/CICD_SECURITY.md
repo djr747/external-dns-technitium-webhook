@@ -6,56 +6,67 @@ This project implements enterprise-grade CI/CD pipelines with comprehensive secu
 
 | Workflow | File | Triggers | Purpose |
 |----------|------|----------|---------|
-| CI | `.github/workflows/ci.yml` | Push/PR to `main` or `develop` | Lints, type-checks, runs tests, generates coverage, dependency scanning (pip-audit), code analysis (Bandit, Semgrep), and container validation (Trivy, Snyk) |
-| Docker Build & Push | `.github/workflows/docker.yml` | Push/PR to `main`, semver tags, manual | Builds multi-platform images, publishes to GHCR, generates SBOMs, runs Trivy and Snyk scans, publishes SARIF results |
-| Security Scanning | `.github/workflows/security.yml` | Weekly schedule, push/PR, manual | CodeQL semantic analysis, Trivy container scan, pip-audit, Bandit, Semgrep, Snyk, SBOM analysis with Grype |
-| Scheduled Security Rebuild | `.github/workflows/scheduled-rebuild.yml` | Mondays 02:00 UTC, manual | Rebuilds container on latest Red Hat UBI base, runs security scans, opens issue for critical CVEs |
-| Release | `.github/workflows/release.yml` | Semantic version tags, manual | Validates tag, builds multi-arch images, signs with Cosign, generates SBOMs, publishes GitHub release with notes |
+| CI | `.github/workflows/ci.yml` | Push to any branch; PR to `main`/`develop` | Lints (Ruff), type-checks (mypy, pyright), runs tests with coverage validation (95% minimum), uploads coverage to Codecov, builds multi-arch Docker images for commit, validates Python version matches Chainguard base |
+| Security Scanning | `.github/workflows/security.yml` | Daily schedule (UTC midnight); push to `main`/`develop`; PR to `main`; manual | CodeQL semantic code analysis, Trivy container vulnerability scan (SARIF + JSON), generates Trivy summary, uploads to GitHub Security tab |
+| Scheduled Security Rebuild | `.github/workflows/scheduled-rebuild.yml` | Mondays 02:00 UTC; manual | Rebuilds container on latest Chainguard Python base, runs Trivy scan, opens GitHub issue for critical CVEs |
+| Release | `.github/workflows/release.yml` | Semantic version tags (semver); manual | Validates semantic version tag, builds multi-platform Docker images, publishes to GHCR, generates SBOMs and provenance attestations, verifies attestation signatures |
+| Nightly Chainguard Version | `.github/workflows/nightly-chainguard-python-version.yml` | Daily schedule; manual | Checks for newer Chainguard Python versions, updates Dockerfile if available, creates PR for review |
 
 ## Security Scanning Strategy
 
-The project employs **5 CVE detection tools** for defense-in-depth:
+The project employs **multi-layer security scanning** for defense-in-depth:
 
-1. **Trivy** - Container image and SBOM vulnerability scanner
-2. **Snyk** - Multi-layer vulnerability detection (code, dependencies, containers)
-3. **pip-audit** - Python package vulnerability checking
-4. **Grype** - SBOM-based vulnerability analysis
-5. **GitHub Dependabot** - Automated dependency update suggestions
+### Active Security Tools
 
-### Code Security Tools
+1. **Ruff** (CI) - Fast Python linter with security-aware rules (format, lint, unused imports)
+2. **mypy & pyright** (CI) - Strict static type checking to catch type-related bugs
+3. **CodeQL** (Security.yml) - Semantic code analysis for security vulnerabilities in Python
+4. **Trivy** (Security.yml & Release.yml) - Container image and SBOM vulnerability scanner for CVEs
+5. **Docker build provenance** (CI & Release) - SBOM and attestation generation with build signatures
 
-- **Ruff** - Fast Python linter and formatter
-- **mypy** - Strict static type checking
-- **Bandit** - Python security linter for common vulnerabilities
-- **Semgrep** - Pattern-based security vulnerability detection
-- **CodeQL** - Semantic code analysis for security vulnerabilities
+### Code & Supply Chain Security
 
-All scanners upload SARIF results to GitHub's Security tab for visibility and tracking.
+- **CodeQL** - GitHub's semantic analysis tool for security vulnerabilities
+- **Trivy scanning** - Multi-stage: SARIF format for GitHub Security integration + JSON for detailed analysis
+- **Build provenance** - SBOM generation and artifact attestation tracking in Release workflow
+- **GitHub Dependabot** - Automated dependency update suggestions (not automated in CI)
+
+Trivy scans upload SARIF results to GitHub's Security tab for visibility and tracking.
 
 ## Required Secrets & Configuration
 
-These secrets must be configured in GitHub repository settings for workflows to function:
+The CI/CD workflows use GitHub's built-in features and do not require additional secrets to be configured:
 
-### Container Registry
-- `GHCR_TOKEN` - GitHub Container Registry token for pushing images (with `write:packages` scope)
+### GitHub Actions Built-ins
 
-### Security Scanning
-- `SNYK_TOKEN` - Snyk API token for vulnerability scanning
+- **GITHUB_TOKEN** - Automatically provided by GitHub Actions
+  - Used for container registry push (`ghcr.io/${{ github.repository }}`)
+  - Used for CodeQL analysis and SARIF upload
+  - Scope: `packages: write`, `security-events: write`, `contents: read`
 
-### Code Signing
-- `COSIGN_EXPERIMENTAL` - Set to `true` to use keyless Cosign signing with GitHub OIDC
+### Optional Enhancements
+
+- **Repository branch protection rules** - Require CI workflow success before merging to `main`
+- **GitHub Security settings** - Enable "Require status checks to pass before merging"
+- **Dependabot alerts** - Enable in repository settings for automated vulnerability notifications
+
+No additional tokens or API credentials are required for core CI/CD operation.
 
 ## Local CI Simulation
 
 Test your changes match CI requirements before pushing:
 
 ```bash
-make all       # Run full CI pipeline
-make lint      # Ruff format + check
+make all        # Run format, lint, type-check, test, security (full CI pipeline)
+make format     # Ruff format code
+make lint       # Ruff check + pyright
 make type-check # mypy + pyright strict
-make test      # pytest with coverage
-make security  # Semgrep scan
+make test       # pytest
+make test-cov   # pytest with coverage report (HTML + terminal)
+make security   # Semgrep code scan
 ```
+
+**Note:** `make all` runs the full CI pipeline including code analysis. Security scanning via GitHub Actions (CodeQL, Trivy) runs separately in automated workflows.
 
 ## Contributing to CI/CD
 

@@ -1,0 +1,65 @@
+## Example Helm values for the Technitium webhook integrated with the ExternalDNS chart
+# This file is provided as an editable example. It is NOT committed to any chart by this
+# tool — you can copy/merge these keys into your chart's values.yaml or use it with
+# helm repo add external-dns https://kubernetes-sigs.github.io/external-dns/
+# helm repo update
+# helm upgrade --install external-dns external-dns/external-dns \
+#     --namespace external-dns \
+#     --create-namespace \
+#     --values helm/values-webhook-example.yaml.
+
+txtOwnerId: kubernetes
+txtPrefix: cluster-name-external-dns- # Replace cluster-name with a unique name for your cluster
+policy: sync
+domainFilters:
+  - kubernetes.example.com
+provider: 
+  name: webhook
+  webhook:
+    image:
+      repository: ghcr.io/djr747/external-dns-technitium-webhook
+      tag: develop # Replace with latest release tag
+      imagePullPolicy: Always
+    resources:
+      requests:
+        cpu: 100m
+        memory: 64Mi
+      limits:
+        cpu: 250m
+        memory: 256Mi
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 65532
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop: ["ALL"]
+    service:
+      # -- Webhook exposed HTTP port for the service and health checks.
+      port: 8080
+    env:
+      - name: TECHNITIUM_URL
+        # Note: Ports 5380 (HTTPS) and 53443 (HTTP) are the default API ports for Technitium DNS Server.
+        value: "https://192.168.7.18:53443" # Replace with your Technitium DNS Server URL (IP or hostname)
+      - name: TECHNITIUM_USERNAME
+        valueFrom:
+          secretKeyRef:
+            name: technitium-credentials
+            key: username
+      - name: TECHNITIUM_VERIFY_SSL
+        value: "False" # Set to "True" to verify SSL certificates but false for self-signed certs
+      - name: TECHNITIUM_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: technitium-credentials
+            key: password
+      - name: ZONE
+        value: "kubernetes.example.com" # Replace with your DNS zone managed in Technitium DNS Server
+      - name: CATALOG_ZONE_NAME
+        value: "catalog.example.com" # Replace with your catalog DNS zone in Technitium DNS Server
+
+## Notes:
+# - Do NOT place plaintext credentials in this file under source control. Use
+#   secrets (valueFrom.secretKeyRef) or mount secrets via volumes and extraVolumeMounts.
+# - If you run the webhook as a sidecar (inside ExternalDNS pod), use the chart's
+#   `extraContainers` block instead of `webhook` and populate a container spec there.

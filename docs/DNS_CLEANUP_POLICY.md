@@ -25,19 +25,19 @@ The webhook works correctly with the **ExternalDNS default policy (`--policy=syn
 
 ### Helm Installation
 
-When deploying ExternalDNS with this webhook via Helm, ensure you use the default policy:
+When deploying ExternalDNS with this webhook via Helm, ensure you use the default policy and the provided example values file (`helm/values-webhook-example.yaml`):
 
 ```bash
-# Option 1: Use default (no need to specify)
+# Option 1: Use the provided example values file (recommended for this webhook)
 helm install external-dns external-dns/external-dns \
   --namespace external-dns \
-  --values values-technitium.yaml
+  --values helm/values-webhook-example.yaml
 
 # Option 2: Explicitly set sync policy (if needed)
 helm install external-dns external-dns/external-dns \
   --namespace external-dns \
   --set policy=sync \
-  --values values-technitium.yaml
+  --values helm/values-webhook-example.yaml
 ```
 
 ### Kubectl Deployment
@@ -57,7 +57,7 @@ spec:
         args:
         - --provider=webhook
         - --policy=sync  # ← REQUIRED for cleanup
-        - --webhook-provider-url=http://localhost:8888
+  - --webhook-provider-url=http://localhost:8888
         # ... other args
 ```
 
@@ -68,13 +68,13 @@ If you need to change an existing deployment to use the `sync` policy:
 ```bash
 # Using kubectl patch
 kubectl patch deployment external-dns -n external-dns \
-  -p '{"spec":{"template":{"spec":{"containers":[{"name":"external-dns","args":["--log-level=info","--policy=sync",...]}]}}}}'
+  -p '{"spec":{"template":{"spec":{"containers":[{"name":"external-dns","args":["--log-level=info","--policy=sync","--webhook-provider-url=http://localhost:8888",...]}]}}}}'
 
 # Or re-install with Helm
 helm upgrade external-dns external-dns/external-dns \
   --namespace external-dns \
   --set policy=sync \
-  --values values-technitium.yaml
+  --values helm/values-webhook-example.yaml
 ```
 
 ## Lifecycle Example

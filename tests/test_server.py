@@ -164,3 +164,121 @@ def test_run_servers_main_server_exception(mocker):
     assert "Main server error" in str(mock_logging_error.call_args)
     # Verify thread join was called in finally block
     mock_thread.return_value.join.assert_called_once_with(timeout=5)
+
+
+def test_run_health_server_success(mocker):
+    """Test that run_health_server starts successfully."""
+    health_app = FastAPI()
+    config = AppConfig(
+        technitium_url="http://localhost:5380",
+        technitium_username="admin",
+        technitium_password="password",
+        zone="example.com",
+        domain_filters="example.com",
+    )
+    mock_server = mocker.patch("external_dns_technitium_webhook.server.Server")
+    mock_server.return_value.serve = mocker.AsyncMock()
+    mocker.patch("external_dns_technitium_webhook.server.UvicornConfig")
+    mock_loop = mocker.Mock()
+    mock_loop.run_until_complete = mocker.Mock()
+    mock_loop.close = mocker.Mock()
+    mocker.patch(
+        "external_dns_technitium_webhook.server.asyncio.new_event_loop", return_value=mock_loop
+    )
+    mocker.patch("external_dns_technitium_webhook.server.asyncio.set_event_loop")
+    mock_logging = mocker.patch("external_dns_technitium_webhook.server.logging.info")
+
+    server_mod.run_health_server(health_app, config)
+
+    # Verify loop was created and used
+    mock_loop.run_until_complete.assert_called_once()
+    mock_loop.close.assert_called_once()
+    # Verify logging was called
+    assert any("[HEALTH]" in str(call) for call in mock_logging.call_args_list)
+
+
+def test_run_health_server_exception_in_serve(mocker):
+    """Test that run_health_server handles exceptions from serve()."""
+    health_app = FastAPI()
+    config = AppConfig(
+        technitium_url="http://localhost:5380",
+        technitium_username="admin",
+        technitium_password="password",
+        zone="example.com",
+        domain_filters="example.com",
+    )
+    mock_server = mocker.patch("external_dns_technitium_webhook.server.Server")
+    mock_server.return_value.serve = mocker.AsyncMock(side_effect=Exception("Serve failed"))
+    mocker.patch("external_dns_technitium_webhook.server.UvicornConfig")
+    mock_loop = mocker.Mock()
+    mock_loop.run_until_complete = mocker.Mock(side_effect=Exception("Serve failed"))
+    mock_loop.close = mocker.Mock()
+    mocker.patch(
+        "external_dns_technitium_webhook.server.asyncio.new_event_loop", return_value=mock_loop
+    )
+    mocker.patch("external_dns_technitium_webhook.server.asyncio.set_event_loop")
+    mock_logging_error = mocker.patch("external_dns_technitium_webhook.server.logging.error")
+
+    server_mod.run_health_server(health_app, config)
+
+    # Verify error was logged
+    assert any(
+        "Health server serve error" in str(call) for call in mock_logging_error.call_args_list
+    )
+    mock_loop.close.assert_called_once()
+
+
+def test_run_health_server_outer_exception(mocker):
+    """Test that run_health_server handles outer exceptions."""
+    health_app = FastAPI()
+    config = AppConfig(
+        technitium_url="http://localhost:5380",
+        technitium_username="admin",
+        technitium_password="password",
+        zone="example.com",
+        domain_filters="example.com",
+    )
+    mocker.patch("external_dns_technitium_webhook.server.Server")
+    mocker.patch("external_dns_technitium_webhook.server.UvicornConfig")
+    mock_new_event_loop = mocker.patch(
+        "external_dns_technitium_webhook.server.asyncio.new_event_loop"
+    )
+    mock_new_event_loop.side_effect = Exception("Loop creation failed")
+    mock_logging_error = mocker.patch("external_dns_technitium_webhook.server.logging.error")
+
+    server_mod.run_health_server(health_app, config)
+
+    # Verify outer error was logged
+    assert any("Health server error" in str(call) for call in mock_logging_error.call_args_list)
+
+
+def test_run_health_server_system_exit_in_serve(mocker):
+    """Test that run_health_server handles SystemExit from serve()."""
+    health_app = FastAPI()
+    config = AppConfig(
+        technitium_url="http://localhost:5380",
+        technitium_username="admin",
+        technitium_password="password",
+        zone="example.com",
+        domain_filters="example.com",
+    )
+    mock_server = mocker.patch("external_dns_technitium_webhook.server.Server")
+    mock_server.return_value.serve = mocker.AsyncMock(side_effect=SystemExit(1))
+    mocker.patch("external_dns_technitium_webhook.server.UvicornConfig")
+    mock_loop = mocker.Mock()
+    # SystemExit is a BaseException, not Exception, so it's caught by our BaseException handler
+    mock_loop.run_until_complete = mocker.Mock(side_effect=SystemExit(1))
+    mock_loop.close = mocker.Mock()
+    mocker.patch(
+        "external_dns_technitium_webhook.server.asyncio.new_event_loop", return_value=mock_loop
+    )
+    mocker.patch("external_dns_technitium_webhook.server.asyncio.set_event_loop")
+    mock_logging_error = mocker.patch("external_dns_technitium_webhook.server.logging.error")
+
+    server_mod.run_health_server(health_app, config)
+
+    # Verify SystemExit was handled and logged
+    assert any(
+        "Health server serve error" in str(call) for call in mock_logging_error.call_args_list
+    )
+    mock_loop.close.assert_called_once()

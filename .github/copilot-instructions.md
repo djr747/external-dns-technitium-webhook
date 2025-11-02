@@ -19,7 +19,7 @@ Key components in `external_dns_technitium_webhook/`:
 
 ## Development Workflow
 ```bash
-# Setup (Python 3.14)
+# Setup (Python 3.13)
 make install-dev          # Install with dev dependencies
 
 # Development cycle
@@ -140,10 +140,9 @@ The project uses **three** type checkers to ensure type safety:
 
 ## Deployment Context
 - **Sidecar deployment**: Runs alongside ExternalDNS in same pod
-- **Port 3000**: Default listen port (configurable via `LISTEN_PORT`)
-- **Health checks**: `/health` endpoint for Kubernetes probes
-- **Container image**: Multi-stage build using Chainguard Python 3.14 base images (minimal, non-root, curated by Chainguard)
-- **Middleware**: Rate limiting (60 req/min, 10 burst) and request size limits (1MB default)
+- **Health checks**: `/healthz` endpoint for Kubernetes probes
+- **Container image**: Multi-stage build using Chainguard Python latest base images (minimal, non-root, curated by Chainguard)
+- **Middleware**: Rate limiting (1000 req/min, 10 burst) and request size limits (1MB default)
 
 Note: We require the security workflow (`.github/workflows/security.yml`) to run on every pull request and on a schedule. Protect the `main` branch with branch protection rules that require the security workflow to pass before merging.
 
@@ -263,7 +262,7 @@ Supported properties: `comment`, `expiryTtl`, `disabled`, `createPtrZone` (see h
 
 ### Monitoring & Observability
 - **Structured logging**: Use appropriate log levels (DEBUG/INFO/WARNING/ERROR)
-- **Health checks**: `/health` endpoint must accurately reflect readiness state
+- **Health checks**: `/healthz` endpoint must accurately reflect readiness state
 - **Performance**: Monitor response times and optimize for production workloads
 - **Future**: Plan for Prometheus metrics and OpenTelemetry tracing integration
 

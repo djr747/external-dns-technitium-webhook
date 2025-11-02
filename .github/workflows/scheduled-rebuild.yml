@@ -22,10 +22,10 @@ jobs:
       - name: Check base image for updates
         id: base-digest
         run: |
-          # Pull latest Chainguard Python 3.14 digest
+          # Pull latest Chainguard Python 3.13 digest
           DIGEST=$(docker manifest inspect cgr.dev/chainguard/python:latest | jq -r '.digest') || true
           echo "digest=$DIGEST" >> $GITHUB_OUTPUT
-          echo "Current Chainguard python:3.14 digest: $DIGEST"
+          echo "Current Chainguard python:3.13 digest: $DIGEST"
 
       - name: Compare with last build
         id: check

@@ -112,6 +112,9 @@ class TechnitiumClient:
                 # Allow TLS 1.2+ for compatibility with self-signed certs
                 context.minimum_version = ssl.TLSVersion.TLSv1_2
                 # Don't restrict cipher suites - allows compatibility with various server configs
+                # Intentional: SECLEVEL=0 allows compatibility with self-signed/legacy servers
+                # Only used when TECHNITIUM_VERIFY_SSL=false, which should only be for dev/testing
+                # nosemgrep: python.lang.security.audit.insecure-transport.ssl.no-set-ciphers.no-set-ciphers
                 context.set_ciphers("DEFAULT:@SECLEVEL=0")
                 verify = context
                 logger.debug("Created permissive SSL context for unverified connections")

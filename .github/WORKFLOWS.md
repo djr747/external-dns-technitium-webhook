@@ -9,14 +9,15 @@ This repository uses a comprehensive CI/CD pipeline with security best practices
 **Triggers:** Push to main/develop, Pull Requests
 
 **Jobs:**
-- **Lint**: Code quality checks with Ruff, pyright and mypy
-- **Test**: Python 3.12, 3.13 with 95% coverage requirement
-- **Security Python**: Bandit and pip-audit CVE scanning
+- **Lint**: Code quality checks with Ruff and pyright
+- **Type Check**: Type checking with mypy (strict mode) and pyright
+- **Test**: Python 3.13 with 95% coverage requirement (actual coverage: 99%)
+- **Security Python**: Semgrep and pip-audit CVE scanning
 - **Snyk Security**: Vulnerability detection with Snyk
 - **Docker Build**: Container build and multi-scanner security check (Trivy + Snyk)
 
 **Key Features:**
-- Multi-version Python testing (3.12, 3.13)
+- Single version Python testing (3.13)
 - Coverage artifact upload for manual inspection
 - SARIF upload to GitHub Security tab
 - Parallel security scanning
@@ -203,10 +204,10 @@ You can add these badges to your README:
 ## 🎯 Best Practices Implemented
 
 ### Testing
-- ✅ Multi-version Python testing (3.12, 3.13)
-- ✅ Minimum 80% code coverage requirement
-- ✅ Type checking with mypy
-- ✅ Code formatting with Ruff
+- ✅ Python 3.13 testing
+- ✅ Minimum 95% code coverage requirement (actual coverage: 99%)
+- ✅ Type checking with mypy (strict mode) and pyright
+- ✅ Code formatting and linting with Ruff
 
 ### Security
 - ✅ Multiple CVE scanners for redundancy
@@ -219,7 +220,7 @@ You can add these badges to your README:
 
 ### Container
 - ✅ Multi-architecture builds (AMD64, ARM64)
-- ✅ Red Hat UBI10 base images (vendor CVE support)
+- ✅ Chainguard minimal Python base image (low CVE footprint)
 - ✅ Layer caching for fast builds
 - ✅ Provenance and SBOM attestation
 - ✅ Non-root user execution
@@ -229,9 +230,9 @@ You can add these badges to your README:
 - ✅ Semantic versioning validation
 - ✅ Automated changelog generation
 - ✅ GitHub release automation
-- ✅ PyPI publishing
-- ✅ Container image signing
+- ✅ Container image signing with Cosign
 - ✅ SBOM attached to releases
+- ✅ Multi-platform container deployment
 
 ## 🐛 Troubleshooting
 
@@ -248,10 +249,12 @@ If you don't have Snyk:
 - Ensure all required secrets are configured
 
 ### Coverage Failures
-Tests must maintain 95% coverage:
+Tests must maintain 95% coverage minimum:
 ```bash
 pytest --cov=external_dns_technitium_webhook --cov-fail-under=95
 ```
+
+Current project coverage: 99% (933/941 lines)
 
 ## 📚 Additional Resources
 

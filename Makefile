@@ -85,7 +85,7 @@ docker-build: ## Build Docker image
 	docker build -t external-dns-technitium-webhook:latest .
 
 docker-run: ## Run Docker container
-	docker run -p 3000:3000 \
+	docker run -p 8888:8888 -p 8080:8080 \
 		-e TECHNITIUM_URL=http://host.docker.internal:5380 \
 		-e TECHNITIUM_USERNAME=admin \
 		-e TECHNITIUM_PASSWORD=admin \
@@ -102,4 +102,4 @@ docker-compose-down: ## Stop services with docker-compose
 docker-compose-logs: ## View docker-compose logs
 	docker-compose logs -f
 
-all: format lint type-check test ## Run all checks
+all: format lint type-check test security ## Run all checks (full CI pipeline)

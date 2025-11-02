@@ -916,3 +916,32 @@ def test_client_init_verify_ssl_false_with_fallback(mocker: MockerFixture) -> No
         verify_ssl=False,
     )
     assert client.verify_ssl is False
+
+
+def test_client_init_ssl_context_entire_exception_path(mocker: MockerFixture) -> None:
+    """Test that SSL context creation exception is caught and logged."""
+
+    # Mock just the ssl.SSLContext in our module to raise exception
+    def raise_on_protocol_tls(*args, **kwargs):  # noqa: ARG001
+        raise Exception("SSL context creation failed")
+
+    mock_ssl_context = mocker.MagicMock(side_effect=raise_on_protocol_tls)
+    mocker.patch(
+        "external_dns_technitium_webhook.technitium_client.ssl.SSLContext",
+        mock_ssl_context,
+    )
+    mock_logging = mocker.patch("external_dns_technitium_webhook.technitium_client.logger.warning")
+
+    # Mock httpx.AsyncClient to avoid the cascading SSLContext error from httpx
+    mocker.patch("external_dns_technitium_webhook.technitium_client.httpx.AsyncClient")
+
+    # Should not raise, should fall back to verify=False
+    client = TechnitiumClient(
+        base_url="http://localhost:5380",
+        token="test-token",
+        verify_ssl=False,
+    )
+    assert client.verify_ssl is False
+    # Verify the warning was logged about SSL context creation failure
+    mock_logging.assert_called_once()
+    assert "Failed to create unverified SSL context" in str(mock_logging.call_args)

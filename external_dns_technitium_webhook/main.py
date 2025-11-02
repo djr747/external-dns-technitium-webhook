@@ -7,6 +7,7 @@ import threading
 from collections.abc import AsyncGenerator, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 from fastapi import Depends, FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -23,13 +24,53 @@ from .middleware import RequestSizeLimitMiddleware, rate_limit_middleware
 from .models import Changes, Endpoint, GetZoneOptionsResponse
 from .technitium_client import TechnitiumError
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.StreamHandler(sys.stdout)],
-)
 
+class StructuredFormatter(logging.Formatter):
+    """Format logs in External-DNS style: time=... level=... module=... msg=..."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        """Format log record as structured text matching External-DNS format."""
+        # ISO 8601 format with Z suffix (UTC)
+        timestamp = (
+            datetime.fromtimestamp(record.created, tz=UTC)
+            .isoformat(timespec="seconds")
+            .replace("+00:00", "Z")
+        )
+
+        # Level name in lowercase
+        level = record.levelname.lower()
+
+        # Module name (logger name or function name)
+        module = record.name if record.name != "root" else record.funcName or "app"
+
+        # Format: time="..." level=info module=handlers msg="..."
+        log_parts = [
+            f'time="{timestamp}"',
+            f"level={level}",
+            f"module={module}",
+            f'msg="{record.getMessage()}"',
+        ]
+
+        return " ".join(log_parts)
+
+
+# Configure structured logging
+def setup_logging() -> None:
+    """Set up structured logging matching External-DNS format."""
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.DEBUG)
+
+    # Remove any existing handlers
+    root_logger.handlers.clear()
+
+    # Create stdout handler with structured formatter
+    handler = logging.StreamHandler(sys.stdout)
+    formatter = StructuredFormatter()
+    handler.setFormatter(formatter)
+    root_logger.addHandler(handler)
+
+
+setup_logging()
 logger = logging.getLogger(__name__)
 
 logger.debug("main.py imported")
@@ -65,9 +106,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     from .server import run_health_server
 
     health_app = create_health_app()
-    logger.info(
-        f"Starting health server on {config.listen_address}:{config.health_port}"
-    )
+    logger.info(f"Starting health server on {config.listen_address}:{config.health_port}")
     health_thread = threading.Thread(
         target=run_health_server,
         args=(health_app, config),
