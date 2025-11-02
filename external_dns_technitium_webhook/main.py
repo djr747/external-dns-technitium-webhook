@@ -73,6 +73,7 @@ def setup_logging() -> None:
 setup_logging()
 logger = logging.getLogger(__name__)
 
+
 # Apply structured formatter to external libraries
 def _apply_structured_formatter_to_logger(name: str) -> None:
     """Apply structured formatter to a specific logger and its children.
