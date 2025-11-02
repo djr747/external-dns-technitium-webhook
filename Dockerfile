@@ -54,6 +54,8 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=2 \
 EXPOSE 8888 8080
 
 # Run the application
+# Chainguard Python base image sets ENTRYPOINT to python automatically
+# So we only need to pass the arguments (no need to repeat 'python')
 # Using --ws websockets-sansio to avoid deprecated websockets.legacy implementation
 # This ensures compatibility with latest websockets library (v14.0+)
-CMD ["python", "-m", "uvicorn", "external_dns_technitium_webhook.main:app", "--host", "0.0.0.0", "--port", "8888", "--no-access-log", "--ws", "websockets-sansio"]
+CMD ["-m", "uvicorn", "external_dns_technitium_webhook.main:app", "--host", "0.0.0.0", "--port", "8888", "--no-access-log", "--ws", "websockets-sansio"]
