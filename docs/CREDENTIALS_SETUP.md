@@ -12,13 +12,15 @@ For Kubernetes deployment details, see `docs/deployment/kubernetes.md`.
 
 ## Step 1: Create a Dedicated Technitium User
 
-1. Sign in to Technitium DNS at `http://<technitium-host>:5380`
+1. Sign in to Technitium DNS at `http://<technitium-host>:5380` (HTTP) or `https://<technitium-host>:53443` (HTTPS)
 2. Navigate to **Administration** → **Users** → **Add User**
 3. Create user account:
    - **Username:** `external-dns-webhook`
    - **Password:** Generate secure random: `openssl rand -base64 32`
    - **Permissions:** Grant DNS zone permissions for read/write access
 4. Click **Create** and save credentials securely
+
+**Note:** Technitium DNS uses different ports for HTTP (5380) and HTTPS (53443).
 
 ## Step 2: Store Credentials in Kubernetes
 
@@ -34,6 +36,22 @@ kubectl create secret generic technitium-credentials \
 ```
 
 ## Step 3: TLS Configuration (Optional)
+
+### Option 1: HTTPS with Self-Signed Certificate
+
+For self-signed certificates, disable SSL verification:
+
+```yaml
+provider:
+  webhook:
+    env:
+      - name: TECHNITIUM_URL
+        value: "https://technitium-dns.technitium.svc.cluster.local:53443"
+      - name: TECHNITIUM_VERIFY_SSL
+        value: "false"
+```
+
+### Option 2: HTTPS with Private CA Certificate
 
 For HTTPS with private CA certificates:
 
@@ -51,7 +69,7 @@ provider:
   webhook:
     env:
       - name: TECHNITIUM_URL
-        value: "https://technitium-dns.technitium.svc.cluster.local:5380"
+        value: "https://technitium-dns.technitium.svc.cluster.local:53443"
       - name: TECHNITIUM_VERIFY_SSL
         value: "true"
       - name: TECHNITIUM_CA_BUNDLE_FILE
@@ -74,12 +92,12 @@ volumes:
 
 | Variable | Required | Default | Purpose |
 |----------|----------|---------|---------|
-| `TECHNITIUM_URL` | Yes | None | Technitium DNS Server API endpoint |
+| `TECHNITIUM_URL` | Yes | None | Technitium DNS API endpoint (port 5380 for HTTP, 53443 for HTTPS) |
 | `TECHNITIUM_USERNAME` | Yes | None | Username for authentication |
 | `TECHNITIUM_PASSWORD` | Yes | None | Password for authentication |
 | `ZONE` | Yes | None | Primary DNS zone for management |
 | `DOMAIN_FILTERS` | No | None | Semicolon-separated list of domains |
-| `TECHNITIUM_VERIFY_SSL` | No | `true` | Enable/disable SSL certificate verification |
+| `TECHNITIUM_VERIFY_SSL` | No | `true` | Enable/disable SSL certificate verification (set to `false` for self-signed certs) |
 | `TECHNITIUM_CA_BUNDLE_FILE` | No | None | Path to PEM file with CA certificate |
 | `LOG_LEVEL` | No | `INFO` | Logging level: DEBUG, INFO, WARNING, ERROR |
 | `LISTEN_ADDRESS` | No | `0.0.0.0` | Address to bind the webhook server |

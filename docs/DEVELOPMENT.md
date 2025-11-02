@@ -46,11 +46,18 @@ pip install -e ".[dev]"
 ### Configure Environment
 
 ```bash
+# For HTTP (default Technitium setup)
 export TECHNITIUM_URL="http://localhost:5380"
+# For HTTPS (use port 53443 and disable SSL verification for self-signed certs)
+# export TECHNITIUM_URL="https://localhost:53443"
+# export TECHNITIUM_VERIFY_SSL="false"
+
 export TECHNITIUM_USERNAME="admin"
 export TECHNITIUM_PASSWORD="admin"
 export ZONE="example.com"
 ```
+
+**Note:** Technitium DNS uses port 5380 for HTTP and port 53443 for HTTPS.
 
 ## Development Workflow
 

@@ -44,7 +44,7 @@ provider:
       tag: v1.0.0  # Use your released version
     env:
       - name: TECHNITIUM_URL
-        value: "http://technitium-dns.technitium.svc.cluster.local:5380"
+        value: "http://technitium-dns.technitium.svc.cluster.local:5380"  # or https://...:53443 for HTTPS
       - name: TECHNITIUM_USERNAME
         valueFrom:
           secretKeyRef:
@@ -57,6 +57,9 @@ provider:
             key: password
       - name: ZONE
         value: "example.com"
+      # For self-signed HTTPS certificates, uncomment:
+      # - name: TECHNITIUM_VERIFY_SSL
+      #   value: "false"
       - name: DOMAIN_FILTERS
         value: "example.com"
       - name: LOG_LEVEL
@@ -138,7 +141,7 @@ spec:
           name: health
         env:
         - name: TECHNITIUM_URL
-          value: "http://technitium-dns.technitium.svc.cluster.local:5380"
+          value: "http://technitium-dns.technitium.svc.cluster.local:5380"  # or https://...:53443 for HTTPS
         - name: TECHNITIUM_USERNAME
           valueFrom:
             secretKeyRef:
@@ -151,6 +154,9 @@ spec:
               key: password
         - name: ZONE
           value: "example.com"
+        # For self-signed HTTPS certificates:
+        # - name: TECHNITIUM_VERIFY_SSL
+        #   value: "false"
         - name: DOMAIN_FILTERS
           value: "example.com"
         livenessProbe:

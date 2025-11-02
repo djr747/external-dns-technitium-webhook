@@ -28,10 +28,13 @@ source .venv/bin/activate
 make install-dev
 
 # minimum configuration
-export TECHNITIUM_URL="http://dns.example.com:5380"
+# Use port 5380 for HTTP or 53443 for HTTPS
+export TECHNITIUM_URL="http://dns.example.com:5380"  # or https://dns.example.com:53443
 export TECHNITIUM_USERNAME="external-dns-webhook"
 export TECHNITIUM_PASSWORD="changeme"
 export ZONE="example.com"
+# For self-signed certificates with HTTPS, disable SSL verification
+# export TECHNITIUM_VERIFY_SSL="false"
 
 python -m external_dns_technitium_webhook.main
 ```
@@ -42,14 +45,14 @@ Environment variables map directly to `external_dns_technitium_webhook.config.Co
 
 | Variable | Required | Default | Notes |
 | --- | --- | --- | --- |
-| `TECHNITIUM_URL` | ✅ | — | Primary Technitium API endpoint |
+| `TECHNITIUM_URL` | ✅ | — | Primary Technitium API endpoint (port 5380 for HTTP, 53443 for HTTPS) |
 | `TECHNITIUM_USERNAME` | ✅ | — | Service account for the webhook |
 | `TECHNITIUM_PASSWORD` | ✅ | — | Password for the service account |
 | `ZONE` | ✅ | — | Forward zone managed through ExternalDNS |
 | `DOMAIN_FILTERS` | ❌ | — | Semicolon-separated allowlist for ExternalDNS |
 | `TECHNITIUM_FAILOVER_URLS` | ❌ | — | Semicolon-separated fallback endpoints |
 | `CATALOG_ZONE` | ❌ | — | Catalog zone joined when the endpoint is writable |
-| `TECHNITIUM_VERIFY_SSL` | ❌ | `true` | Verify TLS certificates when connecting to Technitium |
+| `TECHNITIUM_VERIFY_SSL` | ❌ | `true` | Verify TLS certificates; set to `false` for self-signed certs |
 | `TECHNITIUM_CA_BUNDLE_FILE` | ❌ | — | Path to PEM file with CA cert(s) for private CAs; mounted via ConfigMap |
 | `LISTEN_ADDRESS` | ❌ | `0.0.0.0` | Bind address for the FastAPI server |
 | `LOG_LEVEL` | ❌ | `INFO` | Python logging level |

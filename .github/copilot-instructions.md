@@ -182,7 +182,11 @@ All responses use custom media type: `application/external.dns.webhook+json;vers
 - Health endpoint `/health` returns 503 if not ready (check logs for initialization errors)
 - Validate required env vars: `TECHNITIUM_URL`, `TECHNITIUM_USERNAME`, `TECHNITIUM_PASSWORD`, `ZONE`
 - Use `make test` to verify code changes before deployment
-- Check Technitium API connectivity with curl: `curl -X POST http://<server>:5380/api/user/login`
+- Check Technitium API connectivity with curl: 
+  - HTTP: `curl -X POST http://<server>:5380/api/user/login`
+  - HTTPS: `curl -X POST https://<server>:53443/api/user/login` (use `-k` for self-signed certs)
+- Technitium DNS uses port 5380 for HTTP and port 53443 for HTTPS
+- For self-signed certificates, set `TECHNITIUM_VERIFY_SSL=false`
 - Rate limiting: default 1000 req/min with burst of 10; override via `REQUESTS_PER_MINUTE` and `RATE_LIMIT_BURST`
 - Request size limit: 1MB default (adjust via `RequestSizeLimitMiddleware`)
 
