@@ -24,6 +24,7 @@ jobs:
     outputs:
       version: ${{ steps.set_version.outputs.version }}
       version-number: ${{ steps.set_version.outputs.version-number }}
+      should-release: ${{ steps.check-branch.outputs.should-release }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
@@ -31,25 +32,29 @@ jobs:
           fetch-depth: 0
 
       - name: Check tag is on main branch
+        id: check-branch
         if: github.event_name == 'push'
         run: |
-          # Get the tag name
           TAG="${{ github.ref }}"
           if [[ "$TAG" != refs/tags/* ]]; then
-            echo "This is not a tag push, skipping release"
+            echo "should-release=false" >> $GITHUB_OUTPUT
             exit 0
           fi
           
           TAG_NAME="${TAG#refs/tags/}"
+          git fetch origin main:main 2>/dev/null || true
           
-          # Check if tag exists on main branch
-          git fetch origin main:main
-          if git merge-base --is-ancestor "$TAG_NAME" main; then
-            echo "✓ Tag $TAG_NAME is on main branch, proceeding with release"
+          if git merge-base --is-ancestor "$TAG_NAME" main 2>/dev/null; then
+            echo "should-release=true" >> $GITHUB_OUTPUT
           else
-            echo "✗ Tag $TAG_NAME is not on main branch, cancelling release"
-            exit 1
+            echo "should-release=false" >> $GITHUB_OUTPUT
           fi
+
+      - name: Default should-release for workflow_dispatch
+        id: check-branch-dispatch
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          echo "should-release=true" >> $GITHUB_OUTPUT
 
       - name: Set VERSION
         id: set_version
@@ -70,6 +75,7 @@ jobs:
           echo "Releasing version: $VERSION"
 
       - name: Validate semantic version
+        if: steps.check-branch.outputs.should-release == 'true' || github.event_name == 'workflow_dispatch'
         run: |
           VERSION="${{ steps.set_version.outputs.version-number }}"
           if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
@@ -81,6 +87,7 @@ jobs:
     name: Create GitHub Release
     runs-on: ubuntu-latest
     needs: validate-version
+    if: needs.validate-version.outputs.should-release == 'true' || github.event_name == 'workflow_dispatch'
     outputs:
       upload-url: ${{ steps.create-release.outputs.upload_url }}
     steps:
@@ -156,6 +163,7 @@ jobs:
     name: Build and Publish Container (Primary)
     runs-on: ubuntu-latest
     needs: [validate-version, create-release]
+    if: needs.validate-version.outputs.should-release == 'true' || github.event_name == 'workflow_dispatch'
     # Container is the primary deployment method - always runs
     permissions:
       contents: read
@@ -255,7 +263,7 @@ jobs:
     name: Update CHANGELOG.md
     runs-on: ubuntu-latest
     needs: [validate-version, create-release, build-and-publish-container]
-    if: always() && needs.build-and-publish-container.result == 'success'
+    if: (needs.validate-version.outputs.should-release == 'true' || github.event_name == 'workflow_dispatch') && needs.build-and-publish-container.result == 'success'
     steps:
       - uses: actions/checkout@v5
         with:
