@@ -82,7 +82,6 @@ volumes:
 | `TECHNITIUM_VERIFY_SSL` | No | `true` | Enable/disable SSL certificate verification |
 | `TECHNITIUM_CA_BUNDLE_FILE` | No | None | Path to PEM file with CA certificate |
 | `LOG_LEVEL` | No | `INFO` | Logging level: DEBUG, INFO, WARNING, ERROR |
-| `LISTEN_PORT` | No | `3000` | Port for webhook HTTP server |
 
 ## Troubleshooting
 

@@ -52,7 +52,6 @@ Environment variables map directly to `external_dns_technitium_webhook.config.Co
 | `TECHNITIUM_VERIFY_SSL` | ❌ | `true` | Verify TLS certificates when connecting to Technitium |
 | `TECHNITIUM_CA_BUNDLE_FILE` | ❌ | — | Path to PEM file with CA cert(s) for private CAs; mounted via ConfigMap |
 | `LISTEN_ADDRESS` | ❌ | `0.0.0.0` | Bind address for the FastAPI server |
-| `LISTEN_PORT` | ❌ | `3000` | Bind port for the FastAPI server |
 | `LOG_LEVEL` | ❌ | `INFO` | Python logging level |
 | `TECHNITIUM_TIMEOUT` | ❌ | `10.0` | HTTP timeout (seconds) for Technitium calls |
 | `REQUESTS_PER_MINUTE` | ❌ | `1000` | Token bucket rate limit per client |

@@ -3,7 +3,7 @@
 The Technitium webhook implements the [ExternalDNS webhook specification](https://github.com/kubernetes-sigs/external-dns/blob/master/docs/tutorials/webhook-provider.md). All responses use the media type `application/external.dns.webhook+json;version=1` unless stated otherwise.
 
 ## Base URL
-Default bind address is `http://0.0.0.0:3000`. Adjust with `LISTEN_ADDRESS` / `LISTEN_PORT` environment variables.
+Default bind address is `http://0.0.0.0:3000`. The port is hardcoded to 3000; adjust the bind address with the `LISTEN_ADDRESS` environment variable if needed.
 
 ## Supported Record Types
 `A`, `AAAA`, `CNAME`, `TXT`, `ANAME`, `CAA`, `URI`, `SSHFP`, `SVCB`, `HTTPS`

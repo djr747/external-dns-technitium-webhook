@@ -35,8 +35,7 @@ ENV PATH="/home/nonroot/.local/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONFAULTHANDLER=1 \
-    LISTEN_ADDRESS="0.0.0.0" \
-    LISTEN_PORT="3000"
+    LISTEN_ADDRESS="0.0.0.0"
 
 # Copy application code
 WORKDIR /app
