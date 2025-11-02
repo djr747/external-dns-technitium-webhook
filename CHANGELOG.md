@@ -10,13 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.2.0] - 2025-11-02
 
 ### Added
+- **Private Certificate Authority Support:** HTTPS connectivity with private/self-signed certificates via `TECHNITIUM_VERIFY_SSL=false` and `TECHNITIUM_CA_BUNDLE_FILE` environment variables
 - **Documentation Excellence:** Comprehensive documentation audit and accuracy verification across 6 core docs (ARCHITECTURE.md, API.md, PERFORMANCE.md, MONITORING.md, DEVELOPMENT.md, CICD_SECURITY.md)
 - **Mermaid Diagrams:** Converted 8 ASCII architecture diagrams to modern Mermaid format with enhanced clarity
 - **Health Check Architecture:** Documented dual-port architecture (8888 for main API, 8080 for health checks on separate thread)
 - **Rate Limiting Documentation:** Detailed 1000 req/min default rate limiting with token bucket algorithm and configurable burst
 - **Kubernetes Deployment Guide:** Complete kubectl and Helm deployment examples with security best practices
-- **Security Documentation:** Comprehensive security review, credential setup guide, and production checklist
-- **Helm Values Example:** Production-ready `helm/values-webhook-example.yaml` for ExternalDNS integration
+- **Security Documentation:** Comprehensive security review, credential setup guide, and production checklist with private CA configuration
+- **Helm Values Example:** Production-ready `helm/values-webhook-example.yaml` for ExternalDNS integration with private CA support
 - **Structured Logging:** External-DNS compatible log format (time=... level=... module=... msg=...)
 - **Test Infrastructure:** 176 comprehensive tests with 99% code coverage (933/941 lines)
 - **CI/CD Pipeline Security:** 5 active security tools (Ruff, mypy, CodeQL, Trivy, Semgrep) with SARIF upload to GitHub Security tab
@@ -42,6 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Server Thread Exception Handling:** Changed from Exception to BaseException to properly handle SystemExit
 
 ### Security
+- **Private CA Support:** Seamless HTTPS deployment with private certificate authorities (self-signed, internal PKI)
 - **Semgrep Integration:** Multi-pattern security scanning for Python vulnerabilities
 - **Error Sanitization:** Prevents password, token, and path disclosure in error responses to clients
 - **Input Validation:** RFC 1035/1123 DNS name validation, IPv4/IPv6 address validation, TTL range enforcement
