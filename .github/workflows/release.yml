@@ -4,8 +4,6 @@ on:
   push:
     tags:
       - 'v*.*.*'
-    branches:
-      - main
   workflow_dispatch:
     inputs:
       version:
@@ -31,6 +29,27 @@ jobs:
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
+
+      - name: Check tag is on main branch
+        if: github.event_name == 'push'
+        run: |
+          # Get the tag name
+          TAG="${{ github.ref }}"
+          if [[ "$TAG" != refs/tags/* ]]; then
+            echo "This is not a tag push, skipping release"
+            exit 0
+          fi
+          
+          TAG_NAME="${TAG#refs/tags/}"
+          
+          # Check if tag exists on main branch
+          git fetch origin main:main
+          if git merge-base --is-ancestor "$TAG_NAME" main; then
+            echo "✓ Tag $TAG_NAME is on main branch, proceeding with release"
+          else
+            echo "✗ Tag $TAG_NAME is not on main branch, cancelling release"
+            exit 1
+          fi
 
       - name: Set VERSION
         id: set_version
