@@ -1,9 +1,8 @@
 name: Release
 
 on:
-  push:
-    tags:
-      - 'v*.*.*'
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       version:
@@ -24,50 +23,22 @@ jobs:
     outputs:
       version: ${{ steps.set_version.outputs.version }}
       version-number: ${{ steps.set_version.outputs.version-number }}
-      should-release: ${{ steps.check-branch.outputs.should-release }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
-      - name: Check tag is on main branch
-        id: check-branch
-        if: github.event_name == 'push'
-        run: |
-          TAG="${{ github.ref }}"
-          if [[ "$TAG" != refs/tags/* ]]; then
-            echo "should-release=false" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-          
-          TAG_NAME="${TAG#refs/tags/}"
-          git fetch origin main:main 2>/dev/null || true
-          
-          if git merge-base --is-ancestor "$TAG_NAME" main 2>/dev/null; then
-            echo "should-release=true" >> $GITHUB_OUTPUT
-          else
-            echo "should-release=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Default should-release for workflow_dispatch
-        id: check-branch-dispatch
-        if: github.event_name == 'workflow_dispatch'
-        run: |
-          echo "should-release=true" >> $GITHUB_OUTPUT
-
-      - name: Set VERSION
+      - name: Set VERSION from release event
         id: set_version
-        env:
-          GITHUB_EVENT_NAME: ${{ github.event_name }}
-          GITHUB_EVENT_INPUTS_VERSION: ${{ github.event.inputs.version }}
-          GITHUB_REF: ${{ github.ref }}
         run: |
-          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
-            VERSION="$GITHUB_EVENT_INPUTS_VERSION"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
           else
-            VERSION="${GITHUB_REF#refs/tags/}"
+            # Release event provides the tag in github.event.release.tag_name
+            VERSION="${{ github.event.release.tag_name }}"
           fi
+          
           # Strip 'v' prefix if present for version number validation
           VERSION_NUMBER="${VERSION#v}"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
@@ -75,7 +46,6 @@ jobs:
           echo "Releasing version: $VERSION"
 
       - name: Validate semantic version
-        if: steps.check-branch.outputs.should-release == 'true' || github.event_name == 'workflow_dispatch'
         run: |
           VERSION="${{ steps.set_version.outputs.version-number }}"
           if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
@@ -87,7 +57,6 @@ jobs:
     name: Create GitHub Release
     runs-on: ubuntu-latest
     needs: validate-version
-    if: needs.validate-version.outputs.should-release == 'true' || github.event_name == 'workflow_dispatch'
     outputs:
       upload-url: ${{ steps.create-release.outputs.upload_url }}
     steps:
@@ -163,7 +132,6 @@ jobs:
     name: Build and Publish Container (Primary)
     runs-on: ubuntu-latest
     needs: [validate-version, create-release]
-    if: needs.validate-version.outputs.should-release == 'true' || github.event_name == 'workflow_dispatch'
     # Container is the primary deployment method - always runs
     permissions:
       contents: read
@@ -263,7 +231,7 @@ jobs:
     name: Update CHANGELOG.md
     runs-on: ubuntu-latest
     needs: [validate-version, create-release, build-and-publish-container]
-    if: (needs.validate-version.outputs.should-release == 'true' || github.event_name == 'workflow_dispatch') && needs.build-and-publish-container.result == 'success'
+    if: needs.build-and-publish-container.result == 'success'
     steps:
       - uses: actions/checkout@v5
         with:
