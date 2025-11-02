@@ -119,7 +119,7 @@ args:
 **Components:**
 
 #### 2.1 FastAPI Application (`main.py`)
-- HTTP server on port 8888
+- HTTP server on port 3000
 - 4 webhook endpoints
 - Health check endpoints
 - CORS support
