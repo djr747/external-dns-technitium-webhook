@@ -112,7 +112,9 @@ class TechnitiumClient:
                 context.verify_mode = ssl.CERT_NONE
                 verify = context
             except Exception as e:
-                logger.warning(f"Failed to create unverified SSL context: {e}, falling back to verify=False")
+                logger.warning(
+                    f"Failed to create unverified SSL context: {e}, falling back to verify=False"
+                )
                 verify = False
         elif ca_bundle:
             # Use ssl.create_default_context to load the CA bundle
