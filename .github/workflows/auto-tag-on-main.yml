@@ -1,0 +1,63 @@
+name: Auto-Tag Release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - pyproject.toml
+
+permissions:
+  contents: write
+
+jobs:
+  auto-tag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract version from pyproject.toml
+        id: version
+        run: |
+          VERSION=$(grep '^version = ' pyproject.toml | head -1 | cut -d'"' -f2)
+          TAG="v${VERSION}"
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "Extracted version: ${VERSION}, tag: ${TAG}"
+
+      - name: Validate CHANGELOG has been updated for this version
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          if ! grep -q "## \[${VERSION}\]" CHANGELOG.md; then
+            echo "❌ CHANGELOG.md not updated for version ${VERSION}"
+            echo "Please add an entry like: ## [${VERSION}] - $(date +%Y-%m-%d)"
+            exit 1
+          fi
+          echo "✅ CHANGELOG.md is properly updated for ${VERSION}"
+
+      - name: Check if tag already exists
+        id: tag_exists
+        continue-on-error: true
+        run: |
+          git rev-parse "refs/tags/${{ steps.version.outputs.tag }}"
+          echo "exists=true" >> $GITHUB_OUTPUT
+
+      - name: Create tag and release
+        if: steps.tag_exists.outcome == 'failure'
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          release_name: Release ${{ steps.version.outputs.tag }}
+          body: "Release ${{ steps.version.outputs.tag }}\n\nSee CHANGELOG.md for details."
+          draft: false
+          prerelease: false
+
+      - name: Tag already exists
+        if: steps.tag_exists.outcome == 'success'
+        run: |
+          echo "Tag ${{ steps.version.outputs.tag }} already exists, skipping release creation"
