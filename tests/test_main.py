@@ -1,6 +1,7 @@
 """Tests for main application module."""
 
 import asyncio
+import os
 from contextlib import asynccontextmanager, suppress
 from types import SimpleNamespace
 from typing import cast
@@ -1202,3 +1203,27 @@ def test_main_if_name_main(mocker: MockerFixture) -> None:
     # This should execute without errors (may exit)
     with suppress(SystemExit, Exception):
         main()
+
+
+def test_env_defaults_respect_existing_values(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test that module-level env defaults don't override already-set values.
+
+    When environment variables are set before the module is imported,
+    the default fallbacks should not overwrite them.
+    """
+    # Set custom values (simulating container deployment with env vars)
+    monkeypatch.setenv("TECHNITIUM_URL", "https://custom.example.com:5380")
+    monkeypatch.setenv("TECHNITIUM_USERNAME", "custom_user")
+    monkeypatch.setenv("TECHNITIUM_PASSWORD", "custom_pass")
+    monkeypatch.setenv("ZONE", "custom.zone")
+
+    # Verify the values are set and would not be overwritten by defaults
+    assert os.environ["TECHNITIUM_URL"] == "https://custom.example.com:5380"
+    assert os.environ["TECHNITIUM_USERNAME"] == "custom_user"
+    assert os.environ["TECHNITIUM_PASSWORD"] == "custom_pass"
+    assert os.environ["ZONE"] == "custom.zone"
+    # Also verify defaults are NOT applied
+    assert os.environ["TECHNITIUM_URL"] != "http://localhost:5380"
+    assert os.environ["TECHNITIUM_USERNAME"] != "admin"
+    assert os.environ["TECHNITIUM_PASSWORD"] != "password"
+    assert os.environ["ZONE"] != "example.com"
