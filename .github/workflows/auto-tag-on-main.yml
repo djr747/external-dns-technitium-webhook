@@ -6,7 +6,6 @@ on:
       - main
     paths:
       - pyproject.toml
-  workflow_dispatch:
 
 permissions:
   contents: write
@@ -39,6 +38,11 @@ jobs:
           fi
           echo "✅ CHANGELOG.md is properly updated for ${VERSION}"
 
+      - name: Configure git user
+        run: |
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+
       - name: Check if tag already exists
         id: tag_exists
         run: |
@@ -68,6 +72,7 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               tag_name: tag,
+              target_commitish: 'main',
               name: `Release ${tag}`,
               body: `Release ${tag}\n\nSee [CHANGELOG.md](./CHANGELOG.md) for details.`,
               draft: false,
