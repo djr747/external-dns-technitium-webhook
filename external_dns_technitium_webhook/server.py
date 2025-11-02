@@ -4,6 +4,7 @@ import asyncio
 import contextlib
 import logging
 import signal
+import sys
 import threading
 
 from fastapi import FastAPI
@@ -49,14 +50,22 @@ def run_servers(app: FastAPI, health_app: FastAPI, config: AppConfig) -> None:
     def run_health_server() -> None:
         nonlocal health_server_error
         try:
+            # Direct stderr write to ensure visibility
+            sys.stderr.write("[HEALTH] Health server thread started\n")
+            sys.stderr.flush()
+
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
 
             async def serve_and_signal() -> None:
                 logging.info("Health server starting...")
+                sys.stderr.write("[HEALTH] Health server async function started\n")
+                sys.stderr.flush()
 
                 # Start the server but don't wait for it immediately
                 server_task = asyncio.create_task(health_server.serve())
+                sys.stderr.write("[HEALTH] Health server task created\n")
+                sys.stderr.flush()
 
                 # Give uvicorn a brief moment to bind to the port and start accepting connections
                 with contextlib.suppress(TimeoutError):
@@ -67,6 +76,10 @@ def run_servers(app: FastAPI, health_app: FastAPI, config: AppConfig) -> None:
                 logging.info(
                     f"Health server listening on {config.listen_address}:{config.health_port}"
                 )
+                sys.stderr.write(
+                    f"[HEALTH] Server ready on {config.listen_address}:{config.health_port}\n"
+                )
+                sys.stderr.flush()
 
                 # Now wait for the server indefinitely (until it exits)
                 try:
@@ -77,9 +90,13 @@ def run_servers(app: FastAPI, health_app: FastAPI, config: AppConfig) -> None:
             loop.run_until_complete(serve_and_signal())
         except Exception as e:
             health_server_error = e
+            sys.stderr.write(f"[HEALTH] Error: {e}\n")
+            sys.stderr.flush()
             logging.error(f"Health server error: {e}", exc_info=True)
         finally:
             health_server_ready.set()  # Signal even on error to unblock main thread
+            sys.stderr.write("[HEALTH] Health server thread ending\n")
+            sys.stderr.flush()
             with contextlib.suppress(Exception):
                 loop.close()
 
