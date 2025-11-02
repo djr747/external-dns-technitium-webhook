@@ -15,6 +15,7 @@ from .config import Config as AppConfig
 
 
 def run_servers(app: FastAPI, health_app: FastAPI, config: AppConfig) -> None:
+    logging.info("run_servers() called")
     main_config = UvicornConfig(
         app=app,
         host=config.listen_address,
