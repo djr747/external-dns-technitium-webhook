@@ -103,14 +103,18 @@ class TechnitiumClient:
         verify: Any = verify_ssl
         if not verify_ssl:
             # When verify_ssl is False, we need to create an SSL context that doesn't verify
-            # This is necessary because httpx still tries to establish a TLS connection
-            # but won't validate the certificate
-            logger.debug("SSL verification disabled - creating unverified SSL context")
+            # and is permissive about TLS versions and ciphers
+            logger.debug("SSL verification disabled - creating permissive unverified SSL context")
             try:
-                context = ssl.create_default_context()
+                context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
                 context.check_hostname = False
                 context.verify_mode = ssl.CERT_NONE
+                # Allow TLS 1.2+ for compatibility with self-signed certs
+                context.minimum_version = ssl.TLSVersion.TLSv1_2
+                # Don't restrict cipher suites - allows compatibility with various server configs
+                context.set_ciphers("DEFAULT:@SECLEVEL=0")
                 verify = context
+                logger.debug("Created permissive SSL context for unverified connections")
             except Exception as e:
                 logger.warning(
                     f"Failed to create unverified SSL context: {e}, falling back to verify=False"
