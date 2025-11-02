@@ -103,7 +103,10 @@ def run_servers(app: FastAPI, health_app: FastAPI, config: AppConfig) -> None:
                 loop.close()
 
     health_thread = threading.Thread(target=run_health_server, daemon=True)
+    logging.info("Creating health server thread...")
+    logging.info(f"Health thread daemon: {health_thread.daemon}")
     health_thread.start()
+    logging.info("Health server thread started")
 
     # Wait for health server to be ready, with timeout
     if not health_server_ready.wait(timeout=10):
