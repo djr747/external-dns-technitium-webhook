@@ -41,8 +41,8 @@ ENV PATH="/home/nonroot/.local/bin:$PATH" \
 WORKDIR /app
 COPY --chown=nonroot:nonroot external_dns_technitium_webhook ./external_dns_technitium_webhook
 
-# Chainguard images are already non-root, but explicit is better
-USER nonroot
+# Chainguard images are already non-root (UID 65532); use numeric UID for Kubernetes runAsNonRoot compliance
+USER 65532
 
 # Health check
 # Chainguard images have no shell - use exec form with python
