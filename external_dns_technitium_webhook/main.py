@@ -123,7 +123,12 @@ def create_state_dependency(app: FastAPI) -> Callable[[], AppState]:
 
 
 async def setup_technitium_connection(state: AppState) -> None:
-    """Connect to Technitium, supporting failover endpoints and catalog zones."""
+    """Connect to Technitium, supporting failover endpoints and catalog zones.
+
+    If connection fails, the service starts in an unhealthy state (not ready).
+    The health check endpoint will return 503 Service Unavailable.
+    This allows investigation of issues without complete container failure.
+    """
 
     logger.debug(
         f"Config: verify_ssl={state.config.technitium_verify_ssl}, "
@@ -139,7 +144,10 @@ async def setup_technitium_connection(state: AppState) -> None:
             server_role=None,
             catalog_membership=None,
         )
-        sys.exit(1)
+        logger.warning(
+            "Service starting in unhealthy state. Check configuration and restart."
+        )
+        return
 
     failures: list[str] = []
 
@@ -212,7 +220,10 @@ async def setup_technitium_connection(state: AppState) -> None:
 
     failure_summary = "; ".join(failures) if failures else "unknown error"
     logger.error("Unable to initialize any Technitium endpoint: %s", failure_summary)
-    sys.exit(1)
+    logger.warning(
+        "Service starting in unhealthy state. Health check will return 503. "
+        "Check logs and fix configuration/network issues, then restart."
+    )
 
 
 async def ensure_zone_ready(state: AppState) -> ZonePreparationResult:

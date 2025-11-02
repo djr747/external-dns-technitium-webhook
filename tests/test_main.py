@@ -683,8 +683,10 @@ async def test_ensure_catalog_membership_logs_mismatch(
 
 
 @pytest.mark.asyncio
-async def test_setup_connection_exits_when_no_endpoints(mocker: MockerFixture) -> None:
-    """setup_technitium_connection should exit when no endpoints are configured."""
+async def test_setup_connection_starts_unhealthy_when_no_endpoints(
+    mocker: MockerFixture,
+) -> None:
+    """setup_technitium_connection should set not ready when no endpoints are configured."""
 
     config = Config(
         technitium_url=" ",  # trimmed to empty
@@ -693,14 +695,10 @@ async def test_setup_connection_exits_when_no_endpoints(mocker: MockerFixture) -
         zone="example.com",
     )
     state = AppState(config=config)
-    exit_mock = mocker.patch(
-        "external_dns_technitium_webhook.main.sys.exit",
-        side_effect=SystemExit(1),
-    )
     status_mock = mocker.patch.object(state, "update_status", new_callable=AsyncMock)
 
-    with pytest.raises(SystemExit):
-        await setup_technitium_connection(state)
+    # Should not raise SystemExit, just return with service not ready
+    await setup_technitium_connection(state)
     await state.close()
 
     status_mock.assert_awaited_once_with(
@@ -709,12 +707,13 @@ async def test_setup_connection_exits_when_no_endpoints(mocker: MockerFixture) -
         server_role=None,
         catalog_membership=None,
     )
-    exit_mock.assert_called_once_with(1)
 
 
 @pytest.mark.asyncio
-async def test_setup_connection_exits_after_failures(mocker: MockerFixture) -> None:
-    """setup_technitium_connection should exit when all endpoints fail."""
+async def test_setup_connection_starts_unhealthy_after_failures(
+    mocker: MockerFixture,
+) -> None:
+    """setup_technitium_connection should set not ready when all endpoints fail."""
 
     config = Config(
         technitium_url="http://primary:5380",
@@ -732,13 +731,9 @@ async def test_setup_connection_exits_after_failures(mocker: MockerFixture) -> N
         side_effect=RuntimeError("boom"),
     )
     status_mock = mocker.patch.object(state, "update_status", new_callable=AsyncMock)
-    exit_mock = mocker.patch(
-        "external_dns_technitium_webhook.main.sys.exit",
-        side_effect=SystemExit(1),
-    )
 
-    with pytest.raises(SystemExit):
-        await setup_technitium_connection(state)
+    # Should not raise SystemExit, just return with service not ready
+    await setup_technitium_connection(state)
     await state.close()
 
     status_mock.assert_awaited_once_with(
@@ -747,7 +742,6 @@ async def test_setup_connection_exits_after_failures(mocker: MockerFixture) -> N
         server_role=None,
         catalog_membership=None,
     )
-    exit_mock.assert_called_once_with(1)
 
 
 def _build_config() -> Config:
