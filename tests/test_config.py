@@ -242,4 +242,4 @@ def test_ca_bundle_validation_unreadable_file() -> None:
             assert "not readable" in str(exc_info.value).lower()
         finally:
             # Restore permissions for cleanup
-            os.chmod(ca_file, 0o644)
+            os.chmod(ca_file, 0o600)
