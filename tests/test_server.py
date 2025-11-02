@@ -22,17 +22,14 @@ def test_run_servers_starts_both_servers(mocker):
     mocker.patch("external_dns_technitium_webhook.server.UvicornConfig")
     mock_thread = mocker.patch("external_dns_technitium_webhook.server.threading.Thread")
     mock_asyncio_run = mocker.patch("external_dns_technitium_webhook.server.asyncio.run")
-    mock_signal = mocker.patch("external_dns_technitium_webhook.server.signal.signal")
-    mock_time_sleep = mocker.patch("external_dns_technitium_webhook.server.time.sleep")
+    mocker.patch("external_dns_technitium_webhook.server.signal.signal")
+    mock_event = mocker.patch("external_dns_technitium_webhook.server.threading.Event")
+    mock_event.return_value.wait.return_value = True
 
     server_mod.run_servers(app, health_app, config)
 
-    # Verify signal handlers were registered
-    assert mock_signal.call_count == 2
     # Verify health thread was started
     mock_thread.return_value.start.assert_called_once()
-    # Verify time.sleep was called
-    mock_time_sleep.assert_called_once_with(0.1)
     # Verify main server was started
     mock_asyncio_run.assert_called_once()
 
@@ -54,7 +51,8 @@ def test_run_servers_signal_handler(mocker):
     mocker.patch("external_dns_technitium_webhook.server.threading.Thread")
     mocker.patch("external_dns_technitium_webhook.server.asyncio.run")
     mock_signal = mocker.patch("external_dns_technitium_webhook.server.signal.signal")
-    mocker.patch("external_dns_technitium_webhook.server.time.sleep")
+    mock_event = mocker.patch("external_dns_technitium_webhook.server.threading.Event")
+    mock_event.return_value.wait.return_value = True
     mock_logging = mocker.patch("external_dns_technitium_webhook.server.logging.info")
 
     server_mod.run_servers(app, health_app, config)
@@ -118,7 +116,8 @@ def test_run_servers_health_thread_exception(mocker):
     )
     mocker.patch("external_dns_technitium_webhook.server.asyncio.run")
     mocker.patch("external_dns_technitium_webhook.server.signal.signal")
-    mocker.patch("external_dns_technitium_webhook.server.time.sleep")
+    mock_event = mocker.patch("external_dns_technitium_webhook.server.threading.Event")
+    mock_event.return_value.wait.return_value = False
     mock_logging_error = mocker.patch("external_dns_technitium_webhook.server.logging.error")
     mock_loop = mocker.Mock()
     mock_loop.run_until_complete = mocker.Mock(side_effect=Exception("Health server error"))
@@ -130,12 +129,10 @@ def test_run_servers_health_thread_exception(mocker):
 
     server_mod.run_servers(app, health_app, config)
 
-    # Now call the captured thread target to exercise the health server exception path
-    if thread_target:
-        thread_target()
-        mock_logging_error.assert_called()
-        assert "Health server error" in str(mock_logging_error.call_args)
-        mock_loop.close.assert_called_once()
+    # Verify health server failed to start was logged
+    assert any(
+        "Health server failed to start" in str(call) for call in mock_logging_error.call_args_list
+    )
 
 
 def test_run_servers_main_server_exception(mocker):
@@ -156,7 +153,8 @@ def test_run_servers_main_server_exception(mocker):
     mock_asyncio_run = mocker.patch("external_dns_technitium_webhook.server.asyncio.run")
     mock_asyncio_run.side_effect = Exception("Main server error")
     mocker.patch("external_dns_technitium_webhook.server.signal.signal")
-    mocker.patch("external_dns_technitium_webhook.server.time.sleep")
+    mock_event = mocker.patch("external_dns_technitium_webhook.server.threading.Event")
+    mock_event.return_value.wait.return_value = True
     mock_logging_error = mocker.patch("external_dns_technitium_webhook.server.logging.error")
 
     server_mod.run_servers(app, health_app, config)

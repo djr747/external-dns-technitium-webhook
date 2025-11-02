@@ -4,7 +4,6 @@ import asyncio
 import logging
 import signal
 import threading
-import time
 
 from fastapi import FastAPI
 from uvicorn import Config as UvicornConfig
@@ -43,19 +42,34 @@ def run_servers(app: FastAPI, health_app: FastAPI, config: AppConfig) -> None:
     logging.info(f"Starting main server on {config.listen_address}:{config.listen_port}")
     logging.info(f"Starting health server on {config.listen_address}:{config.health_port}")
 
+    health_server_ready = threading.Event()
+    health_server_error: Exception | None = None
+
     def run_health_server() -> None:
+        nonlocal health_server_error
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
+            # Signal that we've started the event loop
+            health_server_ready.set()
+            logging.debug("Health server event loop started")
             loop.run_until_complete(health_server.serve())
         except Exception as e:
-            logging.error(f"Health server error: {e}")
+            health_server_error = e
+            logging.error(f"Health server error: {e}", exc_info=True)
         finally:
             loop.close()
 
     health_thread = threading.Thread(target=run_health_server, daemon=True)
     health_thread.start()
-    time.sleep(0.1)
+
+    # Wait for health server to be ready, with timeout
+    if not health_server_ready.wait(timeout=5):
+        logging.error("Health server failed to start (event loop timeout)")
+    elif health_server_error:
+        logging.error(f"Health server encountered error during startup: {health_server_error}")
+    else:
+        logging.info("Health server is ready")
 
     try:
         asyncio.run(main_server.serve())
