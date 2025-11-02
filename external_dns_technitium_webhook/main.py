@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import sys
+import threading
 from collections.abc import AsyncGenerator, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -58,6 +59,23 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     # Configure logging level
     logging.getLogger().setLevel(config.log_level)
     logger.setLevel(config.log_level)
+
+    # Start health check server in a separate thread
+    from .health import create_health_app
+    from .server import run_health_server
+
+    health_app = create_health_app()
+    logger.info(
+        f"Starting health server on {config.listen_address}:{config.health_port}"
+    )
+    health_thread = threading.Thread(
+        target=run_health_server,
+        args=(health_app, config),
+        daemon=True,
+        name="HealthServerThread",
+    )
+    health_thread.start()
+    logger.info("Health server thread started")
 
     state = AppState(config)
     app.state.app_state = state

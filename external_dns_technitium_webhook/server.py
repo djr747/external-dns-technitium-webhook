@@ -14,6 +14,49 @@ from uvicorn import Server
 from .config import Config as AppConfig
 
 
+def run_health_server(health_app: FastAPI, config: AppConfig) -> None:
+    """Run the health check server in the current thread (for threading).
+
+    Args:
+        health_app: FastAPI health check application
+        config: Application configuration
+    """
+    logging.info("[HEALTH] Health server thread function called")
+    try:
+        sys.stderr.write("[HEALTH-THREAD-START] Health server thread function called\n")
+        sys.stderr.flush()
+
+        health_config = UvicornConfig(
+            app=health_app,
+            host=config.listen_address,
+            port=config.health_port,
+            log_level=config.log_level.lower(),
+            access_log=False,
+        )
+        health_server = Server(health_config)
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+        logging.info("[HEALTH] Health server event loop created")
+        sys.stderr.write("[HEALTH] Health server event loop created\n")
+        sys.stderr.flush()
+
+        try:
+            loop.run_until_complete(health_server.serve())
+        except Exception as e:
+            logging.error(f"[HEALTH] Health server serve error: {e}", exc_info=True)
+            sys.stderr.write(f"[HEALTH] Error: {e}\n")
+            sys.stderr.flush()
+        finally:
+            loop.close()
+            logging.info("[HEALTH] Health server loop closed")
+    except Exception as e:
+        logging.error(f"[HEALTH] Health server error: {e}", exc_info=True)
+        sys.stderr.write(f"[HEALTH] Fatal error: {e}\n")
+        sys.stderr.flush()
+
+
 def run_servers(app: FastAPI, health_app: FastAPI, config: AppConfig) -> None:
     logging.info("run_servers() called")
     main_config = UvicornConfig(
@@ -48,7 +91,7 @@ def run_servers(app: FastAPI, health_app: FastAPI, config: AppConfig) -> None:
     health_server_ready = threading.Event()
     health_server_error: Exception | None = None
 
-    def run_health_server() -> None:
+    def run_health_server_inline() -> None:
         nonlocal health_server_error
         sys.stderr.write("[HEALTH-THREAD-START] Health server thread function called\n")
         sys.stderr.flush()
@@ -103,7 +146,7 @@ def run_servers(app: FastAPI, health_app: FastAPI, config: AppConfig) -> None:
             with contextlib.suppress(Exception):
                 loop.close()
 
-    health_thread = threading.Thread(target=run_health_server, daemon=True)
+    health_thread = threading.Thread(target=run_health_server_inline, daemon=True)
     logging.info("Creating health server thread...")
     logging.info(f"Health thread daemon: {health_thread.daemon}")
     health_thread.start()
