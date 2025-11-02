@@ -109,6 +109,43 @@ Update dependencies to fix CVE-2024-12345
 - Update type hints
 - Include examples where helpful
 
+## Release Process
+
+**Version Control through `pyproject.toml`:**
+
+Releases are automatically created when the version in `pyproject.toml` changes on the main branch.
+
+### Creating a Release:
+
+1. **Update `pyproject.toml`** - Bump the version field:
+   ```toml
+   version = "0.2.1"  # Update this
+   ```
+
+2. **Update `CHANGELOG.md`** - Add entry for the new version:
+   ```markdown
+   ## [0.2.1] - 2025-11-02
+   
+   ### Fixed
+   - Fixed logging format issue
+   
+   ### Changed
+   - Updated dependencies
+   ```
+
+3. **Create & Merge PR** - Include the version bump and changelog:
+   - PR title: "release: v0.2.1"
+   - Ensure all tests pass
+   - Merge to main
+
+4. **Automated Release** - Two workflows handle the rest:
+   - **auto-tag-on-main**: Detects version change, creates git tag
+   - **release**: Publishes artifacts and release notes
+
+### Dependabot Releases:
+
+When Dependabot merges a dependency update PR, it may bump the patch version in `pyproject.toml`. This automatically triggers a patch release - this is expected and desired for security updates.
+
 ## License
 
 By contributing, you agree that your contributions will be licensed under the MIT License.
