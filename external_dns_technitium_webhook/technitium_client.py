@@ -102,12 +102,22 @@ class TechnitiumClient:
         # Configure TLS verification
         verify: Any = verify_ssl
         if not verify_ssl:
-            verify = False
-            logger.debug("SSL verification disabled")
+            # When verify_ssl is False, we need to create an SSL context that doesn't verify
+            # This is necessary because httpx still tries to establish a TLS connection
+            # but won't validate the certificate
+            logger.debug("SSL verification disabled - creating unverified SSL context")
+            try:
+                context = ssl.create_default_context()
+                context.check_hostname = False
+                context.verify_mode = ssl.CERT_NONE
+                verify = context
+            except Exception as e:
+                logger.warning(f"Failed to create unverified SSL context: {e}, falling back to verify=False")
+                verify = False
         elif ca_bundle:
             # Use ssl.create_default_context to load the CA bundle
-            verify = ssl.create_default_context(cafile=ca_bundle)
             logger.debug(f"Using custom CA bundle: {ca_bundle}")
+            verify = ssl.create_default_context(cafile=ca_bundle)
         else:
             logger.debug("Using system CA certificates for SSL verification")
 
