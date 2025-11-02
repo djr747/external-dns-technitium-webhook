@@ -72,6 +72,7 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               tag_name: tag,
+              target_commitish: 'main',
               name: `Release ${tag}`,
               body: `Release ${tag}\n\nSee [CHANGELOG.md](./CHANGELOG.md) for details.`,
               draft: false,
