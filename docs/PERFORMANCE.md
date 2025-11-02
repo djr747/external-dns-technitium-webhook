@@ -273,49 +273,39 @@ Under normal conditions:
 - Create/delete records: 100-300ms per record
 - Concurrent operations: ~50ms per record (with 5+ records)
 
-## Kubernetes Resource Limits
+## Kubernetes Deployment Configuration
 
-### Recommended Limits
+### Resource Configuration
+
+For Helm deployment, adjust resource requests and limits in `values.yaml`:
 
 ```yaml
 resources:
   requests:
-    cpu: 100m          # 0.1 CPU
-    memory: 128Mi      # 128 MB
+    cpu: 100m          # Minimum CPU (0.1 CPU)
+    memory: 128Mi      # Minimum memory
   limits:
-    cpu: 500m          # 0.5 CPU  
-    memory: 256Mi      # 256 MB
+    cpu: 500m          # Maximum CPU (0.5 CPU)
+    memory: 512Mi      # Maximum memory
 ```
 
 **Rationale**:
-- Small memory footprint (Python + FastAPI + dependencies ~50-100MB)
+- Small memory footprint (Python + FastAPI + dependencies)
 - Low CPU usage (I/O bound, not CPU bound)
-- Handles 100+ req/min comfortably
+- Handles 1000+ req/min comfortably with single instance
 
-### Horizontal Pod Autoscaling
+### Rate Limiting Configuration
 
-For high-traffic environments:
+Adjust request rate limiting in Helm `values.yaml` or environment variables:
 
 ```yaml
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
-metadata:
-  name: external-dns-webhook
-spec:
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: external-dns
-  minReplicas: 2
-  maxReplicas: 5
-  metrics:
-  - type: Resource
-    resource:
-      name: cpu
-      target:
-        type: Utilization
-        averageUtilization: 70
+# In values.yaml or as environment variables
+env:
+  REQUESTS_PER_MINUTE: "1000"  # Default: 1000 requests/min
+  RATE_LIMIT_BURST: "10"        # Default: 10
 ```
+
+**Note:** Only resource limits and rate limiting are adjustable. For full deployment configuration, see the Helm chart documentation.
 
 ## Troubleshooting Performance Issues
 
@@ -336,7 +326,7 @@ spec:
 
 ### High Memory Usage
 
-**Symptom**: Memory usage exceeds 256MB
+**Symptom**: Memory usage exceeds 512MB
 
 **Checks**:
 1. Check for large DNS record sets
@@ -355,12 +345,13 @@ spec:
 **Checks**:
 1. Check ExternalDNS sync frequency
 2. Review rate limiter configuration
-3. Check for multiple ExternalDNS instances
+3. Check if rate limits are too strict for your workload
 
 **Solutions**:
-- Increase rate limit: `RateLimiter(requests_per_minute=120)`
-- Reduce ExternalDNS sync frequency
-- Deploy separate webhook instances per ExternalDNS
+- Default rate limit is 1000 requests/min (usually sufficient)
+- If needed, increase: `REQUESTS_PER_MINUTE=2000` environment variable
+- If needed, increase burst capacity: `RATE_LIMIT_BURST=20` (default is 10)
+- Reduce ExternalDNS sync frequency if possible
 
 ## Future Optimizations
 

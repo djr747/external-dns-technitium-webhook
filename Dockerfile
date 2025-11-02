@@ -27,31 +27,35 @@ LABEL org.opencontainers.image.title="ExternalDNS Technitium Webhook" \
 # Chainguard images run as non-root (UID 65532) by default - no need to create user
 
 # Copy installed packages from builder
+# Use numeric UID:GID (65532:65532) for Kubernetes runAsNonRoot compliance
 # Chainguard Python uses /home/nonroot/.local for user site-packages
-COPY --from=builder --chown=nonroot:nonroot /home/nonroot/.local /home/nonroot/.local
+COPY --from=builder --chown=65532:65532 /home/nonroot/.local /home/nonroot/.local
 
 # Set environment variables
 ENV PATH="/home/nonroot/.local/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONFAULTHANDLER=1 \
-    LISTEN_ADDRESS="0.0.0.0" \
-    LISTEN_PORT="8888"
+    LISTEN_ADDRESS="0.0.0.0"
 
 # Copy application code
 WORKDIR /app
-COPY --chown=nonroot:nonroot external_dns_technitium_webhook ./external_dns_technitium_webhook
+COPY --chown=65532:65532 external_dns_technitium_webhook ./external_dns_technitium_webhook
 
-# Chainguard images are already non-root, but explicit is better
-USER nonroot
+# Chainguard images are already non-root (UID 65532); use numeric UID for Kubernetes runAsNonRoot compliance
+USER 65532
 
 # Health check
 # Chainguard images have no shell - use exec form with python
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=2 \
-    CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8888/health', timeout=3)"]
+    CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health', timeout=3)"]
 
-# Expose port
-EXPOSE 8888
+# Expose ports
+EXPOSE 8888 8080
 
 # Run the application
-CMD ["python", "-m", "uvicorn", "external_dns_technitium_webhook.main:app", "--host", "0.0.0.0", "--port", "8888", "--no-access-log"]
+# Chainguard Python base image sets ENTRYPOINT to python automatically
+# So we only need to pass the arguments (no need to repeat 'python')
+# Using --ws websockets-sansio to avoid deprecated websockets.legacy implementation
+# This ensures compatibility with latest websockets library (v14.0+)
+CMD ["-m", "uvicorn", "external_dns_technitium_webhook.main:app", "--host", "0.0.0.0", "--port", "8888", "--no-access-log", "--ws", "websockets-sansio"]

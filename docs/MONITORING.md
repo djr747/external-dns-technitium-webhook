@@ -6,43 +6,47 @@ This document outlines current and planned monitoring capabilities for the Exter
 
 ### Structured Logging
 
-The webhook uses Python's standard logging with structured output:
+The webhook uses structured logging in External-DNS format with key-value pairs:
 
-```python
-import logging
-
-logger = logging.getLogger(__name__)
-
-# Log levels in use:
-logger.debug("Detailed API call traces")      # DEBUG
-logger.info("Normal operations")              # INFO  
-logger.warning("Retry attempts, degraded")    # WARNING
-logger.error("Failures, exceptions")          # ERROR
 ```
+time="2025-11-02T20:33:18Z" level=info module=external_dns_technitium_webhook.handlers msg="Successfully created DNS record"
+time="2025-11-02T20:33:19Z" level=error module=external_dns_technitium_webhook.technitium_client msg="Failed to authenticate: Invalid credentials"
+```
+
+**Log Format**: `time="TIMESTAMP" level=LEVEL module=MODULE msg="MESSAGE"`
 
 **Configuration**: Set `LOG_LEVEL` environment variable (DEBUG, INFO, WARNING, ERROR)
 
+**Log Levels in Use**:
+- `DEBUG` - Detailed API call traces and internal operations
+- `INFO` - Normal successful operations
+- `WARNING` - Retry attempts, degraded conditions, token renewals
+- `ERROR` - Failures and exceptions
+
 **Best Practices**:
-- Use DEBUG for API request/response details
-- Use INFO for successful operations
-- Use WARNING for retries and non-fatal issues
-- Use ERROR for failures requiring attention
+- Enable DEBUG in development to troubleshoot API interactions
+- Use INFO in production for normal operation tracking
+- Monitor WARNING logs for retry patterns indicating issues
+- Alert on ERROR logs for immediate investigation
 
 ### Health Checks
 
-**Endpoint**: `GET /health`
+**Endpoints** (on separate health server thread, port 8080):
+- `GET /health` - Liveness probe
+- `GET /healthz` - Readiness probe (Kubernetes-style)
 
 **Behavior**:
-- Returns `200 OK` when service is ready
+- Returns `200 OK` with `{"status": "ok"}` when service is ready
 - Returns `503 Service Unavailable` when not ready
-- Checks Technitium connectivity and authentication
+- Checks main API server connectivity (port 8888)
+- Runs on separate thread to isolate from main API load
 
 **Kubernetes Integration**:
 ```yaml
 livenessProbe:
   httpGet:
     path: /health
-    port: 3000
+    port: 8080
   initialDelaySeconds: 10
   periodSeconds: 30
   timeoutSeconds: 5
@@ -50,28 +54,35 @@ livenessProbe:
 
 readinessProbe:
   httpGet:
-    path: /health
-    port: 3000
+    path: /healthz
+    port: 8080
   initialDelaySeconds: 5
   periodSeconds: 10
   timeoutSeconds: 3
   failureThreshold: 2
 ```
 
-### Performance Monitoring (Manual)
+### Performance Monitoring (Current)
 
-**Current Approach**: Log analysis
+**Current Approach**: Structured logging with DEBUG level
 
-Example queries for production logs:
+Enable DEBUG logging to observe performance:
+
 ```bash
-# Request duration patterns
-grep "Request duration" /var/log/webhook.log | awk '{print $NF}'
+# Kubernetes
+kubectl set env deployment/external-dns LOG_LEVEL=DEBUG
 
-# Error rates
-grep "ERROR" /var/log/webhook.log | wc -l
+# Docker
+docker run -e LOG_LEVEL=DEBUG ...
 
-# API call frequency
-grep "POST /records" /var/log/webhook.log | wc -l
+# Docker Compose
+LOG_LEVEL=DEBUG docker-compose up
+```
+
+Debug logs include operation details that help identify performance issues:
+```
+time="2025-11-02T20:33:18Z" level=debug module=technitium_client msg="Fetching records from zone example.com"
+time="2025-11-02T20:33:18Z" level=info module=handlers msg="Found 42 endpoints"
 ```
 
 ## Planned Enhancements
@@ -140,20 +151,7 @@ ExternalDNS Request
 - Active connections
 - Resource utilization
 
-## Current Troubleshooting
-
-### Enable Debug Logging
-
-```bash
-# Kubernetes
-kubectl set env deployment/external-dns LOG_LEVEL=DEBUG
-
-# Docker
-docker run -e LOG_LEVEL=DEBUG ...
-
-# Docker Compose
-LOG_LEVEL=DEBUG docker-compose up
-```
+## Troubleshooting
 
 ### View Logs
 
@@ -172,49 +170,61 @@ docker-compose logs -f webhook
 
 **Successful DNS creation**:
 ```
-INFO - Creating DNS record: example.com (A) -> 192.0.2.1
-INFO - Successfully created record in zone example.com
+time="2025-11-02T20:33:18Z" level=info module=external_dns_technitium_webhook.handlers msg="Creating DNS record: example.com (A) -> 192.0.2.1"
+time="2025-11-02T20:33:19Z" level=info module=external_dns_technitium_webhook.technitium_client msg="Successfully created record in zone example.com"
 ```
 
 **Authentication renewal**:
 ```
-WARNING - Token expired, renewing authentication
-INFO - Successfully renewed authentication token
+time="2025-11-02T20:33:15Z" level=warning module=external_dns_technitium_webhook.technitium_client msg="Token expired, renewing authentication"
+time="2025-11-02T20:33:16Z" level=info module=external_dns_technitium_webhook.technitium_client msg="Successfully renewed authentication token"
 ```
 
 **Rate limiting**:
 ```
-WARNING - Rate limit exceeded for client 10.0.0.1
+time="2025-11-02T20:33:20Z" level=warning module=external_dns_technitium_webhook.middleware msg="Rate limit exceeded for client 10.0.0.1"
 ```
 
 **Connection issues**:
 ```
-ERROR - Failed to connect to Technitium: Connection refused
-ERROR - Retrying in 5 seconds...
+time="2025-11-02T20:33:10Z" level=error module=external_dns_technitium_webhook.technitium_client msg="Failed to connect to Technitium: Connection refused"
+time="2025-11-02T20:33:15Z" level=info module=external_dns_technitium_webhook.technitium_client msg="Retrying connection after 5 seconds..."
 ```
 
 ## Performance Optimization
 
 ### Connection Pooling
 
-The webhook uses `httpx.AsyncClient` for connection pooling:
+The webhook maintains a persistent `httpx.AsyncClient` instance for all requests to Technitium:
 
 ```python
-# Reuses connections to Technitium
-async with httpx.AsyncClient(timeout=10.0) as client:
-    # Multiple requests use same connection
+# In TechnitiumClient.__init__()
+self._client = httpx.AsyncClient(timeout=timeout, verify=verify)
+
+# Reused across all API calls
+response = await self._client.post(url, data=data)
 ```
+
+This approach:
+- Eliminates TCP handshake overhead for each request
+- Reuses connections through HTTP keep-alive
+- Reduces latency for repeated API calls
+- Improves overall throughput
 
 ### Async Operations
 
-All I/O operations are async to prevent blocking:
+All I/O operations use async/await for non-blocking behavior:
 
 ```python
-# Non-blocking concurrent operations
-async def process_changes(changes):
-    tasks = [create_record(r) for r in changes.create]
-    await asyncio.gather(*tasks)
+# Example: DNS record deletion
+await state.client.delete_record(
+    domain=ep.dns_name,
+    record_type=ep.record_type,
+    record_data=record_data,
+)
 ```
+
+Each API call to Technitium is awaited, allowing the FastAPI event loop to handle other requests while waiting for responses. This prevents blocking and enables efficient resource utilization.
 
 ### Rate Limiting
 
@@ -227,14 +237,14 @@ Middleware prevents abuse:
 
 When deploying to production, ensure:
 
-- [ ] Health checks configured in Kubernetes
+- [ ] Health checks configured in Kubernetes (port 8080)
 - [ ] Log aggregation set up (ELK, Loki, CloudWatch, etc.)
 - [ ] Log retention policy defined
 - [ ] Alert rules configured for error rates
 - [ ] Alert rules for health check failures
 - [ ] Response time SLOs defined
 - [ ] Resource limits set (CPU, memory)
-- [ ] Horizontal pod autoscaling configured (if needed)
+- [ ] Single instance deployment verified (ExternalDNS doesn't support HA)
 
 ## Future Roadmap
 

@@ -841,3 +841,107 @@ async def test_set_zone_options_serializes_values(
     assert payload["maxTransfers"] == 5
     assert payload["allowedIpRanges"] == "192.0.2.1,2001:db8::1"
     assert "description" not in payload
+
+
+def test_client_init_with_verify_ssl_false() -> None:
+    """Test client initialization with verify_ssl=False."""
+    client = TechnitiumClient(
+        base_url="http://localhost:5380",
+        token="test-token",
+        verify_ssl=False,
+    )
+    assert client.verify_ssl is False
+
+
+def test_client_init_with_ca_bundle() -> None:
+    """Test client initialization with CA bundle."""
+    import subprocess
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        ca_file = f"{tmpdir}/ca.pem"
+        # Create a valid self-signed CA certificate
+        subprocess.run(
+            [
+                "openssl",
+                "req",
+                "-new",
+                "-x509",
+                "-days",
+                "1",
+                "-nodes",
+                "-out",
+                ca_file,
+                "-keyout",
+                f"{tmpdir}/ca.key",
+                "-subj",
+                "/CN=test-ca",
+            ],
+            check=True,
+            capture_output=True,
+        )
+
+        client = TechnitiumClient(
+            base_url="http://localhost:5380",
+            token="test-token",
+            verify_ssl=True,
+            ca_bundle=ca_file,
+        )
+        # When ca_bundle is provided, it should be stored
+        assert client.ca_bundle == ca_file
+
+
+def test_client_init_default_verify_ssl() -> None:
+    """Test client initialization with default verify_ssl (True)."""
+    client = TechnitiumClient(
+        base_url="http://localhost:5380",
+        token="test-token",
+    )
+    assert client.verify_ssl is True
+    assert client.ca_bundle is None
+
+
+def test_client_init_verify_ssl_false_with_fallback(mocker: MockerFixture) -> None:
+    """Test client initialization with verify_ssl=False and SSL context creation failure."""
+    # Mock the set_ciphers method to raise an exception (simulating SSL context creation failure)
+    mocker.patch(
+        "external_dns_technitium_webhook.technitium_client.ssl.SSLContext.set_ciphers",
+        side_effect=Exception("Failed to set ciphers"),
+    )
+
+    # Should not raise, should fall back to verify=False
+    client = TechnitiumClient(
+        base_url="http://localhost:5380",
+        token="test-token",
+        verify_ssl=False,
+    )
+    assert client.verify_ssl is False
+
+
+def test_client_init_ssl_context_entire_exception_path(mocker: MockerFixture) -> None:
+    """Test that SSL context creation exception is caught and logged."""
+
+    # Mock just the ssl.SSLContext in our module to raise exception
+    def raise_on_protocol_tls(*args, **kwargs):  # noqa: ARG001
+        raise Exception("SSL context creation failed")
+
+    mock_ssl_context = mocker.MagicMock(side_effect=raise_on_protocol_tls)
+    mocker.patch(
+        "external_dns_technitium_webhook.technitium_client.ssl.SSLContext",
+        mock_ssl_context,
+    )
+    mock_logging = mocker.patch("external_dns_technitium_webhook.technitium_client.logger.warning")
+
+    # Mock httpx.AsyncClient to avoid the cascading SSLContext error from httpx
+    mocker.patch("external_dns_technitium_webhook.technitium_client.httpx.AsyncClient")
+
+    # Should not raise, should fall back to verify=False
+    client = TechnitiumClient(
+        base_url="http://localhost:5380",
+        token="test-token",
+        verify_ssl=False,
+    )
+    assert client.verify_ssl is False
+    # Verify the warning was logged about SSL context creation failure
+    mock_logging.assert_called_once()
+    assert "Failed to create unverified SSL context" in str(mock_logging.call_args)

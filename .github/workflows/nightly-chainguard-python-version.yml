@@ -9,57 +9,62 @@ jobs:
   check-python-version:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Pull Chainguard Python latest image
         run: |
           docker pull cgr.dev/chainguard/python:latest
+
       - name: Get Python version from image
         id: get_version
         run: |
-          PY_VER=$(docker run --rm cgr.dev/chainguard/python:latest python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
-          echo "python_version=$PY_VER" >> $GITHUB_OUTPUT
-      - name: Save Python version to artifact
+          PY_VER=$(docker run --rm cgr.dev/chainguard/python:latest -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+          echo "python_version=${PY_VER}" >> $GITHUB_OUTPUT
+          echo "Detected Python version: ${PY_VER}"
+
+      - name: Check if update is needed
+        id: check_update
         run: |
-          echo "${{ steps.get_version.outputs.python_version }}" > chainguard_python_version.txt
-      - name: Upload version artifact
-        uses: actions/upload-artifact@v5
-        with:
-          name: chainguard-python-version
-          path: chainguard_python_version.txt
-      - name: Print detected version
-        run: |
-          echo "Detected Chainguard Python version: ${{ steps.get_version.outputs.python_version }}"
-      - name: Checkout repository
-        uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ steps.get_version.outputs.python_version }}
-      - name: Update version in pyproject.toml and config files
-        run: |
-          VERSION=${{ steps.get_version.outputs.python_version }}
-          sed -i "s/^requires-python = .*/requires-python = \">=$VERSION,<4\"/" pyproject.toml
-          sed -i "s/^target-version = .*/target-version = \"py$VERSION\"/" pyproject.toml
-          sed -i "s/^python_version = .*/python_version = \"$VERSION\"/" pyproject.toml
-          sed -i "s/^pythonVersion = .*/pythonVersion = $VERSION/" pyproject.toml
-          # Update runtime test if present
-          if [ -f tests/test_python_version.py ]; then
-            sed -i "s/assert sys.version_info.major == .*/assert sys.version_info.major == ${VERSION%%.*}/" tests/test_python_version.py
-            sed -i "s/assert sys.version_info.minor == .*/assert sys.version_info.minor == ${VERSION#*.}/" tests/test_python_version.py
+          CURRENT_VERSION=$(grep "requires-python" pyproject.toml | grep -oP '>=\K[0-9]+\.[0-9]+')
+          NEW_VERSION=${{ steps.get_version.outputs.python_version }}
+          if [ "${CURRENT_VERSION}" != "${NEW_VERSION}" ]; then
+            echo "update_needed=true" >> $GITHUB_OUTPUT
+            echo "old_version=${CURRENT_VERSION}" >> $GITHUB_OUTPUT
+            echo "new_version=${NEW_VERSION}" >> $GITHUB_OUTPUT
+          else
+            echo "update_needed=false" >> $GITHUB_OUTPUT
           fi
+
+      - name: Update pyproject.toml requires-python
+        if: steps.check_update.outputs.update_needed == 'true'
+        run: |
+          NEW_VERSION=${{ steps.get_version.outputs.python_version }}
+          sed -i "s/requires-python = \".*\"/requires-python = \">=${NEW_VERSION},<4\"/" pyproject.toml
+
+      - name: Update Dockerfile Chainguard image tag if needed
+        if: steps.check_update.outputs.update_needed == 'true'
+        run: |
+          # Note: Dockerfile uses 'latest' tag which auto-updates, so no change needed
+          echo "Dockerfile already uses cgr.dev/chainguard/python:latest-dev and latest"
+
       - name: Create Pull Request
+        if: steps.check_update.outputs.update_needed == 'true'
         uses: peter-evans/create-pull-request@v7
         with:
-          commit-message: "chore: update Python version to ${{ steps.get_version.outputs.python_version }} from Chainguard image"
-          title: "Update Python version to ${{ steps.get_version.outputs.python_version }} (nightly)"
-          body: "Automated update: Detected Python version ${{ steps.get_version.outputs.python_version }} in Chainguard 'latest' image. This PR updates pyproject.toml, config, and runtime test."
+          commit-message: "chore: update Python requires-python to ${{ steps.get_version.outputs.python_version }} from Chainguard image"
+          title: "chore: Update Python version to ${{ steps.get_version.outputs.python_version }} (nightly)"
+          body: |
+            Automated update from nightly Chainguard Python version check.
+            
+            Updated from Python ${{ steps.check_update.outputs.old_version }} to ${{ steps.check_update.outputs.new_version }}.
+            
+            Changes:
+            - Updated `pyproject.toml` requires-python constraint
+            - Dockerfile already uses `cgr.dev/chainguard/python:latest` which auto-updates
+            
+            Please review and test before merging.
           branch: "chore/update-python-version-nightly"
-          labels: "automation,python-version"
-      - name: Notify maintainers if version changed
-        if: ${{ steps.create-pull-request.outputs.pull-request-number }}
-        run: |
-          echo "Python version updated to ${{ steps.get_version.outputs.python_version }}. PR #${{ steps.create-pull-request.outputs.pull-request-number }} created." > notification.txt
-      - name: Send notification
-        uses: actions/upload-artifact@v5
-        with:
-          name: python-version-notification
-          path: notification.txt
+          labels: "automation,python-version,dependencies"
+          delete-branch: true
+

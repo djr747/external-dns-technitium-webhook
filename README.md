@@ -19,7 +19,7 @@ Kubernetes resources → ExternalDNS → Webhook (FastAPI) → Technitium DNS AP
 ```
 The webhook maintains shared application state (HTTP client, auth token, readiness flag) and exposes the ExternalDNS webhook contract: `/health`, `/`, `/records`, `/adjustendpoints`, and `/records`.
 
-## Quick Start
+## DevelopmentQuick Start
 ```bash
 git clone https://github.com/djr747/external-dns-technitium-webhook.git
 cd external-dns-technitium-webhook
@@ -28,10 +28,13 @@ source .venv/bin/activate
 make install-dev
 
 # minimum configuration
-export TECHNITIUM_URL="http://dns.example.com:5380"
+# Use port 5380 for HTTP or 53443 for HTTPS
+export TECHNITIUM_URL="http://dns.example.com:5380"  # or https://dns.example.com:53443
 export TECHNITIUM_USERNAME="external-dns-webhook"
 export TECHNITIUM_PASSWORD="changeme"
 export ZONE="example.com"
+# For self-signed certificates with HTTPS, disable SSL verification
+# export TECHNITIUM_VERIFY_SSL="false"
 
 python -m external_dns_technitium_webhook.main
 ```
@@ -42,15 +45,16 @@ Environment variables map directly to `external_dns_technitium_webhook.config.Co
 
 | Variable | Required | Default | Notes |
 | --- | --- | --- | --- |
-| `TECHNITIUM_URL` | ✅ | — | Primary Technitium API endpoint |
+| `TECHNITIUM_URL` | ✅ | — | Primary Technitium API endpoint (port 5380 for HTTP, 53443 for HTTPS) |
 | `TECHNITIUM_USERNAME` | ✅ | — | Service account for the webhook |
 | `TECHNITIUM_PASSWORD` | ✅ | — | Password for the service account |
 | `ZONE` | ✅ | — | Forward zone managed through ExternalDNS |
 | `DOMAIN_FILTERS` | ❌ | — | Semicolon-separated allowlist for ExternalDNS |
 | `TECHNITIUM_FAILOVER_URLS` | ❌ | — | Semicolon-separated fallback endpoints |
 | `CATALOG_ZONE` | ❌ | — | Catalog zone joined when the endpoint is writable |
+| `TECHNITIUM_VERIFY_SSL` | ❌ | `true` | Verify TLS certificates; set to `false` for self-signed certs |
+| `TECHNITIUM_CA_BUNDLE_FILE` | ❌ | — | Path to PEM file with CA cert(s) for private CAs; mounted via ConfigMap |
 | `LISTEN_ADDRESS` | ❌ | `0.0.0.0` | Bind address for the FastAPI server |
-| `LISTEN_PORT` | ❌ | `3000` | Bind port for the FastAPI server |
 | `LOG_LEVEL` | ❌ | `INFO` | Python logging level |
 | `TECHNITIUM_TIMEOUT` | ❌ | `10.0` | HTTP timeout (seconds) for Technitium calls |
 | `REQUESTS_PER_MINUTE` | ❌ | `1000` | Token bucket rate limit per client |
@@ -64,8 +68,6 @@ This project uses **Chainguard Python** base images for maximum security:
 - 📋 **SLSA Level 3** - Supply chain security with signed provenance
 - 🚫 **Non-root** - Runs as UID 65532 (`nonroot`) by default
 - 📦 **Minimal** - ~40MB final image (vs 100MB+ for typical Python containers)
-
-The Chainguard migration resolved **30 open CVEs** (3 Critical, 16 High, 11 Medium) that existed in the previous Red Hat UBI 10 base image.
 
 For security disclosures, see [docs/SECURITY.md](docs/SECURITY.md).
 
@@ -88,6 +90,6 @@ See `docs/DEVELOPMENT.md` for contributor tips and Docker usage.
 - [Security policy](docs/SECURITY.md) – Security policy and disclosure process
 
 ## Contributing & License
-Bug reports and pull requests are welcome—see `docs/CONTRIBUTING.md` for expectations. Licensed under the MIT License (`LICENSE`).
+Bug reports and pull requests are welcome—see [CONTRIBUTING.md](docs/CONTRIBUTING.md) for expectations. Licensed under the MIT License ([LICENSE](LICENSE)).
 
 > Inspired by [roosmaa/external-dns-technitium-webhook](https://github.com/roosmaa/external-dns-technitium-webhook) and tailored for Technitium-backed ExternalDNS deployments.

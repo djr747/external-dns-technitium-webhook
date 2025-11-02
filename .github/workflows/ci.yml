@@ -124,7 +124,10 @@ jobs:
           tags: |
             type=ref,event=branch
             type=ref,event=pr
-            type=sha,prefix={{branch}}-
+            # Use a stable prefix for SHA tags to avoid generating tags that
+            # begin with a hyphen when the branch name is empty in certain
+            # CI contexts (which produced invalid tags like ":-489026a").
+            type=sha,prefix=commit-
             type=raw,value=ci-${{ github.sha }},enable={{is_default_branch}}
 
       - name: Build and push Docker image

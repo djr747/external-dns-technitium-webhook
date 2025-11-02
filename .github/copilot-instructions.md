@@ -19,7 +19,7 @@ Key components in `external_dns_technitium_webhook/`:
 
 ## Development Workflow
 ```bash
-# Setup (Python 3.14)
+# Setup (Python 3.13)
 make install-dev          # Install with dev dependencies
 
 # Development cycle
@@ -94,9 +94,11 @@ class Endpoint(BaseModel):
 ### Environment Configuration
 Required vars (see `config.py`):
 - `TECHNITIUM_URL` - DNS server endpoint
-- `TECHNITIUM_USERNAME/PASSWORD` - Auth credentials  
+- `TECHNITIUM_USERNAME/PASSWORD` - Auth credentials (user must be member of **DNS admin** group)
 - `ZONE` - Primary DNS zone
 - `DOMAIN_FILTERS` - Semicolon-separated domain list
+
+**Important:** The Technitium user account must be added to the **DNS admin group** in Technitium's Administration panel to access the API. Zone-level permissions alone are insufficient.
 
 ### Technitium API Integration
 - **Auto-authentication**: Client handles token renewal transparently
@@ -138,10 +140,9 @@ The project uses **three** type checkers to ensure type safety:
 
 ## Deployment Context
 - **Sidecar deployment**: Runs alongside ExternalDNS in same pod
-- **Port 3000**: Default listen port (configurable via `LISTEN_PORT`)
-- **Health checks**: `/health` endpoint for Kubernetes probes
-- **Container image**: Multi-stage build using Chainguard Python 3.14 base images (minimal, non-root, curated by Chainguard)
-- **Middleware**: Rate limiting (60 req/min, 10 burst) and request size limits (1MB default)
+- **Health checks**: `/healthz` endpoint for Kubernetes probes
+- **Container image**: Multi-stage build using Chainguard Python latest base images (minimal, non-root, curated by Chainguard)
+- **Middleware**: Rate limiting (1000 req/min, 10 burst) and request size limits (1MB default)
 
 Note: We require the security workflow (`.github/workflows/security.yml`) to run on every pull request and on a schedule. Protect the `main` branch with branch protection rules that require the security workflow to pass before merging.
 
@@ -182,7 +183,11 @@ All responses use custom media type: `application/external.dns.webhook+json;vers
 - Health endpoint `/health` returns 503 if not ready (check logs for initialization errors)
 - Validate required env vars: `TECHNITIUM_URL`, `TECHNITIUM_USERNAME`, `TECHNITIUM_PASSWORD`, `ZONE`
 - Use `make test` to verify code changes before deployment
-- Check Technitium API connectivity with curl: `curl -X POST http://<server>:5380/api/user/login`
+- Check Technitium API connectivity with curl: 
+  - HTTP: `curl -X POST http://<server>:5380/api/user/login`
+  - HTTPS: `curl -X POST https://<server>:53443/api/user/login` (use `-k` for self-signed certs)
+- Technitium DNS uses port 5380 for HTTP and port 53443 for HTTPS
+- For self-signed certificates, set `TECHNITIUM_VERIFY_SSL=false`
 - Rate limiting: default 1000 req/min with burst of 10; override via `REQUESTS_PER_MINUTE` and `RATE_LIMIT_BURST`
 - Request size limit: 1MB default (adjust via `RequestSizeLimitMiddleware`)
 
@@ -257,7 +262,7 @@ Supported properties: `comment`, `expiryTtl`, `disabled`, `createPtrZone` (see h
 
 ### Monitoring & Observability
 - **Structured logging**: Use appropriate log levels (DEBUG/INFO/WARNING/ERROR)
-- **Health checks**: `/health` endpoint must accurately reflect readiness state
+- **Health checks**: `/healthz` endpoint must accurately reflect readiness state
 - **Performance**: Monitor response times and optimize for production workloads
 - **Future**: Plan for Prometheus metrics and OpenTelemetry tracing integration
 

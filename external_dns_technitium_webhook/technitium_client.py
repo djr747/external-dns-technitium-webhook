@@ -1,6 +1,7 @@
 """Technitium DNS API client."""
 
 import logging
+import ssl
 from typing import Any, TypeVar, cast
 
 import httpx
@@ -81,6 +82,7 @@ class TechnitiumClient:
         token: str = "",
         timeout: float = 10.0,
         verify_ssl: bool = True,
+        ca_bundle: str | None = None,
     ) -> None:
         """Initialize the Technitium client.
 
@@ -89,12 +91,47 @@ class TechnitiumClient:
             token: Authentication token (optional, can be set later)
             timeout: Request timeout in seconds
             verify_ssl: Verify SSL certificates
+            ca_bundle: Optional path to a PEM file with CA certificates
         """
         self.base_url = base_url.rstrip("/")
         self.token = token
         self.timeout = timeout
         self.verify_ssl = verify_ssl
-        self._client = httpx.AsyncClient(timeout=timeout, verify=verify_ssl)
+        self.ca_bundle = ca_bundle
+
+        # Configure TLS verification
+        verify: Any = verify_ssl
+        if not verify_ssl:
+            # When verify_ssl is False, we need to create an SSL context that doesn't verify
+            # and is permissive about TLS versions and ciphers
+            logger.debug("SSL verification disabled - creating permissive unverified SSL context")
+            try:
+                context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+                context.check_hostname = False
+                context.verify_mode = ssl.CERT_NONE
+                # Allow TLS 1.2+ for compatibility with self-signed certs
+                context.minimum_version = ssl.TLSVersion.TLSv1_2
+                # Don't restrict cipher suites - allows compatibility with various server configs
+                # Intentional: SECLEVEL=0 allows compatibility with self-signed/legacy servers
+                # Only used when TECHNITIUM_VERIFY_SSL=false, which should only be for dev/testing
+                # nosemgrep: python.lang.security.audit.insecure-transport.ssl.no-set-ciphers.no-set-ciphers
+                context.set_ciphers("DEFAULT:@SECLEVEL=0")
+                verify = context
+                logger.debug("Created permissive SSL context for unverified connections")
+            except Exception as e:
+                logger.warning(
+                    f"Failed to create unverified SSL context: {e}, falling back to verify=False"
+                )
+                verify = False
+        elif ca_bundle:
+            # Use ssl.create_default_context to load the CA bundle
+            logger.debug(f"Using custom CA bundle: {ca_bundle}")
+            verify = ssl.create_default_context(cafile=ca_bundle)
+        else:
+            logger.debug("Using system CA certificates for SSL verification")
+
+        logger.debug(f"Creating httpx.AsyncClient with verify={verify}")
+        self._client = httpx.AsyncClient(timeout=timeout, verify=verify)
 
     async def close(self) -> None:
         """Close the HTTP client."""

@@ -16,7 +16,8 @@ def test_config_defaults() -> None:
     )
 
     assert config.listen_address == "0.0.0.0"
-    assert config.listen_port == 3000
+    assert config.listen_port == 8888
+    assert config.health_port == 8080
     assert config.log_level == "INFO"
     assert config.domain_filters is None
 
@@ -143,3 +144,102 @@ def test_password_redaction_in_model_dump() -> None:
     dumped = config.model_dump()
     assert dumped["technitium_password"] == "***REDACTED***"
     assert "supersecret" not in str(dumped)
+
+
+def test_ca_bundle_validation_missing_file() -> None:
+    """Test that config validation fails when CA bundle file does not exist."""
+    import pytest
+
+    # Use a non-existent path
+    nonexistent_ca = "/nonexistent/path/to/ca.pem"
+    with pytest.raises(ValueError, match="does not exist"):
+        Config(
+            technitium_url="http://localhost:5380",
+            technitium_username="admin",
+            technitium_password="admin",
+            zone="example.com",
+            technitium_verify_ssl=True,
+            technitium_ca_bundle_file=nonexistent_ca,
+        )
+
+
+def test_ca_bundle_validation_with_valid_file() -> None:
+    """Test that config validation succeeds when CA bundle file exists."""
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        ca_file = f"{tmpdir}/ca.pem"
+        # Create a valid self-signed CA certificate for testing
+        import subprocess
+
+        subprocess.run(
+            [
+                "openssl",
+                "req",
+                "-new",
+                "-x509",
+                "-days",
+                "1",
+                "-nodes",
+                "-out",
+                ca_file,
+                "-keyout",
+                f"{tmpdir}/ca.key",
+                "-subj",
+                "/CN=test-ca",
+            ],
+            check=True,
+            capture_output=True,
+        )
+
+        config = Config(
+            technitium_url="http://localhost:5380",
+            technitium_username="admin",
+            technitium_password="admin",
+            zone="example.com",
+            technitium_verify_ssl=True,
+            technitium_ca_bundle_file=ca_file,
+        )
+        assert config.technitium_ca_bundle_file == ca_file
+
+
+def test_ca_bundle_not_required_when_verify_ssl_false() -> None:
+    """Test that CA bundle is optional when verify_ssl is False."""
+    config = Config(
+        technitium_url="http://localhost:5380",
+        technitium_username="admin",
+        technitium_password="admin",
+        zone="example.com",
+        technitium_verify_ssl=False,
+        technitium_ca_bundle_file="/nonexistent/path.pem",
+    )
+    # Should not raise even though the file does not exist
+    assert config.technitium_verify_ssl is False
+    assert config.technitium_ca_bundle_file == "/nonexistent/path.pem"
+
+
+def test_ca_bundle_validation_unreadable_file() -> None:
+    """Test that config validation fails when CA bundle file is not readable."""
+    import os
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        ca_file = f"{tmpdir}/ca.pem"
+        with open(ca_file, "w") as f:
+            f.write("test")
+        # Make the file unreadable
+        os.chmod(ca_file, 0o000)
+        try:
+            with pytest.raises(ValueError) as exc_info:
+                Config(
+                    technitium_url="http://localhost:5380",
+                    technitium_username="admin",
+                    technitium_password="admin",
+                    zone="example.com",
+                    technitium_verify_ssl=True,
+                    technitium_ca_bundle_file=ca_file,
+                )
+            assert "not readable" in str(exc_info.value).lower()
+        finally:
+            # Restore permissions for cleanup
+            os.chmod(ca_file, 0o600)

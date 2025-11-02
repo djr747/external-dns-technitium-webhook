@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - 'v*.*.*'
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       version:
@@ -42,7 +44,8 @@ jobs:
           else
             VERSION="${GITHUB_REF#refs/tags/}"
           fi
-          VERSION_NUMBER="$VERSION"
+          # Strip 'v' prefix if present for version number validation
+          VERSION_NUMBER="${VERSION#v}"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "version-number=$VERSION_NUMBER" >> $GITHUB_OUTPUT
           echo "Releasing version: $VERSION"

@@ -20,7 +20,7 @@ updates:
           - "pytest*"
           - "ruff"
           - "mypy"
-          - "bandit"
+          - "semgrep"
         update-types:
           - "minor"
           - "patch"

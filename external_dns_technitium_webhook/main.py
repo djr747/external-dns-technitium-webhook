@@ -2,16 +2,15 @@
 
 import asyncio
 import logging
-import signal
 import sys
+import threading
 from collections.abc import AsyncGenerator, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 from fastapi import Depends, FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
-from uvicorn import Config as UvicornConfig
-from uvicorn import Server
 
 from .app_state import AppState
 from .config import Config as AppConfig
@@ -19,21 +18,90 @@ from .handlers import (
     adjust_endpoints,
     apply_record,
     get_records,
-    health_check,
     negotiate_domain_filter,
 )
 from .middleware import RequestSizeLimitMiddleware, rate_limit_middleware
 from .models import Changes, Endpoint, GetZoneOptionsResponse
 from .technitium_client import TechnitiumError
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.StreamHandler(sys.stdout)],
-)
 
+class StructuredFormatter(logging.Formatter):
+    """Format logs in External-DNS style: time=... level=... module=... msg=..."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        """Format log record as structured text matching External-DNS format."""
+        # ISO 8601 format with Z suffix (UTC)
+        timestamp = (
+            datetime.fromtimestamp(record.created, tz=UTC)
+            .isoformat(timespec="seconds")
+            .replace("+00:00", "Z")
+        )
+
+        # Level name in lowercase
+        level = record.levelname.lower()
+
+        # Module name (logger name or function name)
+        module = record.name if record.name != "root" else record.funcName or "app"
+
+        # Format: time="..." level=info module=handlers msg="..."
+        log_parts = [
+            f'time="{timestamp}"',
+            f"level={level}",
+            f"module={module}",
+            f'msg="{record.getMessage()}"',
+        ]
+
+        return " ".join(log_parts)
+
+
+# Configure structured logging
+def setup_logging() -> None:
+    """Set up structured logging matching External-DNS format."""
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.DEBUG)
+
+    # Remove any existing handlers
+    root_logger.handlers.clear()
+
+    # Create stdout handler with structured formatter
+    handler = logging.StreamHandler(sys.stdout)
+    formatter = StructuredFormatter()
+    handler.setFormatter(formatter)
+    root_logger.addHandler(handler)
+
+
+setup_logging()
 logger = logging.getLogger(__name__)
+
+
+# Apply structured formatter to external libraries
+def _apply_structured_formatter_to_logger(name: str) -> None:
+    """Apply structured formatter to a specific logger and its children.
+
+    Args:
+        name: Logger name (e.g., 'uvicorn', 'httpx')
+    """
+    lib_logger = logging.getLogger(name)
+    formatter = StructuredFormatter()
+    for handler in lib_logger.handlers:
+        handler.setFormatter(formatter)
+    lib_logger.propagate = True
+
+
+# Configure external library loggers to use structured format
+_apply_structured_formatter_to_logger("uvicorn")
+_apply_structured_formatter_to_logger("uvicorn.access")
+_apply_structured_formatter_to_logger("httpx")
+
+logger.debug("main.py imported")
+
+# Coverage hook for testing
+try:
+    import coverage
+
+    coverage.process_startup()  # pragma: no cover
+except ImportError:  # pragma: no cover
+    pass
 
 
 @asynccontextmanager
@@ -52,6 +120,21 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     # Configure logging level
     logging.getLogger().setLevel(config.log_level)
     logger.setLevel(config.log_level)
+
+    # Start health check server in a separate thread
+    from .health import create_health_app
+    from .server import run_health_server
+
+    health_app = create_health_app()
+    logger.info(f"Starting health server on {config.listen_address}:{config.health_port}")
+    health_thread = threading.Thread(
+        target=run_health_server,
+        args=(health_app, config),
+        daemon=True,
+        name="HealthServerThread",
+    )
+    health_thread.start()
+    logger.info("Health server thread started")
 
     state = AppState(config)
     app.state.app_state = state
@@ -117,7 +200,17 @@ def create_state_dependency(app: FastAPI) -> Callable[[], AppState]:
 
 
 async def setup_technitium_connection(state: AppState) -> None:
-    """Connect to Technitium, supporting failover endpoints and catalog zones."""
+    """Connect to Technitium, supporting failover endpoints and catalog zones.
+
+    If connection fails, the service starts in an unhealthy state (not ready).
+    The health check endpoint will return 503 Service Unavailable.
+    This allows investigation of issues without complete container failure.
+    """
+
+    logger.debug(
+        f"Config: verify_ssl={state.config.technitium_verify_ssl}, "
+        f"ca_bundle={state.config.technitium_ca_bundle_file}"
+    )
 
     endpoints = state.config.technitium_endpoints
     if not endpoints:
@@ -128,7 +221,8 @@ async def setup_technitium_connection(state: AppState) -> None:
             server_role=None,
             catalog_membership=None,
         )
-        sys.exit(1)
+        logger.warning("Service starting in unhealthy state. Check configuration and restart.")
+        return
 
     failures: list[str] = []
 
@@ -201,7 +295,10 @@ async def setup_technitium_connection(state: AppState) -> None:
 
     failure_summary = "; ".join(failures) if failures else "unknown error"
     logger.error("Unable to initialize any Technitium endpoint: %s", failure_summary)
-    sys.exit(1)
+    logger.warning(
+        "Service starting in unhealthy state. Health check will return 503. "
+        "Check logs and fix configuration/network issues, then restart."
+    )
 
 
 async def ensure_zone_ready(state: AppState) -> ZonePreparationResult:
@@ -397,14 +494,6 @@ def create_app() -> FastAPI:
     # Routes
     state_dependency = create_state_dependency(app)
 
-    @app.get("/health")
-    async def health(
-        state: AppState = Depends(state_dependency),
-    ) -> dict[str, str]:
-        """Health check endpoint."""
-        await health_check(state)
-        return {"status": "ok"}
-
     @app.get("/")
     async def domain_filter(
         state: AppState = Depends(state_dependency),
@@ -438,31 +527,18 @@ def create_app() -> FastAPI:
     return app
 
 
+# Module-level app export for ASGI servers (uvicorn, etc.)
+app = create_app()
+
+
 def main() -> None:
-    """Run the application."""
-    app = create_app()
+    from .health import create_health_app  # pragma: no cover
+    from .server import run_servers  # pragma: no cover
+
+    health_app = create_health_app()
     config = AppConfig()
-
-    server_config = UvicornConfig(
-        app=app,
-        host=config.listen_address,
-        port=config.listen_port,
-        log_level=config.log_level.lower(),
-    )
-
-    server = Server(server_config)
-
-    # Setup signal handlers
-    def handle_signal(signum: int, _frame: object) -> None:
-        logger.info(f"Received signal {signum}, shutting down...")
-        server.should_exit = True
-
-    signal.signal(signal.SIGINT, handle_signal)
-    signal.signal(signal.SIGTERM, handle_signal)
-
-    logger.info(f"Starting server on {config.bind_address}")
-    server.run()
+    run_servers(app, health_app, config)
 
 
-if __name__ == "__main__":
-    main()
+if __name__ == "__main__":  # pragma: no cover
+    main()  # pragma: no cover

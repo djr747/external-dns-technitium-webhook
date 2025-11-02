@@ -30,8 +30,8 @@ We will respond within 48 hours and provide:
 This project implements several security measures:
 
 ### Code Security
-- **Bandit**: Static analysis for finding common security issues.
-- **CodeQL**: Advanced code analysis
+- **Semgrep**: Pattern-based security vulnerability detection
+- **CodeQL**: Advanced semantic code analysis
 
 ### Container Security
 - **Trivy**: Container image vulnerability scanning
@@ -62,28 +62,16 @@ This project implements several security measures:
 - No direct database access
 - Minimal attack surface
 
-### Static analysis compatibility (Bandit)
+### Static analysis (Semgrep)
 
-Note: Bandit is used for static analysis in CI to detect common security issues. There is a known compatibility issue where recent Bandit runs may raise AST parsing exceptions when executed under CPython 3.14 in some environments. Because our CI/build environment is (and should be) Python 3.12, security scans in CI run Bandit under Python 3.12 to avoid this issue.
-
-If you run security checks locally and see AST-related errors from Bandit, run Bandit under a Python 3.12 virtual environment. Example:
+Semgrep is used for pattern-based security scanning in CI to detect common vulnerabilities and security issues. Run it locally with:
 
 ```bash
-# create a reproducible py3.12 venv (if you have python3.12 installed)
-python3.12 -m venv .venv312
-. .venv312/bin/activate
-python -m pip install --upgrade pip setuptools wheel
-python -m pip install -e '.[dev]'
-# run Bandit against the package under Python 3.12
-python -m bandit -r external_dns_technitium_webhook
+make security  # or
+semgrep --config=auto external_dns_technitium_webhook/
 ```
 
-What we do in CI
-- Bandit scans are executed under Python 3.12 in CI to ensure stable AST parsing and consistent results.
-- We recommend running the same environment locally when reproducing CI security scans.
-
-False positives
-- Bandit may flag intentional patterns (for example, code that redacts secrets before logging). We review such findings and, when appropriate, add a `# nosec` comment with an explanation so CI noise is reduced while preserving security intent.
+Security rules are automatically updated from Semgrep's public rule registry. This provides comprehensive coverage for Python security patterns without compatibility issues.
 
 ## Security Updates
 
