@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2] - 2025-11-02
+
+### Fixed
+- **Auto-Tag Workflow:** Replaced deprecated `actions/create-release@v1` with `actions/github-script@v7` for proper git tag and GitHub Release creation
+- **Workflow Trigger:** Added `workflow_dispatch` trigger to allow manual testing of release automation
+
 ## [0.2.1] - 2025-11-02
 
 ### Added
