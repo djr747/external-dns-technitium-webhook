@@ -444,11 +444,14 @@ def create_app() -> FastAPI:
     return app
 
 
+# Module-level app export for ASGI servers (uvicorn, etc.)
+app = create_app()
+
+
 def main() -> None:
     from .health import create_health_app  # pragma: no cover
     from .server import run_servers  # pragma: no cover
 
-    app = create_app()
     health_app = create_health_app()
     config = AppConfig()
     run_servers(app, health_app, config)
