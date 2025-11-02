@@ -49,6 +49,8 @@ def run_servers(app: FastAPI, health_app: FastAPI, config: AppConfig) -> None:
 
     def run_health_server() -> None:
         nonlocal health_server_error
+        sys.stderr.write("[HEALTH-THREAD-START] Health server thread function called\n")
+        sys.stderr.flush()
         try:
             # Direct stderr write to ensure visibility
             sys.stderr.write("[HEALTH] Health server thread started\n")
