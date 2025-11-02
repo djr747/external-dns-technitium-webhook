@@ -17,12 +17,26 @@ For Kubernetes deployment details, see `docs/deployment/kubernetes.md`.
 3. Create user account:
    - **Username:** `external-dns-webhook`
    - **Password:** Generate secure random: `openssl rand -base64 32`
-   - **Permissions:** Grant DNS zone permissions for read/write access
 4. Click **Create** and save credentials securely
+
+## Step 2: Grant Required Permissions
+
+The webhook requires membership in the **DNS admin group** to access the API. After creating the user:
+
+1. Navigate to **Administration** → **Groups**
+2. Edit the **DNS admin** group
+3. Add `external-dns-webhook` user to the group
+4. Save changes
+
+This grants the user the necessary API permissions to:
+- Authenticate via `/api/user/login`
+- List zones via `/api/zones/list`
+- Create zones via `/api/zones/create`
+- Add/get DNS records via `/api/zones/records/*`
 
 **Note:** Technitium DNS uses different ports for HTTP (5380) and HTTPS (53443).
 
-## Step 2: Store Credentials in Kubernetes
+## Step 3: Store Credentials in Kubernetes
 
 ```bash
 # Create namespace
@@ -35,7 +49,7 @@ kubectl create secret generic technitium-credentials \
   -n external-dns
 ```
 
-## Step 3: TLS Configuration (Optional)
+## Step 4: TLS Configuration (Optional)
 
 ### Option 1: HTTPS with Self-Signed Certificate
 

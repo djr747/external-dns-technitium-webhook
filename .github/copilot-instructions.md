@@ -94,9 +94,11 @@ class Endpoint(BaseModel):
 ### Environment Configuration
 Required vars (see `config.py`):
 - `TECHNITIUM_URL` - DNS server endpoint
-- `TECHNITIUM_USERNAME/PASSWORD` - Auth credentials  
+- `TECHNITIUM_USERNAME/PASSWORD` - Auth credentials (user must be member of **DNS admin** group)
 - `ZONE` - Primary DNS zone
 - `DOMAIN_FILTERS` - Semicolon-separated domain list
+
+**Important:** The Technitium user account must be added to the **DNS admin group** in Technitium's Administration panel to access the API. Zone-level permissions alone are insufficient.
 
 ### Technitium API Integration
 - **Auto-authentication**: Client handles token renewal transparently
