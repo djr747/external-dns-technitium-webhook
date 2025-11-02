@@ -144,9 +144,7 @@ async def setup_technitium_connection(state: AppState) -> None:
             server_role=None,
             catalog_membership=None,
         )
-        logger.warning(
-            "Service starting in unhealthy state. Check configuration and restart."
-        )
+        logger.warning("Service starting in unhealthy state. Check configuration and restart.")
         return
 
     failures: list[str] = []

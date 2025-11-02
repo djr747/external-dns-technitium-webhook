@@ -903,9 +903,11 @@ def test_client_init_default_verify_ssl() -> None:
 
 def test_client_init_verify_ssl_false_with_fallback(mocker: MockerFixture) -> None:
     """Test client initialization with verify_ssl=False and SSL context creation failure."""
-    # Mock ssl.create_default_context to raise an exception
-    mock_ssl_context = mocker.patch("ssl.create_default_context")
-    mock_ssl_context.side_effect = Exception("SSL context creation failed")
+    # Mock the set_ciphers method to raise an exception (simulating SSL context creation failure)
+    mocker.patch(
+        "external_dns_technitium_webhook.technitium_client.ssl.SSLContext.set_ciphers",
+        side_effect=Exception("Failed to set ciphers"),
+    )
 
     # Should not raise, should fall back to verify=False
     client = TechnitiumClient(
