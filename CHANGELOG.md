@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.4] - 2025-11-02
+
+### Fixed
+- **Release Workflow Trigger:** Changed trigger from `release: [published]` to `release: [created, published]` to properly handle releases created via GitHub API (API-created releases emit `created` event, not `published`)
+
 ## [0.2.3] - 2025-11-02
 
 ### Fixed
