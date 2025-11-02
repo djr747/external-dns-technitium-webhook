@@ -32,24 +32,24 @@ class Config(BaseSettings):
     technitium_verify_ssl: bool = True
     # Optional path to a PEM file containing one or more CA certificates.
     # Intended to be mounted via ConfigMap (like username/password secrets).
-    # When verify_ssl is True and ca_bundle is set, the file must exist and be readable.
-    technitium_ca_bundle: str | None = None
+    # When verify_ssl is True and ca_bundle_file is set, the file must exist and be readable.
+    technitium_ca_bundle_file: str | None = None
 
     def __init__(self, **values: Any) -> None:
         """Allow instantiation without explicit arguments for env loading."""
         super().__init__(**values)
         # Validate CA bundle after model initialization
-        if self.technitium_verify_ssl and self.technitium_ca_bundle:
-            path = Path(self.technitium_ca_bundle)
+        if self.technitium_verify_ssl and self.technitium_ca_bundle_file:
+            path = Path(self.technitium_ca_bundle_file)
             if not path.exists() or not path.is_file():
                 raise ValueError(
-                    f"TECHNITIUM_CA_BUNDLE path '{self.technitium_ca_bundle}' does not exist or is not a regular file"
+                    f"TECHNITIUM_CA_BUNDLE_FILE path '{self.technitium_ca_bundle_file}' does not exist or is not a regular file"
                 )
             try:
                 with path.open("rb"):
                     pass
             except Exception as exc:
-                raise ValueError(f"TECHNITIUM_CA_BUNDLE file is not readable: {exc}") from exc
+                raise ValueError(f"TECHNITIUM_CA_BUNDLE_FILE file is not readable: {exc}") from exc
 
     @property
     def domain_filter_list(self) -> list[str]:

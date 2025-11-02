@@ -54,7 +54,7 @@ provider:
         value: "https://technitium-dns.technitium.svc.cluster.local:5380"
       - name: TECHNITIUM_VERIFY_SSL
         value: "true"
-      - name: TECHNITIUM_CA_BUNDLE
+      - name: TECHNITIUM_CA_BUNDLE_FILE
         value: "/etc/technitium-ssl/ca.pem"
     volumeMounts:
       - name: technitium-ca-bundle
@@ -80,7 +80,7 @@ volumes:
 | `ZONE` | Yes | None | Primary DNS zone for management |
 | `DOMAIN_FILTERS` | No | None | Semicolon-separated list of domains |
 | `TECHNITIUM_VERIFY_SSL` | No | `true` | Enable/disable SSL certificate verification |
-| `TECHNITIUM_CA_BUNDLE` | No | None | Path to PEM file with CA certificate |
+| `TECHNITIUM_CA_BUNDLE_FILE` | No | None | Path to PEM file with CA certificate |
 | `LOG_LEVEL` | No | `INFO` | Logging level: DEBUG, INFO, WARNING, ERROR |
 | `LISTEN_PORT` | No | `3000` | Port for webhook HTTP server |
 

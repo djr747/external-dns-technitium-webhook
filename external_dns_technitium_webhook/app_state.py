@@ -36,7 +36,7 @@ class AppState:
             base_url=config.technitium_url,
             timeout=config.technitium_timeout,
             verify_ssl=config.technitium_verify_ssl,
-            ca_bundle=config.technitium_ca_bundle,
+            ca_bundle=config.technitium_ca_bundle_file,
         )
         # Use provided helper to replace the module-level rate limiter.
         # This avoids a direct module-level assignment which some static
@@ -91,7 +91,7 @@ class AppState:
             base_url=normalized,
             timeout=self.config.technitium_timeout,
             verify_ssl=self.config.technitium_verify_ssl,
-            ca_bundle=self.config.technitium_ca_bundle,
+            ca_bundle=self.config.technitium_ca_bundle_file,
         )
         self.active_endpoint = normalized
         await old_client.close()

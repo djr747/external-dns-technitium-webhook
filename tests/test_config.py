@@ -158,7 +158,7 @@ def test_ca_bundle_validation_missing_file() -> None:
             technitium_password="admin",
             zone="example.com",
             technitium_verify_ssl=True,
-            technitium_ca_bundle=nonexistent_ca,
+            technitium_ca_bundle_file=nonexistent_ca,
         )
 
 
@@ -197,9 +197,9 @@ def test_ca_bundle_validation_with_valid_file() -> None:
             technitium_password="admin",
             zone="example.com",
             technitium_verify_ssl=True,
-            technitium_ca_bundle=ca_file,
+            technitium_ca_bundle_file=ca_file,
         )
-        assert config.technitium_ca_bundle == ca_file
+        assert config.technitium_ca_bundle_file == ca_file
 
 
 def test_ca_bundle_not_required_when_verify_ssl_false() -> None:
@@ -210,11 +210,11 @@ def test_ca_bundle_not_required_when_verify_ssl_false() -> None:
         technitium_password="admin",
         zone="example.com",
         technitium_verify_ssl=False,
-        technitium_ca_bundle="/nonexistent/path.pem",
+        technitium_ca_bundle_file="/nonexistent/path.pem",
     )
     # Should not raise even though the file does not exist
     assert config.technitium_verify_ssl is False
-    assert config.technitium_ca_bundle == "/nonexistent/path.pem"
+    assert config.technitium_ca_bundle_file == "/nonexistent/path.pem"
 
 
 def test_ca_bundle_validation_unreadable_file() -> None:
@@ -236,7 +236,7 @@ def test_ca_bundle_validation_unreadable_file() -> None:
                     technitium_password="admin",
                     zone="example.com",
                     technitium_verify_ssl=True,
-                    technitium_ca_bundle=ca_file,
+                    technitium_ca_bundle_file=ca_file,
                 )
             assert "not readable" in str(exc_info.value).lower()
         finally:
