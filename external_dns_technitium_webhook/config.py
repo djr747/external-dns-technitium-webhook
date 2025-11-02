@@ -1,5 +1,6 @@
 """Configuration management for the application."""
 
+from pathlib import Path
 from typing import Any
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -15,7 +16,7 @@ class Config(BaseSettings):
         extra="ignore",
     )
 
-    listen_address: str = "0.0.0.0"  # nosec B104
+    listen_address: str = "0.0.0.0"
     listen_port: int = 3000
     technitium_url: str
     technitium_username: str
@@ -29,10 +30,26 @@ class Config(BaseSettings):
     technitium_failover_urls: str | None = None
     catalog_zone: str | None = None
     technitium_verify_ssl: bool = True
+    # Optional path to a PEM file containing one or more CA certificates.
+    # Intended to be mounted via ConfigMap (like username/password secrets).
+    # When verify_ssl is True and ca_bundle is set, the file must exist and be readable.
+    technitium_ca_bundle: str | None = None
 
     def __init__(self, **values: Any) -> None:
         """Allow instantiation without explicit arguments for env loading."""
         super().__init__(**values)
+        # Validate CA bundle after model initialization
+        if self.technitium_verify_ssl and self.technitium_ca_bundle:
+            path = Path(self.technitium_ca_bundle)
+            if not path.exists() or not path.is_file():
+                raise ValueError(
+                    f"TECHNITIUM_CA_BUNDLE path '{self.technitium_ca_bundle}' does not exist or is not a regular file"
+                )
+            try:
+                with path.open("rb"):
+                    pass
+            except Exception as exc:
+                raise ValueError(f"TECHNITIUM_CA_BUNDLE file is not readable: {exc}") from exc
 
     @property
     def domain_filter_list(self) -> list[str]:
@@ -105,5 +122,5 @@ class Config(BaseSettings):
         """
         data = super().model_dump(**kwargs)
         if "technitium_password" in data:
-            data["technitium_password"] = "***REDACTED***"  # nosec B105
+            data["technitium_password"] = "***REDACTED***"
         return data

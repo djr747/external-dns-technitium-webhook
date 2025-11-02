@@ -1,6 +1,7 @@
 """Technitium DNS API client."""
 
 import logging
+import ssl
 from typing import Any, TypeVar, cast
 
 import httpx
@@ -81,6 +82,7 @@ class TechnitiumClient:
         token: str = "",
         timeout: float = 10.0,
         verify_ssl: bool = True,
+        ca_bundle: str | None = None,
     ) -> None:
         """Initialize the Technitium client.
 
@@ -89,12 +91,23 @@ class TechnitiumClient:
             token: Authentication token (optional, can be set later)
             timeout: Request timeout in seconds
             verify_ssl: Verify SSL certificates
+            ca_bundle: Optional path to a PEM file with CA certificates
         """
         self.base_url = base_url.rstrip("/")
         self.token = token
         self.timeout = timeout
         self.verify_ssl = verify_ssl
-        self._client = httpx.AsyncClient(timeout=timeout, verify=verify_ssl)
+        self.ca_bundle = ca_bundle
+
+        # Configure TLS verification
+        verify: Any = verify_ssl
+        if not verify_ssl:
+            verify = False
+        elif ca_bundle:
+            # Use ssl.create_default_context to load the CA bundle
+            verify = ssl.create_default_context(cafile=ca_bundle)
+
+        self._client = httpx.AsyncClient(timeout=timeout, verify=verify)
 
     async def close(self) -> None:
         """Close the HTTP client."""

@@ -841,3 +841,61 @@ async def test_set_zone_options_serializes_values(
     assert payload["maxTransfers"] == 5
     assert payload["allowedIpRanges"] == "192.0.2.1,2001:db8::1"
     assert "description" not in payload
+
+
+def test_client_init_with_verify_ssl_false() -> None:
+    """Test client initialization with verify_ssl=False."""
+    client = TechnitiumClient(
+        base_url="http://localhost:5380",
+        token="test-token",
+        verify_ssl=False,
+    )
+    assert client.verify_ssl is False
+
+
+def test_client_init_with_ca_bundle() -> None:
+    """Test client initialization with CA bundle."""
+    import subprocess
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        ca_file = f"{tmpdir}/ca.pem"
+        # Create a valid self-signed CA certificate
+        subprocess.run(
+            [
+                "openssl",
+                "req",
+                "-new",
+                "-x509",
+                "-days",
+                "1",
+                "-nodes",
+                "-out",
+                ca_file,
+                "-keyout",
+                f"{tmpdir}/ca.key",
+                "-subj",
+                "/CN=test-ca",
+            ],
+            check=True,
+            capture_output=True,
+        )
+
+        client = TechnitiumClient(
+            base_url="http://localhost:5380",
+            token="test-token",
+            verify_ssl=True,
+            ca_bundle=ca_file,
+        )
+        # When ca_bundle is provided, it should be stored
+        assert client.ca_bundle == ca_file
+
+
+def test_client_init_default_verify_ssl() -> None:
+    """Test client initialization with default verify_ssl (True)."""
+    client = TechnitiumClient(
+        base_url="http://localhost:5380",
+        token="test-token",
+    )
+    assert client.verify_ssl is True
+    assert client.ca_bundle is None
