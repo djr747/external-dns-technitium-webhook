@@ -18,7 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Kubernetes Deployment Guide:** Complete kubectl and Helm deployment examples with security best practices
 - **Security Documentation:** Comprehensive security review, credential setup guide, and production checklist with private CA configuration
 - **Helm Values Example:** Production-ready `helm/values-webhook-example.yaml` for ExternalDNS integration with private CA support
-- **Structured Logging:** External-DNS compatible log format (time=... level=... module=... msg=...)
+- **Structured Logging:** External-DNS compatible format applied to ALL logs including uvicorn (HTTP server), httpx (HTTP client), and application loggers (format: time="..." level=... module=... msg="...")
 - **Test Infrastructure:** 176 comprehensive tests with 99% code coverage (933/941 lines)
 - **CI/CD Pipeline Security:** 5 active security tools (Ruff, mypy, CodeQL, Trivy, Semgrep) with SARIF upload to GitHub Security tab
 - **Nightly Chainguard Workflow:** Daily Python version check with automatic PR generation for base image updates
@@ -28,13 +28,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Port Configuration:** Clarified main API runs on port 8888, health checks on port 8080 (separate thread)
 - **Chainguard Python:** Updated to Chainguard Python latest (3.13) with zero-CVE base image
 - **CI/CD Tools:** Migrated from Bandit to Semgrep for pattern-based security scanning
-- **Logging Format:** Structured logs now match External-DNS format with ISO 8601 timestamps and key-value pairs
+- **Logging Format:** Structured logs unified across all sources (app, uvicorn, httpx) using External-DNS format with ISO 8601 timestamps and key-value pairs
 - **Makefile:** Added `security` target to `make all` for comprehensive CI pipeline validation
 - **Python Version:** datetime.utc → UTC import for Python 3.13+ compatibility
 - **Docker Ports:** Updated `make docker-run` from port 3000 to 8888/8080
 - **Dependabot Configuration:** Updated from Bandit to Semgrep for security scans
 
 ### Fixed
+- **Logging Implementation:** Applied StructuredFormatter to uvicorn, httpx, and application loggers for consistent External-DNS format across all sources
 - **Nightly Chainguard Workflow:** Fixed `/usr/bin/python: can't open file '//python'` error caused by Chainguard entrypoint doubling
 - **SSL Certificate Handling:** Added intentional nosemgrep directive with justification for compatibility with self-signed certificates
 - **Documentation Accuracy:** Corrected 50+ port references (3000 → 8888), removed fabricated features (HPA, non-existent env vars), verified all claims against implementation
