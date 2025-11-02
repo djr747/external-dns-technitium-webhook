@@ -53,23 +53,26 @@ def run_servers(app: FastAPI, health_app: FastAPI, config: AppConfig) -> None:
             asyncio.set_event_loop(loop)
 
             async def serve_and_signal() -> None:
-                # Create a task to monitor server startup
-                async def wait_for_server() -> None:
-                    import asyncio as asyncio_module
+                logging.info("Health server starting...")
 
-                    # Give uvicorn a moment to bind to the port
-                    await asyncio_module.sleep(0.5)
-                    health_server_ready.set()
-                    logging.info(
-                        f"Health server listening on {config.listen_address}:{config.health_port}"
-                    )
-
-                # Start both the server and the signal task
+                # Start the server but don't wait for it immediately
                 server_task = asyncio.create_task(health_server.serve())
-                signal_task = asyncio.create_task(wait_for_server())
 
-                # Wait for both tasks (server runs indefinitely until shutdown)
-                await asyncio.gather(server_task, signal_task, return_exceptions=True)
+                # Give uvicorn a brief moment to bind to the port and start accepting connections
+                with contextlib.suppress(TimeoutError):
+                    await asyncio.wait_for(asyncio.sleep(0.5), timeout=1.0)
+
+                # Signal that the server is ready (after binding attempt)
+                health_server_ready.set()
+                logging.info(
+                    f"Health server listening on {config.listen_address}:{config.health_port}"
+                )
+
+                # Now wait for the server indefinitely (until it exits)
+                try:
+                    await server_task
+                except Exception as serve_error:
+                    logging.error(f"Health server serve error: {serve_error}", exc_info=True)
 
             loop.run_until_complete(serve_and_signal())
         except Exception as e:
