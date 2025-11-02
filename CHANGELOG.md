@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2025-11-02
+
+### Added
+- **Version-Driven Release Automation:** Implemented `pyproject.toml` as single source of truth for version control
+- **Auto-Tag Workflow:** New `auto-tag-on-main.yml` that automatically creates git tags and GitHub releases when version bumps on main
+- **CHANGELOG Validation:** Release workflow validates CHANGELOG.md has been updated before creating release (prevents undocumented releases)
+- **Dependabot Integration:** Automatic patch releases when Dependabot merges dependency updates with version bumps
+
+### Changed
+- **Release Process:** Simplified from complex tag-based triggers to clean version-driven automation
+- **Release Documentation:** Updated CONTRIBUTING.md and copilot-instructions.md with complete release workflow
+
 ## [0.2.0] - 2025-11-02
 
 ### Added
