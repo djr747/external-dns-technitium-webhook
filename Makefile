@@ -12,8 +12,9 @@ ifeq ($(VENV_DIR),)
 endif
 
 # Define Python and Pip executables from the virtual environment
-VENV_PYTHON = $(VENV_DIR)/bin/python
-VENV_PIP = $(VENV_DIR)/bin/pip
+VENV_PYTHON := $(shell if [ -x "$(VENV_DIR)/bin/python" ]; then printf "%s" "$(VENV_DIR)/bin/python"; else command -v python3 || command -v python; fi)
+# Prefer venv pip when available, otherwise fall back to using the selected python -m pip
+VENV_PIP := $(shell if [ -x "$(VENV_DIR)/bin/pip" ]; then printf "%s" "$(VENV_DIR)/bin/pip"; else printf "%s" "$(VENV_PYTHON) -m pip"; fi)
 
 .PHONY: help install install-dev test test-cov lint format format-check type-check security clean docker-build docker-run check-deps all codeql-scan
 

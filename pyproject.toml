@@ -183,12 +183,17 @@ python_functions = ["test_*"]
 addopts = [
     "--strict-markers",
     "--tb=short",
-    "--disable-warnings",
 ]
 asyncio_mode = "auto"
 markers = [
     "unit: Unit tests",
     "integration: Integration tests",
+]
+filterwarnings = [
+    "ignore::RuntimeWarning",
+    # Ignore deprecation warnings from external dependencies (uvicorn using websockets.legacy)
+    # This is not our code; waiting for uvicorn to update to websockets.asyncio
+    "ignore:.*websockets.*:DeprecationWarning",
 ]
 
 [tool.coverage.run]
@@ -205,7 +210,6 @@ exclude_lines = [
     "def __repr__",
     "raise AssertionError",
     "raise NotImplementedError",
-    "if __name__ == .__main__.:",
     "if TYPE_CHECKING:",
     "class .*\\bProtocol\\):",
     "@(abc\\.)?abstractmethod",

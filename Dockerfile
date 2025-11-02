@@ -47,10 +47,12 @@ USER nonroot
 # Health check
 # Chainguard images have no shell - use exec form with python
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=2 \
-    CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:3000/health', timeout=3)"]
+    CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health', timeout=3)"]
 
-# Expose port
-EXPOSE 3000
+# Expose ports
+EXPOSE 8888 8080
 
 # Run the application
-CMD ["python", "-m", "uvicorn", "external_dns_technitium_webhook.main:app", "--host", "0.0.0.0", "--port", "3000", "--no-access-log"]
+# Using --ws websockets-sansio to avoid deprecated websockets.legacy implementation
+# This ensures compatibility with latest websockets library (v14.0+)
+CMD ["python", "-m", "uvicorn", "external_dns_technitium_webhook.main:app", "--host", "0.0.0.0", "--port", "8888", "--no-access-log", "--ws", "websockets-sansio"]

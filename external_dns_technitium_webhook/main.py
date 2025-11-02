@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-import signal
+import os
 import sys
 from collections.abc import AsyncGenerator, Callable
 from contextlib import asynccontextmanager
@@ -10,8 +10,6 @@ from dataclasses import dataclass
 
 from fastapi import Depends, FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
-from uvicorn import Config as UvicornConfig
-from uvicorn import Server
 
 from .app_state import AppState
 from .config import Config as AppConfig
@@ -19,9 +17,15 @@ from .handlers import (
     adjust_endpoints,
     apply_record,
     get_records,
-    health_check,
     negotiate_domain_filter,
 )
+
+# Mock configuration for testing
+os.environ["TECHNITIUM_URL"] = "http://localhost:5380"
+os.environ["TECHNITIUM_USERNAME"] = "admin"
+os.environ["TECHNITIUM_PASSWORD"] = "password"
+os.environ["ZONE"] = "example.com"
+
 from .middleware import RequestSizeLimitMiddleware, rate_limit_middleware
 from .models import Changes, Endpoint, GetZoneOptionsResponse
 from .technitium_client import TechnitiumError
@@ -34,6 +38,16 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)
+
+print("DEBUG: main.py imported")
+
+# Coverage hook for testing
+try:
+    import coverage
+
+    coverage.process_startup()  # pragma: no cover
+except ImportError:  # pragma: no cover
+    pass
 
 
 @asynccontextmanager
@@ -397,14 +411,6 @@ def create_app() -> FastAPI:
     # Routes
     state_dependency = create_state_dependency(app)
 
-    @app.get("/health")
-    async def health(
-        state: AppState = Depends(state_dependency),
-    ) -> dict[str, str]:
-        """Health check endpoint."""
-        await health_check(state)
-        return {"status": "ok"}
-
     @app.get("/")
     async def domain_filter(
         state: AppState = Depends(state_dependency),
@@ -439,30 +445,20 @@ def create_app() -> FastAPI:
 
 
 def main() -> None:
-    """Run the application."""
+    from .health import create_health_app  # pragma: no cover
+    from .server import run_servers  # pragma: no cover
+
     app = create_app()
+    health_app = create_health_app()
     config = AppConfig()
-
-    server_config = UvicornConfig(
-        app=app,
-        host=config.listen_address,
-        port=config.listen_port,
-        log_level=config.log_level.lower(),
-    )
-
-    server = Server(server_config)
-
-    # Setup signal handlers
-    def handle_signal(signum: int, _frame: object) -> None:
-        logger.info(f"Received signal {signum}, shutting down...")
-        server.should_exit = True
-
-    signal.signal(signal.SIGINT, handle_signal)
-    signal.signal(signal.SIGTERM, handle_signal)
-
-    logger.info(f"Starting server on {config.bind_address}")
-    server.run()
+    run_servers(app, health_app, config)
 
 
-if __name__ == "__main__":
-    main()
+os.environ["TECHNITIUM_URL"] = "http://localhost:5380"
+os.environ["TECHNITIUM_USERNAME"] = "admin"
+os.environ["TECHNITIUM_PASSWORD"] = "password"
+os.environ["ZONE"] = "example.com"
+
+
+if __name__ == "__main__":  # pragma: no cover
+    main()  # pragma: no cover

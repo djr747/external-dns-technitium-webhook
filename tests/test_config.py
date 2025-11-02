@@ -16,7 +16,8 @@ def test_config_defaults() -> None:
     )
 
     assert config.listen_address == "0.0.0.0"
-    assert config.listen_port == 3000
+    assert config.listen_port == 8888
+    assert config.health_port == 8080
     assert config.log_level == "INFO"
     assert config.domain_filters is None
 

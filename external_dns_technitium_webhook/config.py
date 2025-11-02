@@ -17,7 +17,8 @@ class Config(BaseSettings):
     )
 
     listen_address: str = "0.0.0.0"
-    listen_port: int = 3000
+    listen_port: int = 8888  # Changed from 3000 to 8888 for Helm sidecar compatibility
+    health_port: int = 8080  # Separate port for health checks (security separation)
     technitium_url: str
     technitium_username: str
     technitium_password: str
