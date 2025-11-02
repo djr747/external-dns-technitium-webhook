@@ -1025,7 +1025,8 @@ def test_run_servers_startup_and_shutdown(mocker):
 
 def test_main_entry_point(mocker):
     """Test the main() entry point function."""
-    mock_create_app = mocker.patch("external_dns_technitium_webhook.main.create_app")
+    # app is now created at module import time, so we can't mock create_app after import.
+    # Instead, verify that main() calls run_servers with the module-level app.
     mock_create_health_app = mocker.patch(
         "external_dns_technitium_webhook.health.create_health_app"
     )
@@ -1036,7 +1037,6 @@ def test_main_entry_point(mocker):
 
     main()
 
-    mock_create_app.assert_called_once()
     mock_create_health_app.assert_called_once()
     mock_config.assert_called_once()
     mock_run_servers.assert_called_once()
