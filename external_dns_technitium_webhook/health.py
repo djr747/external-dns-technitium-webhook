@@ -42,4 +42,15 @@ def create_health_app() -> FastAPI:
                 detail="Main application not responding",
             )
 
+    @app.get("/healthz")
+    async def healthz() -> dict[str, str]:
+        """Kubernetes-style health check endpoint for liveness/readiness probes."""
+        if is_main_server_ready():
+            return {"status": "ok"}
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Main application not responding",
+            )
+
     return app

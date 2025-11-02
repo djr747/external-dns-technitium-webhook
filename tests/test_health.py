@@ -27,6 +27,30 @@ def test_health_endpoint_not_ready(mocker):
     assert response.status_code == 503
 
 
+def test_healthz_endpoint_ready(mocker):
+    """Test /healthz endpoint returns 200 when ready."""
+    app = create_health_app()
+    # Mock the entire health check function to return True
+    mocker.patch("external_dns_technitium_webhook.health.is_main_server_ready", return_value=True)
+    from fastapi.testclient import TestClient
+
+    client = TestClient(app)
+    response = client.get("/healthz")
+    assert response.status_code == 200
+
+
+def test_healthz_endpoint_not_ready(mocker):
+    """Test /healthz endpoint returns 503 when not ready."""
+    app = create_health_app()
+    # Mock the entire health check function to return False
+    mocker.patch("external_dns_technitium_webhook.health.is_main_server_ready", return_value=False)
+    from fastapi.testclient import TestClient
+
+    client = TestClient(app)
+    response = client.get("/healthz")
+    assert response.status_code == 503
+
+
 def test_is_main_server_ready_success(mocker):
     """Test is_main_server_ready returns True when connection succeeds."""
     mocker.patch(
