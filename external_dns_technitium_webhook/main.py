@@ -73,6 +73,25 @@ def setup_logging() -> None:
 setup_logging()
 logger = logging.getLogger(__name__)
 
+# Apply structured formatter to external libraries
+def _apply_structured_formatter_to_logger(name: str) -> None:
+    """Apply structured formatter to a specific logger and its children.
+
+    Args:
+        name: Logger name (e.g., 'uvicorn', 'httpx')
+    """
+    lib_logger = logging.getLogger(name)
+    formatter = StructuredFormatter()
+    for handler in lib_logger.handlers:
+        handler.setFormatter(formatter)
+    lib_logger.propagate = True
+
+
+# Configure external library loggers to use structured format
+_apply_structured_formatter_to_logger("uvicorn")
+_apply_structured_formatter_to_logger("uvicorn.access")
+_apply_structured_formatter_to_logger("httpx")
+
 logger.debug("main.py imported")
 
 # Coverage hook for testing

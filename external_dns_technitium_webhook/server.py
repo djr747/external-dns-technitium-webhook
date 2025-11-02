@@ -32,6 +32,7 @@ def run_health_server(health_app: FastAPI, config: AppConfig) -> None:
             port=config.health_port,
             log_level=config.log_level.lower(),
             access_log=False,
+            log_config=None,  # Disable uvicorn's default logging
         )
         health_server = Server(health_config)
 
@@ -65,6 +66,7 @@ def run_servers(app: FastAPI, health_app: FastAPI, config: AppConfig) -> None:
         host=config.listen_address,
         port=config.listen_port,
         log_level=config.log_level.lower(),
+        log_config=None,  # Disable uvicorn's default logging, use app's structured logging
     )
     main_server = Server(main_config)
     health_config = UvicornConfig(
@@ -73,6 +75,7 @@ def run_servers(app: FastAPI, health_app: FastAPI, config: AppConfig) -> None:
         port=config.health_port,
         log_level=config.log_level.lower(),
         access_log=False,
+        log_config=None,  # Disable uvicorn's default logging
     )
     health_server = Server(health_config)
     shutdown_event = threading.Event()
