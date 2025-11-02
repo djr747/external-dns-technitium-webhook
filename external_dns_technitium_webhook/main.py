@@ -2,7 +2,6 @@
 
 import asyncio
 import logging
-import os
 import sys
 from collections.abc import AsyncGenerator, Callable
 from contextlib import asynccontextmanager
@@ -19,13 +18,6 @@ from .handlers import (
     get_records,
     negotiate_domain_filter,
 )
-
-# Mock configuration for testing
-os.environ["TECHNITIUM_URL"] = "http://localhost:5380"
-os.environ["TECHNITIUM_USERNAME"] = "admin"
-os.environ["TECHNITIUM_PASSWORD"] = "password"
-os.environ["ZONE"] = "example.com"
-
 from .middleware import RequestSizeLimitMiddleware, rate_limit_middleware
 from .models import Changes, Endpoint, GetZoneOptionsResponse
 from .technitium_client import TechnitiumError
@@ -455,18 +447,6 @@ def main() -> None:
     health_app = create_health_app()
     config = AppConfig()
     run_servers(app, health_app, config)
-
-
-# Set development defaults only if environment variables are not already set.
-# This allows container deployments to pass environment variables without override.
-if "TECHNITIUM_URL" not in os.environ:
-    os.environ["TECHNITIUM_URL"] = "http://localhost:5380"
-if "TECHNITIUM_USERNAME" not in os.environ:
-    os.environ["TECHNITIUM_USERNAME"] = "admin"
-if "TECHNITIUM_PASSWORD" not in os.environ:
-    os.environ["TECHNITIUM_PASSWORD"] = "password"
-if "ZONE" not in os.environ:
-    os.environ["ZONE"] = "example.com"
 
 
 if __name__ == "__main__":  # pragma: no cover

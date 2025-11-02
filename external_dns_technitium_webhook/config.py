@@ -19,10 +19,10 @@ class Config(BaseSettings):
     listen_address: str = "0.0.0.0"
     listen_port: int = 8888  # Changed from 3000 to 8888 for Helm sidecar compatibility
     health_port: int = 8080  # Separate port for health checks (security separation)
-    technitium_url: str
-    technitium_username: str
-    technitium_password: str
-    zone: str
+    technitium_url: str  # Required: Technitium DNS API endpoint
+    technitium_username: str  # Required: Technitium authentication username
+    technitium_password: str  # Required: Technitium authentication password
+    zone: str  # Required: Primary DNS zone
     domain_filters: str | None = None
     log_level: str = "INFO"
     technitium_timeout: float = 10.0  # HTTP client timeout in seconds
