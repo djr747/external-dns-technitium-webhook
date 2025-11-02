@@ -899,3 +899,18 @@ def test_client_init_default_verify_ssl() -> None:
     )
     assert client.verify_ssl is True
     assert client.ca_bundle is None
+
+
+def test_client_init_verify_ssl_false_with_fallback(mocker: MockerFixture) -> None:
+    """Test client initialization with verify_ssl=False and SSL context creation failure."""
+    # Mock ssl.create_default_context to raise an exception
+    mock_ssl_context = mocker.patch("ssl.create_default_context")
+    mock_ssl_context.side_effect = Exception("SSL context creation failed")
+
+    # Should not raise, should fall back to verify=False
+    client = TechnitiumClient(
+        base_url="http://localhost:5380",
+        token="test-token",
+        verify_ssl=False,
+    )
+    assert client.verify_ssl is False
