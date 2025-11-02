@@ -40,24 +40,45 @@ jobs:
 
       - name: Check if tag already exists
         id: tag_exists
-        continue-on-error: true
         run: |
-          git rev-parse "refs/tags/${{ steps.version.outputs.tag }}"
-          echo "exists=true" >> $GITHUB_OUTPUT
+          if git rev-parse "refs/tags/${{ steps.version.outputs.tag }}" >/dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "✅ Tag ${{ steps.version.outputs.tag }} already exists"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "ℹ️ Tag ${{ steps.version.outputs.tag }} does not exist, will create it"
+          fi
 
-      - name: Create tag and release
-        if: steps.tag_exists.outcome == 'failure'
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create git tag
+        if: steps.tag_exists.outputs.exists == 'false'
+        run: |
+          git tag -a ${{ steps.version.outputs.tag }} -m "Release ${{ steps.version.outputs.tag }}"
+          git push origin ${{ steps.version.outputs.tag }}
+
+      - name: Create GitHub Release
+        if: steps.tag_exists.outputs.exists == 'false'
+        uses: actions/github-script@v7
         with:
-          tag_name: ${{ steps.version.outputs.tag }}
-          release_name: Release ${{ steps.version.outputs.tag }}
-          body: "Release ${{ steps.version.outputs.tag }}\n\nSee CHANGELOG.md for details."
-          draft: false
-          prerelease: false
+          script: |
+            const tag = '${{ steps.version.outputs.tag }}';
+            const version = '${{ steps.version.outputs.version }}';
+            
+            await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: tag,
+              name: `Release ${tag}`,
+              body: `Release ${tag}\n\nSee [CHANGELOG.md](./CHANGELOG.md) for details.`,
+              draft: false,
+              prerelease: false
+            });
+            
+            console.log(`✅ GitHub Release created for ${tag}`);
 
-      - name: Tag already exists
-        if: steps.tag_exists.outcome == 'success'
+      - name: Summary
         run: |
-          echo "Tag ${{ steps.version.outputs.tag }} already exists, skipping release creation"
+          if [ "${{ steps.tag_exists.outputs.exists }}" == "true" ]; then
+            echo "⏭️ Tag ${{ steps.version.outputs.tag }} already exists, skipped creation"
+          else
+            echo "✅ Created tag and release for ${{ steps.version.outputs.tag }}"
+          fi
