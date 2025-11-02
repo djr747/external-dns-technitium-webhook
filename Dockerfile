@@ -27,8 +27,9 @@ LABEL org.opencontainers.image.title="ExternalDNS Technitium Webhook" \
 # Chainguard images run as non-root (UID 65532) by default - no need to create user
 
 # Copy installed packages from builder
+# Use numeric UID:GID (65532:65532) for Kubernetes runAsNonRoot compliance
 # Chainguard Python uses /home/nonroot/.local for user site-packages
-COPY --from=builder --chown=nonroot:nonroot /home/nonroot/.local /home/nonroot/.local
+COPY --from=builder --chown=65532:65532 /home/nonroot/.local /home/nonroot/.local
 
 # Set environment variables
 ENV PATH="/home/nonroot/.local/bin:$PATH" \
@@ -39,7 +40,7 @@ ENV PATH="/home/nonroot/.local/bin:$PATH" \
 
 # Copy application code
 WORKDIR /app
-COPY --chown=nonroot:nonroot external_dns_technitium_webhook ./external_dns_technitium_webhook
+COPY --chown=65532:65532 external_dns_technitium_webhook ./external_dns_technitium_webhook
 
 # Chainguard images are already non-root (UID 65532); use numeric UID for Kubernetes runAsNonRoot compliance
 USER 65532
