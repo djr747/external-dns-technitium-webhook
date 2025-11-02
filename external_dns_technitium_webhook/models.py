@@ -257,7 +257,7 @@ class ListCatalogZonesResponse(BaseModel):
 class GetZoneOptionsResponse(BaseModel):
     """Response from get zone options API."""
 
-    zone: str
+    zone: str = Field(alias="name")
     is_catalog_zone: bool = Field(False, alias="isCatalogZone")
     is_read_only: bool = Field(False, alias="isReadOnly")
     catalog_zone_name: str | None = Field(None, alias="catalogZoneName")
