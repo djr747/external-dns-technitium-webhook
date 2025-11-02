@@ -103,10 +103,15 @@ class TechnitiumClient:
         verify: Any = verify_ssl
         if not verify_ssl:
             verify = False
+            logger.debug("SSL verification disabled")
         elif ca_bundle:
             # Use ssl.create_default_context to load the CA bundle
             verify = ssl.create_default_context(cafile=ca_bundle)
+            logger.debug(f"Using custom CA bundle: {ca_bundle}")
+        else:
+            logger.debug("Using system CA certificates for SSL verification")
 
+        logger.debug(f"Creating httpx.AsyncClient with verify={verify}")
         self._client = httpx.AsyncClient(timeout=timeout, verify=verify)
 
     async def close(self) -> None:

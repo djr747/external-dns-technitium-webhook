@@ -125,6 +125,11 @@ def create_state_dependency(app: FastAPI) -> Callable[[], AppState]:
 async def setup_technitium_connection(state: AppState) -> None:
     """Connect to Technitium, supporting failover endpoints and catalog zones."""
 
+    logger.debug(
+        f"Config: verify_ssl={state.config.technitium_verify_ssl}, "
+        f"ca_bundle={state.config.technitium_ca_bundle_file}"
+    )
+
     endpoints = state.config.technitium_endpoints
     if not endpoints:
         logger.error("No Technitium endpoints configured; cannot proceed")
