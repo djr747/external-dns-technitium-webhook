@@ -39,7 +39,7 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-print("DEBUG: main.py imported")
+logger.debug("main.py imported")
 
 # Coverage hook for testing
 try:
