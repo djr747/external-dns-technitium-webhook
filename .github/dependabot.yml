@@ -1,13 +1,40 @@
 version: 2
 updates:
-  # Python dependencies (weekly)
+  # Production Python dependencies (weekly) - target develop for version management
   - package-ecosystem: "pip"
     directory: "/"
+    target-branch: "develop"
     schedule:
       interval: "weekly"
       day: "monday"
       time: "09:00"
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "python"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+    groups:
+      production-dependencies:
+        patterns:
+          - "fastapi"
+          - "uvicorn"
+          - "httpx"
+          - "pydantic*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # Development Python dependencies (weekly) - target main, no version bump needed
+  - package-ecosystem: "pip"
+    directory: "/"
+    target-branch: "main"
+    schedule:
+      interval: "weekly"
+      day: "tuesday"
+      time: "09:00"
+    open-pull-requests-limit: 5
     labels:
       - "dependencies"
       - "python"
@@ -24,19 +51,11 @@ updates:
         update-types:
           - "minor"
           - "patch"
-      production-dependencies:
-        patterns:
-          - "fastapi"
-          - "uvicorn"
-          - "httpx"
-          - "pydantic*"
-        update-types:
-          - "minor"
-          - "patch"
 
-  # Docker base image updates (daily) - watch Chainguard Python
+  # Docker base image updates (daily) - target main, no version bump needed
   - package-ecosystem: "docker"
     directory: "/"
+    target-branch: "main"
     schedule:
       interval: "daily"
     open-pull-requests-limit: 5
@@ -46,12 +65,13 @@ updates:
     commit-message:
       prefix: "docker"
 
-  # GitHub Actions workflows (weekly)
+  # GitHub Actions workflows (weekly) - target main, no version bump needed
   - package-ecosystem: "github-actions"
     directory: "/"
+    target-branch: "main"
     schedule:
       interval: "weekly"
-      day: "monday"
+      day: "wednesday"
       time: "09:00"
     open-pull-requests-limit: 5
     labels:
