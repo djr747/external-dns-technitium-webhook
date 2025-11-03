@@ -147,7 +147,7 @@ jobs:
           echo '```' >> RELEASE_NOTES.md
           echo "" >> RELEASE_NOTES.md
           echo "**Image Details:**" >> RELEASE_NOTES.md
-          echo "- Base: Red Hat UBI10 (vendor-supported CVE remediation)" >> RELEASE_NOTES.md
+          echo "- Base: Chainguard Python (zero CVEs, updated daily, SLSA Level 3)" >> RELEASE_NOTES.md
           echo "- Architectures: linux/amd64, linux/arm64" >> RELEASE_NOTES.md
           echo "- Signed with Cosign" >> RELEASE_NOTES.md
           echo "- SBOM included (SPDX format)" >> RELEASE_NOTES.md
@@ -209,7 +209,7 @@ jobs:
           labels: |
             org.opencontainers.image.title=ExternalDNS Technitium Webhook
             org.opencontainers.image.description=ExternalDNS webhook provider for Technitium DNS Server
-            org.opencontainers.image.vendor=Red Hat UBI10
+            org.opencontainers.image.vendor=Chainguard
             org.opencontainers.image.version=${{ needs.validate-version.outputs.version }}
             org.opencontainers.image.created=${{ github.event.repository.updated_at }}
             org.opencontainers.image.revision=${{ github.sha }}
