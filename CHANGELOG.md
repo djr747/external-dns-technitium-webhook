@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.6] - 2025-11-02
+
+### Changed
+- **Release Automation:** Consolidated all release logic into single `release.yml` workflow - removed `auto-tag-on-main.yml`. Workflow now triggers on `pyproject.toml` changes to main, creates git tag, creates GitHub release, then builds/publishes container.
+
+## [0.2.5] - 2025-11-02
+
+### Fixed
+- **Release Automation:** Simplified release workflow to use GitHub's standard tagging pattern - auto-tag creates tags only, GitHub automatically creates releases from tags, release.yml triggers on release published event (reliable webhook pattern)
+
 ## [0.2.4] - 2025-11-02
 
 ### Fixed
