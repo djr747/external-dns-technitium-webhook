@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.7] - 2025-11-03
+
+### Fixed
+- **Release Automation:** Fixed SBOM and security scan upload in release workflow - added `contents:write` permission to container build job and switched from `softprops/action-gh-release` to `gh release upload` CLI for more reliable asset uploads
+
 ## [0.2.6] - 2025-11-02
 
 ### Changed

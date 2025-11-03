@@ -171,7 +171,7 @@ jobs:
     needs: [validate-version, create-release]
     # Container is the primary deployment method - always runs
     permissions:
-      contents: read
+      contents: write
       packages: write
       security-events: write
       id-token: write
@@ -236,10 +236,10 @@ jobs:
           output-file: sbom-${{ needs.validate-version.outputs.version }}.spdx.json
 
       - name: Upload SBOM to release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ needs.validate-version.outputs.version }}
-          files: sbom-${{ needs.validate-version.outputs.version }}.spdx.json
+        run: |
+          gh release upload ${{ needs.validate-version.outputs.version }} \
+            sbom-${{ needs.validate-version.outputs.version }}.spdx.json \
+            --clobber
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
