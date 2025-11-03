@@ -293,6 +293,40 @@ When Dependabot creates PRs to update dependencies, merging them will also trigg
 - **Performance**: Monitor response times and optimize for production workloads
 - **Future**: Plan for Prometheus metrics and OpenTelemetry tracing integration
 
+## Release Workflow (CRITICAL - Read docs/RELEASE.md)
+
+**ONLY production dependency updates trigger releases.** The workflow is:
+
+### Production Dependencies (fastapi, uvicorn, httpx, pydantic)
+1. **Dependabot creates PR on `develop` branch** (NOT main)
+2. **Review and merge to develop**
+3. **Manually bump version in pyproject.toml** (e.g., 0.2.8 → 0.2.9)
+4. **Update CHANGELOG.md** with dependency and version changes
+5. **Commit**: `git commit -m "deps: bump fastapi to 0.121.0 + release v0.2.9"`
+6. **Create PR**: develop → main
+7. **Merge to main** → **Triggers release.yml**
+8. **Release pipeline runs automatically:**
+   - `check-version-changed` detects `version =` line changed ✅
+   - `create-git-tag` creates `vX.Y.Z` git tag
+   - `create-release` creates GitHub release
+   - `build-and-publish-container` builds multi-arch Docker image
+   - Uploads SBOM, security scans, signs container
+
+### Development Dependencies (pytest, ruff, mypy, semgrep, etc.)
+1. **Dependabot creates PR on `main` branch** automatically
+2. **Merge directly to main** - no version bump needed
+3. **Release is skipped** (version-changed detection catches this)
+4. **No git tag, no release, no container build**
+
+### Key Points
+- **Never manually merge production deps to main** - always go through develop + version bump first
+- **Version bump in pyproject.toml is the ONLY trigger** for releases
+- **CHANGELOG.md must be updated** with every release
+- **Dev-only updates never create releases** - version detection prevents this
+- **If PR targets wrong branch**, close it and follow the proper workflow above
+
+**See `docs/RELEASE.md` for complete detailed workflow.**
+
 ## Additional Resources
 - [FastAPI Documentation](https://fastapi.tiangolo.com/)
 - [Pydantic Documentation](https://pydantic.dev/)
