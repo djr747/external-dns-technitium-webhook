@@ -20,9 +20,41 @@ permissions:
   id-token: write
 
 jobs:
+  check-version-changed:
+    name: Check if Version Changed
+    runs-on: ubuntu-latest
+    outputs:
+      version-changed: ${{ steps.check.outputs.version-changed }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
+
+      - name: Detect version change
+        id: check
+        run: |
+          # For workflow_dispatch, always proceed (manual release)
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "version-changed=true" >> $GITHUB_OUTPUT
+            echo "✅ Manual release via workflow_dispatch"
+            exit 0
+          fi
+          
+          # For push events, check if version line actually changed
+          if git diff HEAD~1 HEAD -- pyproject.toml | grep -E '^\+version = |^-version = ' >/dev/null 2>&1; then
+            echo "version-changed=true" >> $GITHUB_OUTPUT
+            echo "✅ Version changed in pyproject.toml - proceeding with release"
+          else
+            echo "version-changed=false" >> $GITHUB_OUTPUT
+            echo "ℹ️ Only dependencies changed, no version bump - skipping release"
+          fi
+
   validate-version:
     name: Validate Version
     runs-on: ubuntu-latest
+    needs: check-version-changed
+    if: needs.check-version-changed.outputs.version-changed == 'true'
     outputs:
       version: ${{ steps.set_version.outputs.version }}
       version-number: ${{ steps.set_version.outputs.version-number }}
