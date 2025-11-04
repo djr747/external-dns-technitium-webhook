@@ -255,7 +255,7 @@ jobs:
           sarif_file: snyk-container.sarif
 
       - name: Set up Node.js for Snyk CLI
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '18'
 
