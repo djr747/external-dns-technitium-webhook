@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.9] - 2025-11-03
+
+### Dependencies
+- Bump fastapi from 0.120.4 to 0.121.0 - adds support for dependencies with scopes and scope="request" for early-exit dependencies
+
+### Documentation
+- Add comprehensive release workflow documentation in `docs/RELEASE.md`
+- Update `copilot-instructions.md` with detailed release workflow section
+- Document production vs development dependency separation and automated release triggering
+
 ## [0.2.8] - 2025-11-03
 
 ### Fixed
