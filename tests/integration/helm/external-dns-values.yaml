@@ -95,3 +95,6 @@ podLabels:
 # Annotations for monitoring
 podAnnotations:
   description: "External DNS with Technitium webhook for integration testing"
+
+# Enable debug logging
+logLevel: debug
