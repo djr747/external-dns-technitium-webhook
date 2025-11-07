@@ -202,8 +202,8 @@ jobs:
         with:
           cluster_name: integration-test
           config: /tmp/kind-config.yaml
-          version: v0.23.0
-          kubectl_version: v1.31.0
+          version: v0.30.0
+          kubectl_version: v1.33.4
 
       - name: Load webhook image into Kind
         run: |
