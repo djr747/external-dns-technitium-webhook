@@ -302,13 +302,15 @@ jobs:
 
       - name: Wait for External DNS deployment (loop with event logging)
         run: |
+          set -x
+          set +e
           echo "Waiting for ExternalDNS pod to become ready (max 160s)..."
           for i in $(seq 1 8); do
             POD=$(kubectl get pods -n default -l app.kubernetes.io/name=external-dns -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
             STATUS=$(kubectl get pods -n default -l app.kubernetes.io/name=external-dns -o jsonpath='{.items[0].status.phase}' 2>/dev/null)
             RESTARTS=$(kubectl get pods -n default -l app.kubernetes.io/name=external-dns -o jsonpath='{.items[0].status.containerStatuses[*].restartCount}' 2>/dev/null)
             READY=$(kubectl get pods -n default -l app.kubernetes.io/name=external-dns -o jsonpath='{.items[0].status.containerStatuses[?(@.name=="webhook")].ready}' 2>/dev/null)
-            echo "[${i}/30] Pod: $POD status: $STATUS, webhook ready: $READY, restarts: $RESTARTS"
+            echo "[${i}/8] Pod: $POD status: $STATUS, webhook ready: $READY, restarts: $RESTARTS"
             kubectl get pods -n default -l app.kubernetes.io/name=external-dns
             kubectl describe pod $POD -n default || true
             kubectl get events -n default --sort-by=.lastTimestamp | grep external-dns || true
@@ -329,7 +331,7 @@ jobs:
             fi
             sleep 20
           done
-          echo "ERROR: ExternalDNS webhook sidecar did not become ready after 150s."
+          echo "ERROR: ExternalDNS webhook sidecar did not become ready after 160s."
           exit 1
 
       - name: Check External DNS pod status
