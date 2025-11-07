@@ -61,7 +61,9 @@ async def health_check(state: AppState) -> Response:
         200 OK if ready, 503 if not ready
     """
     if not state.is_ready:
-        return ExternalDNSResponse(content={"status": "unhealthy"}, status_code=status.HTTP_503_SERVICE_UNAVAILABLE)
+        return ExternalDNSResponse(
+            content={"status": "unhealthy"}, status_code=status.HTTP_503_SERVICE_UNAVAILABLE
+        )
     return ExternalDNSResponse(content={"status": "ok"}, status_code=status.HTTP_200_OK)
 
 
