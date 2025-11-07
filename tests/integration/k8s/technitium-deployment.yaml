@@ -46,8 +46,17 @@ data:
       -d "zone=test.local&type=Primary" \
       -o /dev/null -w "\nZone creation status: %{http_code}\n"
     
+    # Create catalog zone for member zones
+    echo "Creating catalog zone for member zone provisioning..."
+    curl -s -X POST http://localhost:5380/api/zones/createZone \
+      -H "Content-Type: application/x-www-form-urlencoded" \
+      -H "Authorization: Bearer $TOKEN" \
+      -d "zone=catalog.invalid&type=Catalog" \
+      -o /dev/null -w "\nCatalog zone creation status: %{http_code}\n"
+    
     echo "Setup complete!"
-    echo "Zone: test.local"
+    echo "DNS Zone: test.local"
+    echo "Catalog Zone: catalog.invalid"
     echo "API: http://technitium:5380"
     echo "Admin user: admin"
     echo "Admin password: $ADMIN_PASSWORD"

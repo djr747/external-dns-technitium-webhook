@@ -136,10 +136,8 @@ jobs:
       - name: Create Technitium secret
         run: |
           kubectl create secret generic technitium-secret \
-            --from-literal=url=http://technitium:5380 \
             --from-literal=username=admin \
             --from-literal=password=${{ steps.creds.outputs.admin_password }} \
-            --from-literal=zone=test.local \
             -n default
 
       - name: Deploy Technitium DNS
@@ -162,7 +160,7 @@ jobs:
             --quiet \
             --env="TECHNITIUM_URL=http://technitium:5380" \
             --env="ADMIN_PASSWORD=${{ steps.creds.outputs.admin_password }}" \
-            --env="CATALOG_ZONE=test.local" \
+            --env="CATALOG_ZONE=catalog.invalid" \
             -- sh -c "
               apk add --no-cache bash openssl &&
               $(cat tests/integration/fixtures/init-technitium.sh)
