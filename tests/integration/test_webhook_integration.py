@@ -8,12 +8,13 @@ Tests the complete workflow:
 4. Webhook health and API endpoints
 """
 
-import asyncio
 import os
-import pytest
+
 import httpx
-from kubernetes import client, config, watch
-from kubernetes.stream import stream
+import pytest
+from kubernetes import client, config
+
+pytestmark = pytest.mark.integration
 
 
 class TestWebhookIntegration:
@@ -46,7 +47,9 @@ class TestWebhookIntegration:
     def test_technitium_api_ready(self, technitium_url):
         """Verify Technitium API is accessible"""
         response = httpx.get(f"{technitium_url}/api/user/login", timeout=10)
-        assert response.status_code in [200, 400], f"Technitium API unreachable: {response.status_code}"
+        assert response.status_code in [200, 400], (
+            f"Technitium API unreachable: {response.status_code}"
+        )
 
     def test_webhook_health_endpoint(self, webhook_url):
         """Test webhook /health endpoint"""
@@ -74,14 +77,13 @@ class TestWebhookIntegration:
     def test_webhook_custom_media_type(self, webhook_url):
         """Verify webhook returns correct ExternalDNS media type"""
         response = httpx.get(f"{webhook_url}/health", timeout=10)
-        content_type = response.headers.get("content-type", "")
         # Should use standard JSON for health, but API endpoints should use custom type
         assert response.status_code == 200
 
     def test_pod_logs_no_errors(self, k8s_client):
         """Check External DNS pod logs for errors"""
         namespace = "default"
-        
+
         # Find external-dns pod
         pods = k8s_client.list_namespaced_pod(namespace)
         external_dns_pod = None
@@ -89,7 +91,7 @@ class TestWebhookIntegration:
             if "external-dns" in pod.metadata.name:
                 external_dns_pod = pod.metadata.name
                 break
-        
+
         if external_dns_pod:
             try:
                 logs = k8s_client.read_namespaced_pod_log(external_dns_pod, namespace)
@@ -101,24 +103,28 @@ class TestWebhookIntegration:
     def test_webhook_sidecar_container_running(self, k8s_client):
         """Verify webhook sidecar container is running in external-dns pod"""
         namespace = "default"
-        
+
         pods = k8s_client.list_namespaced_pod(namespace)
         external_dns_pod = None
         for pod in pods.items:
             if "external-dns" in pod.metadata.name:
                 external_dns_pod = pod
                 break
-        
+
         if external_dns_pod:
             # Check for webhook-provider container
             containers = external_dns_pod.spec.containers
             container_names = [c.name for c in containers]
-            assert "webhook-provider" in container_names or len(containers) > 1, \
+            assert "webhook-provider" in container_names or len(containers) > 1, (
                 "Webhook sidecar should be running"
-            
+            )
+
             # Check container status
             for container_status in external_dns_pod.status.container_statuses:
-                if "webhook" in container_status.name or "external-dns-technitium" in container_status.image:
+                if (
+                    "webhook" in container_status.name
+                    or "external-dns-technitium" in container_status.image
+                ):
                     assert container_status.ready, f"Container {container_status.name} is not ready"
 
     def test_technitium_zone_exists(self, technitium_url):
@@ -142,20 +148,12 @@ class TestWebhookAdjustEndpoints:
         """Test POST /adjustendpoints endpoint"""
         payload = {
             "endpoints": [
-                {
-                    "dnsName": "test.test.local",
-                    "recordType": "A",
-                    "targets": ["10.0.0.1"]
-                }
+                {"dnsName": "test.test.local", "recordType": "A", "targets": ["10.0.0.1"]}
             ]
         }
-        
+
         async with httpx.AsyncClient() as client:
-            response = await client.post(
-                f"{webhook_url}/adjustendpoints",
-                json=payload,
-                timeout=10
-            )
+            response = await client.post(f"{webhook_url}/adjustendpoints", json=payload, timeout=10)
             assert response.status_code == 200, f"Adjust endpoints failed: {response.text}"
             data = response.json()
             assert "content" in data, "Response should contain adjusted endpoints"
@@ -180,25 +178,15 @@ class TestWebhookRecordOperations:
                         "name": "test.test.local",
                         "type": "A",
                         "ttl": 300,
-                        "changes": [
-                            {
-                                "action": "CREATE",
-                                "resourceRecord": {
-                                    "value": "10.0.0.1"
-                                }
-                            }
-                        ]
-                    }
+                        "changes": [{"action": "CREATE", "resourceRecord": {"value": "10.0.0.1"}}],
+                    },
                 }
             ]
         }
-        
+
         async with httpx.AsyncClient() as client:
-            response = await client.post(
-                f"{webhook_url}/records",
-                json=payload,
-                timeout=10
-            )
+            response = await client.post(f"{webhook_url}/records", json=payload, timeout=10)
             # Should return 200 even if Technitium isn't fully configured for testing
-            assert response.status_code in [200, 400, 500], \
+            assert response.status_code in [200, 400, 500], (
                 f"Unexpected status code: {response.status_code}"
+            )

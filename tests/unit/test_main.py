@@ -108,7 +108,7 @@ async def test_ensure_zone_ready_existing_zone(mocker: MockerFixture) -> None:
     state = AppState(config=config)
 
     options = GetZoneOptionsResponse(
-        zone=config.zone,
+        name=config.zone,
         isCatalogZone=False,
         isReadOnly=False,
         catalogZoneName=None,
@@ -138,7 +138,7 @@ async def test_ensure_zone_ready_creates_zone_when_missing(mocker: MockerFixture
     state = AppState(config=config)
 
     options_after_create = GetZoneOptionsResponse(
-        zone=config.zone,
+        name=config.zone,
         isCatalogZone=False,
         isReadOnly=False,
         catalogZoneName=None,
@@ -179,7 +179,7 @@ async def test_ensure_zone_ready_secondary_skips_catalog(mocker: MockerFixture) 
     state = AppState(config=config)
 
     options = GetZoneOptionsResponse(
-        zone=config.zone,
+        name=config.zone,
         isCatalogZone=False,
         isReadOnly=True,
         catalogZoneName="catalog.example.com",
@@ -217,7 +217,7 @@ async def test_ensure_zone_ready_invokes_catalog_membership(mocker: MockerFixtur
     state = AppState(config=config)
 
     options = GetZoneOptionsResponse(
-        zone=config.zone,
+        name=config.zone,
         isCatalogZone=False,
         isReadOnly=False,
         catalogZoneName=None,
@@ -291,7 +291,7 @@ async def test_ensure_catalog_membership_skips_when_unavailable(
     state = AppState(config=config)
 
     options = GetZoneOptionsResponse(
-        zone=config.zone,
+        name=config.zone,
         isCatalogZone=False,
         isReadOnly=False,
         catalogZoneName=None,
@@ -324,7 +324,7 @@ async def test_ensure_catalog_membership_returns_existing_membership(
     state = AppState(config=config)
 
     options = GetZoneOptionsResponse(
-        zone=config.zone,
+        name=config.zone,
         isCatalogZone=False,
         isReadOnly=False,
         catalogZoneName="catalog.example.com",
@@ -354,7 +354,7 @@ async def test_ensure_catalog_membership_enrolls_when_available(
     state = AppState(config=config)
 
     options = GetZoneOptionsResponse(
-        zone=config.zone,
+        name=config.zone,
         isCatalogZone=False,
         isReadOnly=False,
         catalogZoneName=None,
@@ -363,7 +363,7 @@ async def test_ensure_catalog_membership_enrolls_when_available(
 
     set_mock = mocker.patch.object(state.client, "set_zone_options", new_callable=AsyncMock)
     refreshed = GetZoneOptionsResponse(
-        zone=config.zone,
+        name=config.zone,
         isCatalogZone=True,
         isReadOnly=False,
         catalogZoneName="catalog.example.com",
@@ -652,7 +652,7 @@ async def test_ensure_catalog_membership_logs_mismatch(
     caplog.set_level("INFO")
 
     options = GetZoneOptionsResponse(
-        zone=config.zone,
+        name=config.zone,
         isCatalogZone=False,
         isReadOnly=False,
         catalogZoneName=None,
@@ -661,7 +661,7 @@ async def test_ensure_catalog_membership_logs_mismatch(
 
     mocker.patch.object(state.client, "set_zone_options", new_callable=AsyncMock)
     refreshed = GetZoneOptionsResponse(
-        zone=config.zone,
+        name=config.zone,
         isCatalogZone=False,
         isReadOnly=False,
         catalogZoneName="other.example.com",
