@@ -283,9 +283,11 @@ jobs:
 
       - name: Deploy External DNS with webhook
         run: |
+          # Extract just the tag portion (e.g., "d244611" from "external-dns-technitium-webhook:d244611")
+          TAG="${{ needs.build-amd64.outputs.image-tag }}#*:}"
           helm install external-dns external-dns/external-dns \
             -f tests/integration/helm/external-dns-values.yaml \
-            --set provider.webhook.image.tag=${{ needs.build-amd64.outputs.image-tag }} \
+            --set provider.webhook.image.tag="${TAG}" \
             -n default \
             --timeout=5m
 
