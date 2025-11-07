@@ -249,7 +249,7 @@ jobs:
             --env="TECHNITIUM_URL=http://technitium:5380" \
             --env="ADMIN_PASSWORD=${{ steps.creds.outputs.admin_password }}" \
             --env="CATALOG_ZONE=catalog.invalid" \
-            -- sh -c "$(cat tests/integration/fixtures/init-technitium.sh)" || true
+            -- sh -c "$(cat tests/integration/fixtures/init-technitium.sh)"
           
           # Get logs and capture credentials
           echo ""
@@ -283,10 +283,19 @@ jobs:
 
       - name: Deploy External DNS with webhook
         run: |
-          # Extract just the tag portion (e.g., "d244611" from "external-dns-technitium-webhook:d244611")
-          TAG="${{ needs.build-amd64.outputs.image-tag }}#*:}"
+          # The build step emits an image reference like "external-dns-technitium-webhook:d244611"
+          # Split that into repository and tag and pass them separately to Helm so we don't
+          # end up with a malformed image name (repo:repo:tag)
+          FULL_IMAGE="${{ needs.build-amd64.outputs.image-tag }}"
+          REPO="${FULL_IMAGE%:*}"
+          TAG="${FULL_IMAGE##*:}"
+
+          echo "Using image repository: $REPO"
+          echo "Using image tag: $TAG"
+
           helm install external-dns external-dns/external-dns \
             -f tests/integration/helm/external-dns-values.yaml \
+            --set provider.webhook.image.repository="${REPO}" \
             --set provider.webhook.image.tag="${TAG}" \
             -n default \
             --timeout=5m
@@ -296,7 +305,7 @@ jobs:
           kubectl wait --for=condition=ready pod \
             -l app.kubernetes.io/name=external-dns \
             --timeout=300s \
-            -n default || true
+            -n default
 
       - name: Check External DNS pod status
         run: |
@@ -322,7 +331,7 @@ jobs:
           pytest tests/integration/test_webhook_integration.py \
             -v \
             --tb=short \
-            -m "" || true
+            -m ""
 
       - name: Collect logs on failure
         if: failure()

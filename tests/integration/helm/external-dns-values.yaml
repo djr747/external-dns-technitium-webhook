@@ -9,8 +9,6 @@ provider:
   webhook:
     # Image for the webhook provider (our Technitium webhook)
     image:
-      repository: external-dns-technitium-webhook
-      tag: latest
       imagePullPolicy: Never
     
     # Environment variables for the webhook container
