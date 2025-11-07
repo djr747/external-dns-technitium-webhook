@@ -90,7 +90,7 @@ jobs:
   integration:
     name: Integration Tests (Kubernetes)
     runs-on: ubuntu-latest
-    needs: [test]
+    needs: [test, docker-build]
     steps:
       - uses: actions/checkout@v5
         with:
@@ -120,8 +120,8 @@ jobs:
 
       - name: Pull and load Technitium image into Kind
         run: |
-          docker pull technitium/technitium-dns:latest
-          kind load docker-image technitium/technitium-dns:latest --name integration-test
+          docker pull technitium/dns-server:latest
+          kind load docker-image technitium/dns-server:latest --name integration-test
 
       - name: Generate test credentials
         id: creds
@@ -164,17 +164,16 @@ jobs:
               $(cat tests/integration/fixtures/init-technitium.sh)
             "
 
-      - name: Add Bitnami Helm repository
+      - name: Add External DNS Helm repository
         run: |
-          helm repo add bitnami https://charts.bitnami.com/bitnami
+          helm repo add external-dns https://kubernetes-sigs.github.io/external-dns/
           helm repo update
 
       - name: Deploy External DNS with webhook
         run: |
-          helm install external-dns bitnami/external-dns \
+          helm install external-dns external-dns/external-dns \
             -f tests/integration/helm/external-dns-values.yaml \
             -n default \
-            --set image.tag=latest \
             --timeout=5m
 
       - name: Wait for External DNS deployment
