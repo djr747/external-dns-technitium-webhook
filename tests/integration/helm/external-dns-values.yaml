@@ -112,13 +112,24 @@ resources:
   limits:
     cpu: 200m
     memory: 256Mi
-    livenessProbe:
-      httpGet:
-        path: /health
-        port: webhook
-      initialDelaySeconds: 10
-      periodSeconds: 30
-      timeoutSeconds: 5
+
+# Liveness probe for external-dns container
+livenessProbe:
+  httpGet:
+    path: /metrics
+    port: 7979
+  initialDelaySeconds: 10
+  periodSeconds: 30
+  timeoutSeconds: 5
+
+# Readiness probe for external-dns container
+readinessProbe:
+  httpGet:
+    path: /metrics
+    port: 7979
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  timeoutSeconds: 5
 
 # Labels for pod selection
 podLabels:
