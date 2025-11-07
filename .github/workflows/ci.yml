@@ -302,26 +302,34 @@ jobs:
 
       - name: Wait for External DNS deployment (loop with event logging)
         run: |
-          echo "Waiting for ExternalDNS pod to become ready (max 90s)..."
-          for i in $(seq 1 18); do
+          echo "Waiting for ExternalDNS pod to become ready (max 160s)..."
+          for i in $(seq 1 8); do
             POD=$(kubectl get pods -n default -l app.kubernetes.io/name=external-dns -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
-            READY=$(kubectl get pods -n default -l app.kubernetes.io/name=external-dns -o jsonpath='{.items[0].status.containerStatuses[?(@.name=="webhook")].ready}' 2>/dev/null)
             STATUS=$(kubectl get pods -n default -l app.kubernetes.io/name=external-dns -o jsonpath='{.items[0].status.phase}' 2>/dev/null)
-            echo "[${i}/18] Pod: $POD status: $STATUS, webhook ready: $READY"
+            RESTARTS=$(kubectl get pods -n default -l app.kubernetes.io/name=external-dns -o jsonpath='{.items[0].status.containerStatuses[*].restartCount}' 2>/dev/null)
+            READY=$(kubectl get pods -n default -l app.kubernetes.io/name=external-dns -o jsonpath='{.items[0].status.containerStatuses[?(@.name=="webhook")].ready}' 2>/dev/null)
+            echo "[${i}/30] Pod: $POD status: $STATUS, webhook ready: $READY, restarts: $RESTARTS"
             kubectl get pods -n default -l app.kubernetes.io/name=external-dns
             kubectl describe pod $POD -n default || true
             kubectl get events -n default --sort-by=.lastTimestamp | grep external-dns || true
-            echo "--- ExternalDNS container logs ---"
+            echo "--- ExternalDNS container logs (current) ---"
             kubectl logs $POD -c external-dns -n default --tail=50 || true
-            echo "--- Webhook-provider container logs ---"
+            echo "--- Webhook-provider container logs (current) ---"
             kubectl logs $POD -c webhook-provider -n default --tail=50 || true
+            # If container has restarted, get previous logs
+            if [ "$RESTARTS" != "0" ]; then
+              echo "--- ExternalDNS container logs (previous) ---"
+              kubectl logs $POD -c external-dns -n default --tail=50 --previous || true
+              echo "--- Webhook-provider container logs (previous) ---"
+              kubectl logs $POD -c webhook-provider -n default --tail=50 --previous || true
+            fi
             if [ "$READY" = "true" ]; then
               echo "ExternalDNS webhook sidecar is ready!"
               exit 0
             fi
-            sleep 5
+            sleep 20
           done
-          echo "ERROR: ExternalDNS webhook sidecar did not become ready after 90s."
+          echo "ERROR: ExternalDNS webhook sidecar did not become ready after 150s."
           exit 1
 
       - name: Check External DNS pod status
