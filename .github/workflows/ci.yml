@@ -155,14 +155,18 @@ jobs:
           kubectl run technitium-init \
             --image=curlimages/curl:latest \
             --restart=Never \
-            --rm=true \
+            --attach=true \
+            --quiet \
             --env="TECHNITIUM_URL=http://technitium:5380" \
             --env="ADMIN_PASSWORD=${{ steps.creds.outputs.admin_password }}" \
             --env="CATALOG_ZONE=test.local" \
             -- sh -c "
               apk add --no-cache bash openssl &&
               $(cat tests/integration/fixtures/init-technitium.sh)
-            "
+            " || true
+          
+          # Clean up the pod
+          kubectl delete pod technitium-init --ignore-not-found=true -n default || true
 
       - name: Add External DNS Helm repository
         run: |
