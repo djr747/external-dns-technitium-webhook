@@ -1,0 +1,125 @@
+# External DNS Helm Chart Values for Integration Testing
+# Deploys External DNS with webhook provider to sync DNS records to Technitium
+
+provider: webhook
+
+webhook:
+  # URL of the webhook (this pod itself)
+  url: http://localhost:8888
+  
+  # Request timeout for webhook calls
+  requestTimeout: 10s
+
+# ClusterRoleBinding configuration
+rbac:
+  create: true
+  
+# Service Account
+serviceAccount:
+  create: true
+  name: external-dns
+
+# RBAC policies for External DNS
+policy: sync
+
+# Registry source configuration (what resources to read from)
+sources:
+  - ingress
+  - service
+
+# Domain filtering
+domainFilters:
+  - test.local
+
+# Registry type for storing state
+registry: txt
+
+# TXT record prefix for registry
+txtOwnerId: external-dns-test
+
+# Replicas for testing
+replicas: 1
+
+# Pod resources for testing (minimal)
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 256Mi
+
+# Sidecar container for Technitium webhook provider
+# This is the external-dns-technitium-webhook image we're testing
+sidecars:
+  - name: webhook-provider
+    image: external-dns-technitium-webhook:latest
+    imagePullPolicy: IfNotPresent
+    ports:
+      - name: webhook
+        containerPort: 8888
+    env:
+      # Technitium configuration - will be injected by workflow
+      - name: TECHNITIUM_URL
+        valueFrom:
+          secretKeyRef:
+            name: technitium-secret
+            key: url
+      - name: TECHNITIUM_USERNAME
+        valueFrom:
+          secretKeyRef:
+            name: technitium-secret
+            key: username
+      - name: TECHNITIUM_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: technitium-secret
+            key: password
+      - name: ZONE
+        valueFrom:
+          secretKeyRef:
+            name: technitium-secret
+            key: zone
+      - name: DOMAIN_FILTERS
+        value: "test.local"
+      - name: LOG_LEVEL
+        value: "DEBUG"
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi
+    readinessProbe:
+      httpGet:
+        path: /health
+        port: webhook
+      initialDelaySeconds: 5
+      periodSeconds: 10
+      timeoutSeconds: 3
+    livenessProbe:
+      httpGet:
+        path: /health
+        port: webhook
+      initialDelaySeconds: 10
+      periodSeconds: 30
+      timeoutSeconds: 5
+
+# Labels for pod selection
+podLabels:
+  app: external-dns
+  test: integration
+
+# Annotations for monitoring
+podAnnotations:
+  description: "External DNS with Technitium webhook for integration testing"
+
+# SecurityContext for pod
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 65534
+  fsReadOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
