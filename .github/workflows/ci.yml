@@ -96,19 +96,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build webhook Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: false
-          load: true
-          tags: external-dns-technitium-webhook:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
       - name: Create Kind cluster config
         run: |
           cat > /tmp/kind-config.yaml <<EOF
@@ -131,10 +118,10 @@ jobs:
           cluster_name: integration-test
           config: /tmp/kind-config.yaml
 
-      - name: Load webhook image into Kind
+      - name: Pull and load Technitium image into Kind
         run: |
-          kind load docker-image external-dns-technitium-webhook:latest \
-            --name integration-test
+          docker pull technitium/technitium-dns:latest
+          kind load docker-image technitium/technitium-dns:latest --name integration-test
 
       - name: Generate test credentials
         id: creds
