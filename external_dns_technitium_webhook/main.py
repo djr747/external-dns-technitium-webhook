@@ -12,14 +12,9 @@ from datetime import UTC, datetime
 from fastapi import Depends, FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 
+from . import handlers
 from .app_state import AppState
 from .config import Config as AppConfig
-from .handlers import (
-    adjust_endpoints,
-    apply_record,
-    get_records,
-    negotiate_domain_filter,
-)
 from .middleware import RequestSizeLimitMiddleware, rate_limit_middleware
 from .models import Changes, Endpoint, GetZoneOptionsResponse
 from .technitium_client import TechnitiumError
@@ -445,7 +440,6 @@ def create_app() -> FastAPI:
     """Create the FastAPI application.
 
     Returns:
-        FastAPI application
     """
     app = FastAPI(
         title="ExternalDNS Technitium Webhook",
@@ -499,14 +493,14 @@ def create_app() -> FastAPI:
         state: AppState = Depends(state_dependency),
     ) -> Response:
         """Negotiate domain filter."""
-        return await negotiate_domain_filter(state)
+        return await handlers.negotiate_domain_filter(state)
 
     @app.get("/records")
     async def records(
         state: AppState = Depends(state_dependency),
     ) -> Response:
         """Get current DNS records."""
-        return await get_records(state)
+        return await handlers.get_records(state)
 
     @app.post("/adjustendpoints")
     async def adjust(
@@ -514,15 +508,15 @@ def create_app() -> FastAPI:
         state: AppState = Depends(state_dependency),
     ) -> Response:
         """Adjust endpoints."""
-        return await adjust_endpoints(state, endpoints)
+        return await handlers.adjust_endpoints(state, endpoints)
 
     @app.post("/records", status_code=204)
     async def apply(
         changes: Changes,
         state: AppState = Depends(state_dependency),
-    ) -> None:
+    ) -> Response:
         """Apply DNS record changes."""
-        await apply_record(state, changes)
+        return await handlers.apply_record(state, changes)
 
     return app
 

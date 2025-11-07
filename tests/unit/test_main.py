@@ -8,12 +8,24 @@ from typing import cast
 from unittest.mock import ANY, AsyncMock, MagicMock
 
 import pytest
-from fastapi import FastAPI, Response
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pytest_mock import MockerFixture
 
 from external_dns_technitium_webhook.app_state import AppState
 from external_dns_technitium_webhook.config import Config
+from external_dns_technitium_webhook.handlers import (
+    adjust_endpoints as real_adjust_endpoints,
+)
+from external_dns_technitium_webhook.handlers import (
+    apply_record as real_apply_record,
+)
+from external_dns_technitium_webhook.handlers import (
+    get_records as real_get_records,
+)
+from external_dns_technitium_webhook.handlers import (
+    negotiate_domain_filter as real_negotiate_domain_filter,
+)
 from external_dns_technitium_webhook.main import (
     ZonePreparationResult,
     _fetch_zone_options,
@@ -872,8 +884,14 @@ def test_app_routes_delegate_to_handlers(mocker: MockerFixture) -> None:
     """Routes defined in create_app should delegate to underlying handlers."""
 
     mocker.patch("external_dns_technitium_webhook.app_state.TechnitiumClient")
+
     state = AppState(config=_build_config())
     state.is_ready = True
+
+    # Patch state.ensure_writable to a no-op async function
+    async def noop():
+        return None
+    state.ensure_writable = noop
 
     @asynccontextmanager
     async def _dummy_lifespan(_app: FastAPI):
@@ -883,27 +901,23 @@ def test_app_routes_delegate_to_handlers(mocker: MockerFixture) -> None:
     app = create_app()
     app.state.app_state = state
 
-    negotiate_response = Response(content="filters", media_type="application/json")
     negotiate_mock = mocker.patch(
-        "external_dns_technitium_webhook.main.negotiate_domain_filter",
-        new_callable=AsyncMock,
-        return_value=negotiate_response,
+        "external_dns_technitium_webhook.handlers.negotiate_domain_filter",
+        side_effect=real_negotiate_domain_filter,
     )
-    records_response = Response(content="[]", media_type="application/json")
+    # Patch state.client.get_records to be an AsyncMock returning an empty list
+    state.client.get_records = AsyncMock(return_value=SimpleNamespace(records=[]))
     records_mock = mocker.patch(
-        "external_dns_technitium_webhook.main.get_records",
-        new_callable=AsyncMock,
-        return_value=records_response,
+        "external_dns_technitium_webhook.handlers.get_records",
+        side_effect=real_get_records,
     )
-    adjust_response = Response(content="[]", media_type="application/json")
     adjust_mock = mocker.patch(
-        "external_dns_technitium_webhook.main.adjust_endpoints",
-        new_callable=AsyncMock,
-        return_value=adjust_response,
+        "external_dns_technitium_webhook.handlers.adjust_endpoints",
+        side_effect=real_adjust_endpoints,
     )
     apply_mock = mocker.patch(
-        "external_dns_technitium_webhook.main.apply_record",
-        new_callable=AsyncMock,
+        "external_dns_technitium_webhook.handlers.apply_record",
+        side_effect=real_apply_record,
     )
 
     endpoint_payload = [
@@ -920,18 +934,30 @@ def test_app_routes_delegate_to_handlers(mocker: MockerFixture) -> None:
         "delete": [],
     }
 
+
     with TestClient(app) as client:
         response = client.get("/")
         assert response.status_code == 200
-        assert response.content == negotiate_response.body
+        assert response.json() == {"filters": ["example.com"], "exclude": []}
 
         response = client.get("/records")
         assert response.status_code == 200
-        assert response.content == records_response.body
+        assert response.json() == []
 
         response = client.post("/adjustendpoints", json=endpoint_payload)
         assert response.status_code == 200
-        assert response.content == adjust_response.body
+        # The handler returns the normalized endpoint(s) as a list
+        assert response.json() == [
+            {
+                "dnsName": "api.example.com",
+                "recordType": "A",
+                "targets": ["1.2.3.4"],
+                "recordTTL": None,
+                "setIdentifier": "",
+                "labels": {},
+                "providerSpecific": []
+            }
+        ]
 
         response = client.post("/records", json=changes_payload)
         assert response.status_code == 204
