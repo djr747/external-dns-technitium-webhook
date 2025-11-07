@@ -11,7 +11,7 @@ provider:
     image:
       repository: external-dns-technitium-webhook
       tag: latest
-      pullPolicy: Always
+      imagePullPolicy: Never
     
     # Environment variables for the webhook container
     env:
