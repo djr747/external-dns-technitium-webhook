@@ -296,7 +296,7 @@ jobs:
           helm install external-dns external-dns/external-dns \
             -f tests/integration/helm/external-dns-values.yaml \
             --set provider.webhook.image.repository="${REPO}" \
-            --set provider.webhook.image.tag="${TAG}" \
+            --set provider.webhook.image.tag="'${TAG}'" \
             -n default \
             --timeout=5m
 
