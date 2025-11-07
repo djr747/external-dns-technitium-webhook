@@ -300,12 +300,24 @@ jobs:
             -n default \
             --timeout=5m
 
-      - name: Wait for External DNS deployment
+      - name: Wait for External DNS deployment (loop with event logging)
         run: |
-          kubectl wait --for=condition=ready pod \
-            -l app.kubernetes.io/name=external-dns \
-            --timeout=300s \
-            -n default
+          echo "Waiting for ExternalDNS pod to become ready (max 90s)..."
+          for i in $(seq 1 18); do
+            READY=$(kubectl get pods -n default -l app.kubernetes.io/name=external-dns -o jsonpath='{.items[0].status.containerStatuses[?(@.name=="webhook")].ready}' 2>/dev/null)
+            STATUS=$(kubectl get pods -n default -l app.kubernetes.io/name=external-dns -o jsonpath='{.items[0].status.phase}' 2>/dev/null)
+            echo "[${i}/18] Pod status: $STATUS, webhook ready: $READY"
+            kubectl get pods -n default -l app.kubernetes.io/name=external-dns
+            kubectl describe pod -l app.kubernetes.io/name=external-dns -n default || true
+            kubectl get events -n default --sort-by=.lastTimestamp | grep external-dns || true
+            if [ "$READY" = "true" ]; then
+              echo "ExternalDNS webhook sidecar is ready!"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "ERROR: ExternalDNS webhook sidecar did not become ready after 90s."
+          exit 1
 
       - name: Check External DNS pod status
         run: |
