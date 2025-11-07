@@ -48,6 +48,7 @@ jobs:
   test:
     name: Test Python ${{ matrix.python-version }}
     runs-on: ubuntu-latest
+    needs: [lint]
     strategy:
       fail-fast: false
       matrix:
@@ -79,23 +80,107 @@ jobs:
           path: htmlcov/
           retention-days: 30
 
-      - name: Upload coverage to Codecov
-        if: matrix.python-version == '3.13'
-        uses: codecov/codecov-action@v4
+  build:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+    needs: [test]
+    outputs:
+      image-tag: ${{ steps.image-tag.outputs.tag }}
+      image-digest: ${{ steps.build.outputs.digest }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
         with:
-          file: ./coverage.xml
-          flags: unittests
-          name: codecov-umbrella
-          fail_ci_if_error: false
+          fetch-depth: 0
+
+      - name: Generate image tag
+        id: image-tag
+        run: |
+          COMMIT_SHA=${{ github.sha }}
+          IMAGE_TAG="external-dns-technitium-webhook:${COMMIT_SHA:0:7}"
+          echo "tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image (single-arch for this runner)
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          load: true
+          tags: ${{ steps.image-tag.outputs.tag }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Verify built image Python version matches Chainguard latest
+        run: |
+          echo "Checking Python version inside built image..."
+          chainguard_version=$(docker run --rm --entrypoint python cgr.dev/chainguard/python:latest -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+          image_version=$(docker run --rm --entrypoint python ${{ steps.image-tag.outputs.tag }} -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+          if [ "$image_version" != "$chainguard_version" ]; then
+            echo "ERROR: Python version in built image ($image_version) does not match Chainguard latest ($chainguard_version)"
+            exit 1
+          fi
+          echo "Python version in built image matches Chainguard latest: $image_version"
+
+      - name: Save Docker image to artifact
+        run: |
+          docker save ${{ steps.image-tag.outputs.tag }} -o /tmp/webhook-image.tar
+          
+      - name: Upload image artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: webhook-image
+          path: /tmp/webhook-image.tar
+          retention-days: 1
+
+  build-multiarch:
+    name: Validate Multi-arch Build
+    runs-on: ubuntu-latest
+    needs: [test]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build multi-arch Docker image (validation only)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          sbom: true
+          provenance: true
 
   integration:
     name: Integration Tests (Kubernetes)
     runs-on: ubuntu-latest
-    needs: [test, docker-build]
+    needs: [build, build-multiarch]
     steps:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
+
+      - name: Download webhook image
+        uses: actions/download-artifact@v5
+        with:
+          name: webhook-image
+          path: /tmp
+
+      - name: Load webhook image
+        run: |
+          docker load -i /tmp/webhook-image.tar
 
       - name: Create Kind cluster config
         run: |
@@ -121,10 +206,9 @@ jobs:
           version: v0.23.0
           kubectl_version: v1.31.0
 
-      - name: Build and load webhook image into Kind
+      - name: Load webhook image into Kind
         run: |
-          docker build -t external-dns-technitium-webhook:latest .
-          kind load docker-image external-dns-technitium-webhook:latest --name integration-test
+          kind load docker-image ${{ needs.build.outputs.image-tag }} --name integration-test
 
       - name: Pull and load Technitium image into Kind
         run: |
@@ -136,7 +220,6 @@ jobs:
         run: |
           PASSWORD=$(openssl rand -base64 12)
           echo "admin_password=$PASSWORD" >> $GITHUB_OUTPUT
-          echo "Generated admin password: $PASSWORD"
 
       - name: Create Technitium secret
         run: |
@@ -194,6 +277,7 @@ jobs:
         run: |
           helm install external-dns external-dns/external-dns \
             -f tests/integration/helm/external-dns-values.yaml \
+            --set image.webhook.tag=${{ needs.build.outputs.image-tag }} \
             -n default \
             --timeout=5m
 
@@ -253,24 +337,26 @@ jobs:
         run: |
           kind delete cluster --name integration-test
 
-  docker-build:
-    name: Build Docker Image and Scan
+  push:
+    name: Push Docker Image to Registry
     runs-on: ubuntu-latest
-    needs: [test]
-    permissions:
-      contents: read
-      packages: write
-      security-events: write
-      id-token: write
-      attestations: write
+    needs: [build, integration, build-multiarch]
+    if: success()
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+      - name: Download webhook image
+        uses: actions/download-artifact@v5
+        with:
+          name: webhook-image
+          path: /tmp
+
+      - name: Load webhook image
+        run: |
+          docker load -i /tmp/webhook-image.tar
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -290,46 +376,12 @@ jobs:
           tags: |
             type=ref,event=branch
             type=ref,event=pr
-            # Use a stable prefix for SHA tags to avoid generating tags that
-            # begin with a hyphen when the branch name is empty in certain
-            # CI contexts (which produced invalid tags like ":-489026a").
             type=sha,prefix=commit-
             type=raw,value=ci-${{ github.sha }},enable={{is_default_branch}}
 
-      - name: Build and push Docker image
-        id: build
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          sbom: true
-          provenance: true
-
-      - name: Generate artifact attestation
-        if: success()
-        uses: actions/attest-build-provenance@v1
-        with:
-          subject-name: ghcr.io/${{ github.repository }}
-          subject-digest: ${{ steps.build.outputs.digest }}
-          push-to-registry: true
-
-      - name: Verify built image Python version matches Chainguard latest
+      - name: Push Docker image to registry
         run: |
-          echo "Checking Python version inside built image..."
-          chainguard_version=$(docker run --rm --entrypoint python cgr.dev/chainguard/python:latest -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
-          # Construct an explicit image reference using the pushed digest (repository@digest).
-          # For multi-platform builds the 'image' output may be empty; the digest is a reliable identifier.
-          IMAGE_REF="ghcr.io/${{ github.repository }}@${{ steps.build.outputs.digest }}"
-          echo "Pulling built image by digest: $IMAGE_REF"
-          docker pull "$IMAGE_REF"
-          image_version=$(docker run --rm --entrypoint python "$IMAGE_REF" -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
-          if [ "$image_version" != "$chainguard_version" ]; then
-            echo "ERROR: Python version in built image ($image_version) does not match Chainguard latest ($chainguard_version)"
-            exit 1
-          fi
-          echo "Python version in built image matches Chainguard latest: $image_version"
+          for tag in ${{ steps.meta.outputs.tags }}; do
+            docker tag ${{ needs.build.outputs.image-tag }} "$tag"
+            docker push "$tag"
+          done
