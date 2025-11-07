@@ -91,7 +91,7 @@ jobs:
   integration:
     name: Integration Tests (Kubernetes)
     runs-on: ubuntu-latest
-    needs: [test, docker-build]
+    needs: [test]
     steps:
       - uses: actions/checkout@v5
         with:
@@ -120,6 +120,11 @@ jobs:
           config: /tmp/kind-config.yaml
           version: v0.23.0
           kubectl_version: v1.31.0
+
+      - name: Build and load webhook image into Kind
+        run: |
+          docker build -t external-dns-technitium-webhook:latest .
+          kind load docker-image external-dns-technitium-webhook:latest --name integration-test
 
       - name: Pull and load Technitium image into Kind
         run: |
@@ -161,13 +166,24 @@ jobs:
             --env="TECHNITIUM_URL=http://technitium:5380" \
             --env="ADMIN_PASSWORD=${{ steps.creds.outputs.admin_password }}" \
             --env="CATALOG_ZONE=catalog.invalid" \
-            -- sh -c "
-              apk add --no-cache bash openssl &&
-              $(cat tests/integration/fixtures/init-technitium.sh)
-            " || true
+            -- sh -c "$(cat tests/integration/fixtures/init-technitium.sh)"
           
-          # Clean up the pod
-          kubectl delete pod technitium-init --ignore-not-found=true -n default || true
+          INIT_EXIT_CODE=$?
+          
+          # Get logs before cleanup
+          echo ""
+          echo "=== Technitium Init Pod Logs ==="
+          kubectl logs technitium-init -n default || true
+          
+          # Clean up the pod - force delete if needed
+          kubectl delete pod technitium-init -n default --force --grace-period=0 2>/dev/null || true
+          
+          # Fail if initialization failed
+          if [ $INIT_EXIT_CODE -ne 0 ]; then
+            echo ""
+            echo "ERROR: Technitium initialization failed with exit code $INIT_EXIT_CODE"
+            exit 1
+          fi
 
       - name: Add External DNS Helm repository
         run: |

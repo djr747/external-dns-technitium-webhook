@@ -55,8 +55,7 @@ if echo "$LOGIN_RESPONSE" | grep -q '"status":"ok"'; then
     echo "Changing admin password..."
     CHANGE_RESPONSE=$(curl -s -X POST "$TECHNITIUM_URL/api/user/changePassword" \
       -H "Content-Type: application/x-www-form-urlencoded" \
-      -H "Authorization: Bearer $TOKEN" \
-      -d "user=$ADMIN_USER&newPassword=$ADMIN_PASSWORD" 2>&1)
+      -d "token=$TOKEN&user=$ADMIN_USER&newPassword=$ADMIN_PASSWORD" 2>&1)
     
     if echo "$CHANGE_RESPONSE" | grep -q '"status":"ok"'; then
       echo "✓ Password changed successfully"
@@ -92,8 +91,7 @@ echo ""
 echo "Creating catalog zone: $CATALOG_ZONE"
 ZONE_RESPONSE=$(curl -s -X POST "$TECHNITIUM_URL/api/zones/createZone" \
   -H "Content-Type: application/x-www-form-urlencoded" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d "zone=$CATALOG_ZONE&type=Primary" 2>&1)
+  -d "token=$TOKEN&zone=$CATALOG_ZONE&type=Catalog" 2>&1)
 
 if echo "$ZONE_RESPONSE" | grep -q '"status":"ok"'; then
   echo "✓ Zone created successfully"
