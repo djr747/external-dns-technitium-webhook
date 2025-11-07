@@ -198,12 +198,10 @@ jobs:
           EOF
 
       - name: Set up Kind cluster
-        uses: helm/kind-action@v1.10.0
+        uses: helm/kind-action@v1
         with:
           cluster_name: integration-test
           config: /tmp/kind-config.yaml
-          version: v0.30.0
-          kubectl_version: v1.33.4
 
       - name: Load webhook image into Kind
         run: |
