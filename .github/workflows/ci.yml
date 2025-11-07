@@ -2,7 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ '*' ]
+    branches:
+      - '**'
+      - '!main'
   pull_request:
     branches: [ main, develop ]
   workflow_dispatch:
@@ -12,7 +14,6 @@ permissions:
   security-events: write
   packages: write
   id-token: write
-  attestations: write
 
 jobs:
   lint:
@@ -117,6 +118,8 @@ jobs:
         with:
           cluster_name: integration-test
           config: /tmp/kind-config.yaml
+          version: v0.23.0
+          kubectl_version: v1.33.0
 
       - name: Pull and load Technitium image into Kind
         run: |

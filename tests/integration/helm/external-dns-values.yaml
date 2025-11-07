@@ -1,14 +1,78 @@
 # External DNS Helm Chart Values for Integration Testing
 # Deploys External DNS with webhook provider to sync DNS records to Technitium
 
-provider: webhook
-
-webhook:
-  # URL of the webhook (this pod itself)
-  url: http://localhost:8888
+# External DNS provider configuration
+provider:
+  name: webhook
   
-  # Request timeout for webhook calls
-  requestTimeout: 10s
+  # Webhook provider sidecar container configuration
+  webhook:
+    # Image for the webhook provider (our Technitium webhook)
+    image:
+      repository: external-dns-technitium-webhook
+      tag: latest
+      pullPolicy: IfNotPresent
+    
+    # Environment variables for the webhook container
+    env:
+      # Technitium configuration - will be injected from secrets
+      - name: TECHNITIUM_URL
+        valueFrom:
+          secretKeyRef:
+            name: technitium-secret
+            key: url
+      - name: TECHNITIUM_USERNAME
+        valueFrom:
+          secretKeyRef:
+            name: technitium-secret
+            key: username
+      - name: TECHNITIUM_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: technitium-secret
+            key: password
+      - name: ZONE
+        valueFrom:
+          secretKeyRef:
+            name: technitium-secret
+            key: zone
+      - name: DOMAIN_FILTERS
+        value: "test.local"
+      - name: LOG_LEVEL
+        value: "DEBUG"
+    
+    # Resources for the webhook container
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi
+    
+    # Readiness probe for the webhook
+    readinessProbe:
+      httpGet:
+        path: /health
+        port: http-webhook
+      initialDelaySeconds: 5
+      periodSeconds: 10
+      timeoutSeconds: 3
+      failureThreshold: 6
+    
+    # Liveness probe for the webhook
+    livenessProbe:
+      httpGet:
+        path: /health
+        port: http-webhook
+      initialDelaySeconds: 10
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 2
+    
+    # Service port configuration for the webhook
+    service:
+      port: 8080
 
 # ClusterRoleBinding configuration
 rbac:
@@ -48,56 +112,6 @@ resources:
   limits:
     cpu: 200m
     memory: 256Mi
-
-# Sidecar container for Technitium webhook provider
-# This is the external-dns-technitium-webhook image we're testing
-sidecars:
-  - name: webhook-provider
-    image: external-dns-technitium-webhook:latest
-    imagePullPolicy: IfNotPresent
-    ports:
-      - name: webhook
-        containerPort: 8888
-    env:
-      # Technitium configuration - will be injected by workflow
-      - name: TECHNITIUM_URL
-        valueFrom:
-          secretKeyRef:
-            name: technitium-secret
-            key: url
-      - name: TECHNITIUM_USERNAME
-        valueFrom:
-          secretKeyRef:
-            name: technitium-secret
-            key: username
-      - name: TECHNITIUM_PASSWORD
-        valueFrom:
-          secretKeyRef:
-            name: technitium-secret
-            key: password
-      - name: ZONE
-        valueFrom:
-          secretKeyRef:
-            name: technitium-secret
-            key: zone
-      - name: DOMAIN_FILTERS
-        value: "test.local"
-      - name: LOG_LEVEL
-        value: "DEBUG"
-    resources:
-      requests:
-        cpu: 50m
-        memory: 128Mi
-      limits:
-        cpu: 200m
-        memory: 256Mi
-    readinessProbe:
-      httpGet:
-        path: /health
-        port: webhook
-      initialDelaySeconds: 5
-      periodSeconds: 10
-      timeoutSeconds: 3
     livenessProbe:
       httpGet:
         path: /health
