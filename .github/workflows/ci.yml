@@ -91,7 +91,7 @@ jobs:
   integration:
     name: Integration Tests (Kubernetes)
     runs-on: ubuntu-latest
-    needs: [test]
+    needs: [test, docker-build]
     steps:
       - uses: actions/checkout@v5
         with:
