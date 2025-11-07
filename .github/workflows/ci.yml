@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   lint:
-    name: Lint and Format Check
+    name: Lint and Format Check (Python)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -46,7 +46,7 @@ jobs:
         run: pyright
 
   test:
-    name: Test Python ${{ matrix.python-version }}
+    name: Unit Test (Python)
     runs-on: ubuntu-latest
     needs: [lint]
     strategy:
@@ -74,14 +74,13 @@ jobs:
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v5
-        if: matrix.python-version == '3.13'
         with:
           name: coverage-report
           path: htmlcov/
           retention-days: 30
 
-  build:
-    name: Build Docker Image
+  build-amd64:
+    name: Build Docker Image (amd64)
     runs-on: ubuntu-latest
     needs: [test]
     outputs:
@@ -103,7 +102,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build Docker image (single-arch for this runner)
+      - name: Build Docker image for amd64
         id: build
         uses: docker/build-push-action@v6
         with:
@@ -132,12 +131,12 @@ jobs:
       - name: Upload image artifact
         uses: actions/upload-artifact@v5
         with:
-          name: webhook-image
+          name: webhook-image-amd64
           path: /tmp/webhook-image.tar
           retention-days: 1
 
-  build-multiarch:
-    name: Validate Multi-arch Build
+  build-arm64:
+    name: Build Docker Image (arm64)
     runs-on: ubuntu-latest
     needs: [test]
     steps:
@@ -152,11 +151,11 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build multi-arch Docker image (validation only)
+      - name: Build Docker image for arm64
         uses: docker/build-push-action@v6
         with:
           context: .
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/arm64
           push: false
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -166,7 +165,7 @@ jobs:
   integration:
     name: Integration Tests (Kubernetes)
     runs-on: ubuntu-latest
-    needs: [build, build-multiarch]
+    needs: [build-amd64, build-arm64]
     steps:
       - uses: actions/checkout@v5
         with:
@@ -175,7 +174,7 @@ jobs:
       - name: Download webhook image
         uses: actions/download-artifact@v5
         with:
-          name: webhook-image
+          name: webhook-image-amd64
           path: /tmp
 
       - name: Load webhook image
@@ -208,7 +207,7 @@ jobs:
 
       - name: Load webhook image into Kind
         run: |
-          kind load docker-image ${{ needs.build.outputs.image-tag }} --name integration-test
+          kind load docker-image ${{ needs.build-amd64.outputs.image-tag }} --name integration-test
 
       - name: Pull and load Technitium image into Kind
         run: |
@@ -240,6 +239,7 @@ jobs:
             -n default
 
       - name: Run Technitium initialization script
+        id: init
         run: |
           kubectl run technitium-init \
             --image=curlimages/curl:latest \
@@ -249,22 +249,30 @@ jobs:
             --env="TECHNITIUM_URL=http://technitium:5380" \
             --env="ADMIN_PASSWORD=${{ steps.creds.outputs.admin_password }}" \
             --env="CATALOG_ZONE=catalog.invalid" \
-            -- sh -c "$(cat tests/integration/fixtures/init-technitium.sh)"
+            -- sh -c "$(cat tests/integration/fixtures/init-technitium.sh)" || true
           
-          INIT_EXIT_CODE=$?
-          
-          # Get logs before cleanup
+          # Get logs and capture credentials
           echo ""
           echo "=== Technitium Init Pod Logs ==="
-          kubectl logs technitium-init -n default || true
+          INIT_LOGS=$(kubectl logs technitium-init -n default 2>&1 || true)
+          echo "$INIT_LOGS"
+          
+          # Extract credentials from logs
+          TECH_USERNAME=$(echo "$INIT_LOGS" | grep "^TECHNITIUM_USERNAME=" | cut -d= -f2)
+          TECH_PASSWORD=$(echo "$INIT_LOGS" | grep "^TECHNITIUM_PASSWORD=" | cut -d= -f2)
+          TECH_ZONE=$(echo "$INIT_LOGS" | grep "^TECHNITIUM_ZONE=" | cut -d= -f2)
+          
+          echo "technitium_username=$TECH_USERNAME" >> $GITHUB_OUTPUT
+          echo "technitium_password=$TECH_PASSWORD" >> $GITHUB_OUTPUT
+          echo "technitium_zone=$TECH_ZONE" >> $GITHUB_OUTPUT
           
           # Clean up the pod - force delete if needed
           kubectl delete pod technitium-init -n default --force --grace-period=0 2>/dev/null || true
           
-          # Fail if initialization failed
-          if [ $INIT_EXIT_CODE -ne 0 ]; then
+          # Check if initialization succeeded by verifying outputs
+          if [ -z "$TECH_PASSWORD" ] || [ -z "$TECH_USERNAME" ]; then
             echo ""
-            echo "ERROR: Technitium initialization failed with exit code $INIT_EXIT_CODE"
+            echo "ERROR: Technitium initialization failed - could not extract credentials"
             exit 1
           fi
 
@@ -277,7 +285,7 @@ jobs:
         run: |
           helm install external-dns external-dns/external-dns \
             -f tests/integration/helm/external-dns-values.yaml \
-            --set image.webhook.tag=${{ needs.build.outputs.image-tag }} \
+            --set image.webhook.tag=${{ needs.build-amd64.outputs.image-tag }} \
             -n default \
             --timeout=5m
 
@@ -340,7 +348,7 @@ jobs:
   push:
     name: Push Docker Image to Registry
     runs-on: ubuntu-latest
-    needs: [build, integration, build-multiarch]
+    needs: [build-amd64, integration, build-arm64]
     if: success()
     steps:
       - name: Checkout repository
@@ -351,7 +359,7 @@ jobs:
       - name: Download webhook image
         uses: actions/download-artifact@v5
         with:
-          name: webhook-image
+          name: webhook-image-amd64
           path: /tmp
 
       - name: Load webhook image
@@ -382,6 +390,6 @@ jobs:
       - name: Push Docker image to registry
         run: |
           for tag in ${{ steps.meta.outputs.tags }}; do
-            docker tag ${{ needs.build.outputs.image-tag }} "$tag"
+            docker tag ${{ needs.build-amd64.outputs.image-tag }} "$tag"
             docker push "$tag"
           done

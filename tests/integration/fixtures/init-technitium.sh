@@ -110,12 +110,6 @@ echo "Admin Password: $ADMIN_PASSWORD"
 echo "Catalog Zone: $CATALOG_ZONE"
 echo "API URL: $TECHNITIUM_URL"
 echo "========================================"
-
-# Export credentials for use by other containers
-echo "TECHNITIUM_USERNAME=$ADMIN_USER" > /shared/technitium.env
-echo "TECHNITIUM_PASSWORD=$ADMIN_PASSWORD" >> /shared/technitium.env
-echo "TECHNITIUM_ZONE=$CATALOG_ZONE" >> /shared/technitium.env
-
-echo ""
-echo "Credentials saved to /shared/technitium.env"
-cat /shared/technitium.env
+echo "TECHNITIUM_USERNAME=$ADMIN_USER"
+echo "TECHNITIUM_PASSWORD=$ADMIN_PASSWORD"
+echo "TECHNITIUM_ZONE=$CATALOG_ZONE"
