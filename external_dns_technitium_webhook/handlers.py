@@ -60,15 +60,9 @@ async def health_check(state: AppState) -> Response:
     Returns:
         200 OK if ready, 503 if not ready
     """
-    try:
-        await state.ensure_ready()
-        return Response(status_code=status.HTTP_200_OK)
-    except RuntimeError as e:
-        logger.warning(f"Health check failed: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=str(e),
-        ) from e
+    if not state.is_ready:
+        return ExternalDNSResponse(content={"status": "unhealthy"}, status_code=status.HTTP_503_SERVICE_UNAVAILABLE)
+    return ExternalDNSResponse(content={"status": "ok"}, status_code=status.HTTP_200_OK)
 
 
 async def negotiate_domain_filter(state: AppState) -> ExternalDNSResponse:
@@ -222,7 +216,7 @@ async def apply_record(state: AppState, changes: Changes) -> Response:
 
     if not deletions and not additions:
         logger.info("All records already up to date, skipping apply")
-        return Response(status_code=status.HTTP_204_NO_CONTENT)
+        return ExternalDNSResponse(content=None, status_code=status.HTTP_204_NO_CONTENT)
 
     # Process deletions
     for ep in deletions:
@@ -275,13 +269,13 @@ async def apply_record(state: AppState, changes: Changes) -> Response:
                     detail=f"Failed to add record: {safe_message}",
                 ) from e
 
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+    return ExternalDNSResponse(content=None, status_code=status.HTTP_204_NO_CONTENT)
 
 
 def _get_record_data(record_type: str, target: str) -> dict[str, Any] | None:
     """Get record data for a given record type and target.
 
-    Args:
+            return ExternalDNSResponse(content=None, status_code=status.HTTP_204_NO_CONTENT)
         record_type: DNS record type
         target: Target value
 
