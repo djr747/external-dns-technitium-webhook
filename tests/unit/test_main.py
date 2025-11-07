@@ -891,6 +891,7 @@ def test_app_routes_delegate_to_handlers(mocker: MockerFixture) -> None:
     # Patch state.ensure_writable to a no-op async function
     async def noop():
         return None
+
     state.ensure_writable = noop
 
     @asynccontextmanager
@@ -934,7 +935,6 @@ def test_app_routes_delegate_to_handlers(mocker: MockerFixture) -> None:
         "delete": [],
     }
 
-
     with TestClient(app) as client:
         response = client.get("/")
         assert response.status_code == 200
@@ -955,7 +955,7 @@ def test_app_routes_delegate_to_handlers(mocker: MockerFixture) -> None:
                 "recordTTL": None,
                 "setIdentifier": "",
                 "labels": {},
-                "providerSpecific": []
+                "providerSpecific": [],
             }
         ]
 
