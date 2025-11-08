@@ -357,6 +357,10 @@ jobs:
           pip install pytest pytest-asyncio httpx kubernetes
 
       - name: Wait for Technitium reachable inside Kind
+        env:
+          TECHNITIUM_URL: http://technitium.default.svc.cluster.local:5380
+          TECHNITIUM_USERNAME: ${{ steps.init.outputs.technitium_username }}
+          TECHNITIUM_PASSWORD: ${{ steps.init.outputs.technitium_password }}
         run: |
           echo "Waiting for Technitium API inside cluster to be ready..."
           # Try for up to 120s
@@ -366,7 +370,9 @@ jobs:
             --attach=true \
             --quiet \
             --env="TECHNITIUM_URL=http://technitium.default.svc.cluster.local:5380" \
-            -- sh -c 'i=0; until curl -sSf $TECHNITIUM_URL/api/user/login || [ $i -ge 24 ]; do i=$((i+1)); echo "Attempt $i/24"; sleep 5; done; if [ $i -ge 24 ]; then echo "ERROR: Technitium API not reachable inside cluster"; exit 1; fi'
+            --env="TECHNITIUM_USERNAME=$TECHNITIUM_USERNAME" \
+            --env="TECHNITIUM_PASSWORD=$TECHNITIUM_PASSWORD" \
+            -- sh -c 'i=0; until [ $i -ge 24 ]; do i=$((i+1)); echo "Attempt $i/24"; RESPONSE=$(curl -s -X POST "$TECHNITIUM_URL/api/user/login" -H "Content-Type: application/x-www-form-urlencoded" -d "user=$TECHNITIUM_USERNAME&pass=$TECHNITIUM_PASSWORD" 2>/dev/null); if echo "$RESPONSE" | grep -q "\"status\":\"ok\""; then echo "✓ Technitium API is ready and credentials work"; exit 0; elif echo "$RESPONSE" | grep -q "\"status\":\"error\""; then echo "✗ Technitium API authentication failed: $RESPONSE"; exit 1; fi; sleep 5; done; echo "ERROR: Technitium API not reachable inside cluster after 120s"; exit 1'
 
       - name: Run integration tests
         env:
