@@ -246,6 +246,7 @@ jobs:
             --quiet \
             --env="TECHNITIUM_URL=http://technitium:5380" \
             --env="ADMIN_PASSWORD=${{ steps.creds.outputs.admin_password }}" \
+            --env="ZONE=test.local" \
             --env="CATALOG_ZONE=catalog.invalid" \
             -- sh -c "$(cat tests/integration/fixtures/init-technitium.sh)"
           
