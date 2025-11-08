@@ -350,9 +350,8 @@ async def create_default_zone(state: AppState) -> None:
 
     await state.client.create_zone(
         zone=state.config.zone,
-        zone_type="Forwarder",
+        zone_type="Primary",
         protocol="Udp",
-        forwarder="this-server",
         dnssec_validation=True,
         catalog=state.config.catalog_zone_name,
     )
@@ -536,7 +535,7 @@ def create_app() -> FastAPI:
 
     # Exception handlers for proper JSON responses
     @app.exception_handler(RuntimeError)
-    async def runtime_error_handler(exc: RuntimeError) -> ExternalDNSResponse:
+    async def runtime_error_handler(request: Request, exc: RuntimeError) -> ExternalDNSResponse:
         """Handle RuntimeError exceptions with JSON response."""
         if "Service not ready yet" in str(exc):
             # Service not ready - return 503 with JSON
@@ -551,7 +550,7 @@ def create_app() -> FastAPI:
         )
 
     @app.exception_handler(Exception)
-    async def general_exception_handler(_exc: Exception) -> ExternalDNSResponse:
+    async def general_exception_handler(request: Request, exc: Exception) -> ExternalDNSResponse:
         """Handle general exceptions with JSON response."""
         return ExternalDNSResponse(
             status_code=500,

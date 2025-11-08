@@ -81,7 +81,7 @@ if [ -n "$ZONE" ]; then
   echo "Creating primary zone: $ZONE"
   PRIMARY_ZONE_RESPONSE=$(curl -s -X POST "$TECHNITIUM_URL/api/zones/createZone" \
     -H "Content-Type: application/x-www-form-urlencoded" \
-    -d "token=$TOKEN&zone=$ZONE&type=Forwarder&forwarder=this-server" 2>&1)
+    -d "token=$TOKEN&zone=$ZONE&type=Primary" 2>&1)
 
   if echo "$PRIMARY_ZONE_RESPONSE" | grep -q '"status":"ok"'; then
     echo "✓ Primary zone created successfully"

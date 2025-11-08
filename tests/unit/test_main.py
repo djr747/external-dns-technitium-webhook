@@ -280,9 +280,8 @@ async def test_create_default_zone(mocker: MockerFixture) -> None:
     await create_default_zone(state)
     mock_create.assert_awaited_once_with(
         zone=config.zone,
-        zone_type="Forwarder",
+        zone_type="Primary",
         protocol="Udp",
-        forwarder="this-server",
         dnssec_validation=True,
         catalog=config.catalog_zone_name,
     )
