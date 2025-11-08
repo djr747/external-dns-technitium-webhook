@@ -430,7 +430,7 @@ async def ensure_catalog_membership(
         details = str(exc).lower()
         logger.warning(f"Caught TechnitiumError in enroll_catalog: {exc}")
         logger.warning(f"Details: {details}")
-        if "not found" in details or "does not exist" in details:
+        if "not found" in details or "does not exist" in details or "status code 404" in details:
             logger.warning(
                 "Catalog zone %s does not exist on endpoint %s; skipping enrollment",
                 catalog_zone,
