@@ -315,8 +315,8 @@ jobs:
             kubectl get events -n default --sort-by=.lastTimestamp | grep external-dns || true
             echo "--- ExternalDNS container logs (current) ---"
             kubectl logs $POD -c external-dns -n default --tail=50 || true
-            echo "--- Webhook-provider container logs (current) ---"
-            kubectl logs $POD -c webhook-provider -n default --tail=50 || true
+            echo "--- Webhook container logs (current) ---"
+            kubectl logs $POD -c webhook -n default --tail=50 || true
             # If either container is in CrashLoopBackOff, print and exit
             if echo "$CONTAINER_STATUSES" | grep -q 'CrashLoopBackOff'; then
               echo "ERROR: At least one container is in CrashLoopBackOff."
@@ -324,7 +324,7 @@ jobs:
             fi
             # If both containers are ready, continue
             READY_EXTERNAL=$(echo "$CONTAINER_STATUSES" | grep '^external-dns:' | grep -q 'ready=true' && echo true || echo false)
-            READY_WEBHOOK=$(echo "$CONTAINER_STATUSES" | grep '^webhook-provider:' | grep -q 'ready=true' && echo true || echo false)
+            READY_WEBHOOK=$(echo "$CONTAINER_STATUSES" | grep '^webhook:' | grep -q 'ready=true' && echo true || echo false)
             if [ "$READY_EXTERNAL" = "true" ] && [ "$READY_WEBHOOK" = "true" ]; then
               echo "Both containers are ready!"
               exit 0
