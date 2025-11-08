@@ -195,6 +195,9 @@ jobs:
                 - containerPort: 53
                   hostPort: 5353
                   protocol: UDP
+                - containerPort: 8888
+                  hostPort: 8888
+                  protocol: TCP
           EOF
 
       - name: Set up Kind cluster
@@ -350,6 +353,18 @@ jobs:
       - name: Install integration test dependencies
         run: |
           pip install pytest pytest-asyncio httpx kubernetes
+
+      - name: Wait for Technitium reachable inside Kind
+        run: |
+          echo "Waiting for Technitium API inside cluster to be ready..."
+          # Try for up to 120s
+          kubectl run technitium-probe \
+            --image=curlimages/curl:latest \
+            --restart=Never \
+            --attach=true \
+            --quiet \
+            --env="TECHNITIUM_URL=http://technitium.default.svc.cluster.local:5380" \
+            -- sh -c 'i=0; until curl -sSf $TECHNITIUM_URL/api/user/login || [ $i -ge 24 ]; do i=$((i+1)); echo "Attempt $i/24"; sleep 5; done; if [ $i -ge 24 ]; then echo "ERROR: Technitium API not reachable inside cluster"; exit 1; fi'
 
       - name: Run integration tests
         env:
