@@ -535,7 +535,7 @@ def create_app() -> FastAPI:
 
     # Exception handlers for proper JSON responses
     @app.exception_handler(RuntimeError)
-    async def runtime_error_handler(request: Request, exc: RuntimeError) -> ExternalDNSResponse:
+    async def runtime_error_handler(_request: Request, exc: RuntimeError) -> ExternalDNSResponse:
         """Handle RuntimeError exceptions with JSON response."""
         if "Service not ready yet" in str(exc):
             # Service not ready - return 503 with JSON
@@ -550,7 +550,7 @@ def create_app() -> FastAPI:
         )
 
     @app.exception_handler(Exception)
-    async def general_exception_handler(request: Request, exc: Exception) -> ExternalDNSResponse:
+    async def general_exception_handler(_request: Request, _exc: Exception) -> ExternalDNSResponse:
         """Handle general exceptions with JSON response."""
         return ExternalDNSResponse(
             status_code=500,
