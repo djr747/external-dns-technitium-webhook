@@ -324,10 +324,10 @@ jobs:
               exit 1
             fi
             # If both containers are ready, continue
-            READY_EXTERNAL=$(echo "$CONTAINER_STATUSES" | grep '^external-dns:' | grep -q 'ready=true' && echo true || echo false)
-            READY_WEBHOOK=$(echo "$CONTAINER_STATUSES" | grep '^webhook:' | grep -q 'ready=true' && echo true || echo false)
-            if [ "$READY_EXTERNAL" = "true" ] && [ "$READY_WEBHOOK" = "true" ]; then
-              echo "Both containers are ready!"
+            # Check if all containers are ready instead of looking for specific names
+            ALL_CONTAINERS_READY=$(kubectl get pods $POD -n default -o jsonpath='{.status.containerStatuses[*].ready}' | grep -q 'false' && echo false || echo true)
+            if [ "$ALL_CONTAINERS_READY" = "true" ]; then
+              echo "All containers are ready!"
               exit 0
             fi
             sleep 20
