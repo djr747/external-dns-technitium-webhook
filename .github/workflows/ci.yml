@@ -355,11 +355,14 @@ jobs:
         env:
           TECHNITIUM_URL: http://localhost:5380
           WEBHOOK_URL: http://localhost:8888
+          TECHNITIUM_USERNAME: ${{ steps.init.outputs.technitium_username }}
+          TECHNITIUM_PASSWORD: ${{ steps.init.outputs.technitium_password }}
+          ZONE: ${{ steps.init.outputs.technitium_zone }}
         run: |
           pytest tests/integration/test_webhook_integration.py \
             -v \
             --tb=short \
-            -m ""
+            -m "integration"
 
       - name: Collect logs on failure
         if: failure()

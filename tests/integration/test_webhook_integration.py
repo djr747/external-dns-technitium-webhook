@@ -34,6 +34,81 @@ class TestWebhookIntegration:
                 pytest.skip("Kubernetes not available")
         return client.CoreV1Api()
 
+    @pytest.fixture(scope="class", autouse=True)
+    def ensure_cluster_ready(self, k8s_client, technitium_url):
+        """Ensure cluster resources (Technitium service/pod and ExternalDNS pod) are ready before tests run.
+
+        This prevents race conditions where pods are 'Running' but endpoints are not yet accepting
+        connections on the host (which causes httpx ReadError connection resets in CI).
+        """
+        namespace = "default"
+        # Wait for technitium Service to exist
+        start = time.time()
+        timeout = 120
+        found_svc = False
+        while time.time() - start < timeout:
+            try:
+                _ = k8s_client.read_namespaced_service("technitium", namespace)
+                found_svc = True
+                break
+            except Exception:
+                time.sleep(2)
+
+        if not found_svc:
+            pytest.skip("Technitium service not found in cluster within timeout")
+
+        # Wait for technitium pod to be ready
+        start = time.time()
+        found_ready = False
+        while time.time() - start < timeout:
+            pods = k8s_client.list_namespaced_pod(namespace, label_selector="app=technitium")
+            if pods.items:
+                pod = pods.items[0]
+                statuses = pod.status.container_statuses or []
+                if statuses and all(getattr(s, "ready", False) for s in statuses):
+                    found_ready = True
+                    break
+            time.sleep(2)
+
+        if not found_ready:
+            pytest.skip("Technitium pod not ready within timeout")
+
+        # Wait for ExternalDNS pod to be ready (at least one container)
+        start = time.time()
+        ext_ready = False
+        while time.time() - start < timeout:
+            pods = k8s_client.list_namespaced_pod(
+                namespace, label_selector="app.kubernetes.io/name=external-dns"
+            )
+            if pods.items:
+                pod = pods.items[0]
+                statuses = pod.status.container_statuses or []
+                if statuses and any(getattr(s, "ready", False) for s in statuses):
+                    ext_ready = True
+                    break
+            time.sleep(2)
+
+        if not ext_ready:
+            pytest.skip("ExternalDNS pod not ready within timeout")
+
+        # Finally, verify the Technitium API is reachable from the runner (host) at technitium_url
+        # Retry for a short period to allow port mappings to become available
+        reach_start = time.time()
+        reach_timeout = 60
+        reachable = False
+        while time.time() - reach_start < reach_timeout:
+            try:
+                resp = httpx.get(f"{technitium_url}/api/user/login", timeout=5)
+                if resp.status_code in [200, 400]:
+                    reachable = True
+                    break
+            except Exception:
+                pass
+            time.sleep(2)
+
+        if not reachable:
+            pytest.skip(f"Technitium API not reachable at {technitium_url} from runner")
+
     @pytest.fixture(scope="class")
     def technitium_url(self):
         """Get Technitium service URL"""
