@@ -456,7 +456,8 @@ class TechnitiumClient:
             else:
                 payload[key] = value
 
-        await self._post_raw(self.ENDPOINT_SET_ZONE_OPTIONS, payload)
+        data = {"token": self.token, **payload}
+        await self._post_raw(self.ENDPOINT_SET_ZONE_OPTIONS, data)
 
     async def enroll_catalog(self, member_zone: str, catalog_zone: str) -> None:
         """Enroll a zone in a catalog zone.
@@ -466,4 +467,5 @@ class TechnitiumClient:
             catalog_zone: Catalog zone name
         """
         payload: dict[str, Any] = {"zone": member_zone, "catalogZone": catalog_zone}
-        await self._post_raw(self.ENDPOINT_ENROLL_CATALOG, payload)
+        data = {"token": self.token, **payload}
+        await self._post_raw(self.ENDPOINT_ENROLL_CATALOG, data)
