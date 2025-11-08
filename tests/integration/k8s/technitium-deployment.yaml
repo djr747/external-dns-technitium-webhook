@@ -165,15 +165,20 @@ spec:
     port: 5380
     targetPort: 5380
     protocol: TCP
-    nodePort: 5380
-  - name: dns-udp
-    port: 53
-    targetPort: 53
-    protocol: UDP
-    nodePort: 5353
-  - name: dns-tcp
-    port: 53
-    targetPort: 53
+  type: ClusterIP
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: technitium-external
+spec:
+  selector:
+    app: technitium
+  ports:
+  - name: api
+    port: 5380
+    targetPort: 5380
     protocol: TCP
-    nodePort: 5354
+    nodePort: 30380
   type: NodePort

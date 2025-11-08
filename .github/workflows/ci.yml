@@ -192,6 +192,9 @@ jobs:
                 - containerPort: 5380
                   hostPort: 5380
                   protocol: TCP
+                - containerPort: 30380
+                  hostPort: 30380
+                  protocol: TCP
                 - containerPort: 53
                   hostPort: 5353
                   protocol: UDP
@@ -376,7 +379,7 @@ jobs:
 
       - name: Run integration tests
         env:
-          TECHNITIUM_URL: http://localhost:5380
+          TECHNITIUM_URL: http://localhost:30380
           TECHNITIUM_USERNAME: ${{ steps.init.outputs.technitium_username }}
           TECHNITIUM_PASSWORD: ${{ steps.init.outputs.technitium_password }}
           ZONE: ${{ steps.init.outputs.technitium_zone }}
