@@ -12,7 +12,6 @@ from typing import cast
 
 from fastapi import Depends, FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 
 from . import handlers
 from .app_state import AppState
@@ -537,29 +536,26 @@ def create_app() -> FastAPI:
 
     # Exception handlers for proper JSON responses
     @app.exception_handler(RuntimeError)
-    async def runtime_error_handler(exc: RuntimeError) -> JSONResponse:
+    async def runtime_error_handler(exc: RuntimeError) -> ExternalDNSResponse:
         """Handle RuntimeError exceptions with JSON response."""
         if "Service not ready yet" in str(exc):
             # Service not ready - return 503 with JSON
-            return JSONResponse(
+            return ExternalDNSResponse(
                 status_code=503,
                 content={"error": "Service not ready yet. Try again later."},
-                media_type="application/external.dns.webhook+json;version=1",
             )
         # Other RuntimeError - return 500 with JSON
-        return JSONResponse(
+        return ExternalDNSResponse(
             status_code=500,
             content={"error": "Internal server error"},
-            media_type="application/external.dns.webhook+json;version=1",
         )
 
     @app.exception_handler(Exception)
-    async def general_exception_handler(_exc: Exception) -> JSONResponse:
+    async def general_exception_handler(_exc: Exception) -> ExternalDNSResponse:
         """Handle general exceptions with JSON response."""
-        return JSONResponse(
+        return ExternalDNSResponse(
             status_code=500,
             content={"error": "Internal server error"},
-            media_type="application/external.dns.webhook+json;version=1",
         )
 
     # Routes
