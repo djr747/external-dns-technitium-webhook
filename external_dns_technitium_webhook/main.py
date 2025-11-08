@@ -19,6 +19,7 @@ from .app_state import AppState
 from .config import Config as AppConfig
 from .middleware import RequestSizeLimitMiddleware, rate_limit_middleware
 from .models import Changes, Endpoint, GetZoneOptionsResponse
+from .responses import ExternalDNSResponse
 from .technitium_client import TechnitiumError
 
 
@@ -611,12 +612,12 @@ async def exception_logging_middleware(request: Request, call_next: Callable) ->
         logger.error("Unhandled exception: %s", e, exc_info=True)
         # Return 503 for service not ready errors
         if "Service not ready yet" in str(e):
-            return JSONResponse(
+            return ExternalDNSResponse(
                 status_code=503,
                 content={"message": "Service Unavailable"},
             )
         # Return 500 for other errors
-        return JSONResponse(
+        return ExternalDNSResponse(
             status_code=500,
             content={"message": "Internal Server Error"},
         )

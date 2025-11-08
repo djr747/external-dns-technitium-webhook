@@ -6,10 +6,11 @@ import re
 from typing import Any
 
 from fastapi import HTTPException, status
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import Response
 
 from .app_state import AppState
 from .models import Changes, DomainFilter, Endpoint
+from .responses import ExternalDNSResponse
 
 logger = logging.getLogger(__name__)
 
@@ -43,12 +44,6 @@ def sanitize_error_message(error: Exception) -> str:
         error_str = re.sub(pattern, replacement, error_str, flags=re.IGNORECASE)
 
     return error_str
-
-
-class ExternalDNSResponse(JSONResponse):
-    """Custom JSON response with ExternalDNS content type."""
-
-    media_type = "application/external.dns.webhook+json;version=1"
 
 
 async def health_check(state: AppState) -> Response:
