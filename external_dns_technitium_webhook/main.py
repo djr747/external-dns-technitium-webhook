@@ -8,9 +8,11 @@ from collections.abc import AsyncGenerator, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import cast
 
-from fastapi import Depends, FastAPI, Response
+from fastapi import Depends, FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from . import handlers
 from .app_state import AppState
@@ -317,6 +319,7 @@ async def ensure_zone_ready(state: AppState) -> ZonePreparationResult:
     server_role = "secondary" if zone_options.is_read_only else "primary"
 
     if catalog and not zone_options.is_read_only:
+        logger.info("Catalog zone configured: %s, attempting enrollment", catalog)
         membership = await ensure_catalog_membership(state, zone_options, catalog)
 
     return ZonePreparationResult(
@@ -335,8 +338,11 @@ async def _fetch_zone_options(state: AppState, zone: str) -> GetZoneOptionsRespo
     except TechnitiumError as exc:
         details = str(exc).lower()
         if "not found" in details or "does not exist" in details:
+            logger.warning(f"Zone {zone} not found, will attempt to create: {exc}")
             return None
-        raise
+        else:
+            # Re-raise other errors
+            raise
 
 
 async def create_default_zone(state: AppState) -> None:
@@ -373,6 +379,36 @@ async def ensure_catalog_membership(
         if name is not None
     }
 
+    # If catalog zone is not available, try to create it
+    if desired_membership not in available:
+        logger.info(
+            "Catalog zone %s not found, attempting to create it",
+            catalog_zone,
+        )
+        try:
+            await state.client.create_zone(catalog_zone, zone_type="Catalog")
+            logger.info("Created catalog zone %s", catalog_zone)
+            # Refresh available catalog zones
+            refreshed_options = await state.client.get_zone_options(
+                state.config.zone, include_catalog_names=True
+            )
+            available = {
+                name
+                for name in (
+                    _normalize_zone_name(candidate)
+                    for candidate in refreshed_options.available_catalog_zone_names
+                )
+                if name is not None
+            }
+            logger.info("Available catalog zones after creation: %s", available)
+        except TechnitiumError as exc:
+            logger.warning(
+                "Failed to create catalog zone %s: %s",
+                catalog_zone,
+                exc,
+            )
+            return current_membership
+
     if available and desired_membership not in available:
         logger.warning(
             "Catalog zone %s is not available on endpoint %s; skipping enrollment",
@@ -386,10 +422,23 @@ async def ensure_catalog_membership(
         state.config.zone,
         catalog_zone,
     )
-    await state.client.set_zone_options(
-        state.config.zone,
-        catalogZoneName=catalog_zone,
-    )
+    try:
+        await state.client.enroll_catalog(
+            member_zone=state.config.zone,
+            catalog_zone=catalog_zone,
+        )
+    except TechnitiumError as exc:
+        details = str(exc).lower()
+        logger.warning(f"Caught TechnitiumError in enroll_catalog: {exc}")
+        logger.warning(f"Details: {details}")
+        if "not found" in details or "does not exist" in details:
+            logger.warning(
+                "Catalog zone %s does not exist on endpoint %s; skipping enrollment",
+                catalog_zone,
+                state.active_endpoint,
+            )
+            return current_membership
+        raise
 
     refreshed = await state.client.get_zone_options(
         state.config.zone,
@@ -485,6 +534,33 @@ def create_app() -> FastAPI:
         max_age=3600,
     )
 
+    # Exception handlers for proper JSON responses
+    @app.exception_handler(RuntimeError)
+    async def runtime_error_handler(exc: RuntimeError) -> JSONResponse:
+        """Handle RuntimeError exceptions with JSON response."""
+        if "Service not ready yet" in str(exc):
+            # Service not ready - return 503 with JSON
+            return JSONResponse(
+                status_code=503,
+                content={"error": "Service not ready yet. Try again later."},
+                media_type="application/external.dns.webhook+json;version=1",
+            )
+        # Other RuntimeError - return 500 with JSON
+        return JSONResponse(
+            status_code=500,
+            content={"error": "Internal server error"},
+            media_type="application/external.dns.webhook+json;version=1",
+        )
+
+    @app.exception_handler(Exception)
+    async def general_exception_handler(_exc: Exception) -> JSONResponse:
+        """Handle general exceptions with JSON response."""
+        return JSONResponse(
+            status_code=500,
+            content={"error": "Internal server error"},
+            media_type="application/external.dns.webhook+json;version=1",
+        )
+
     # Routes
     state_dependency = create_state_dependency(app)
 
@@ -523,6 +599,36 @@ def create_app() -> FastAPI:
 
 # Module-level app export for ASGI servers (uvicorn, etc.)
 app = create_app()
+
+
+@app.middleware("http")
+async def exception_logging_middleware(request: Request, call_next: Callable) -> Response:
+    """Log exceptions with traceback and return appropriate error response."""
+    try:
+        response = await call_next(request)
+        return cast(Response, response)
+    except Exception as e:
+        logger.error("Unhandled exception: %s", e, exc_info=True)
+        # Return 503 for service not ready errors
+        if "Service not ready yet" in str(e):
+            return JSONResponse(
+                status_code=503,
+                content={"message": "Service Unavailable"},
+            )
+        # Return 500 for other errors
+        return JSONResponse(
+            status_code=500,
+            content={"message": "Internal Server Error"},
+        )
+
+
+@app.middleware("http")
+async def log_requests_middleware(request: Request, call_next: Callable) -> Response:
+    """Log incoming requests and their responses."""
+    logger.info(f"Request: {request.method} {request.url}")
+    response = await call_next(request)
+    logger.info(f"Response: {response.status_code}")
+    return cast(Response, response)
 
 
 def main() -> None:

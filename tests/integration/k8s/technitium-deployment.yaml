@@ -117,7 +117,7 @@ spec:
           name: dns-tcp
           protocol: TCP
         env:
-        - name: ADMIN_PASSWORD
+        - name: DNS_SERVER_ADMIN_PASSWORD
           valueFrom:
             secretKeyRef:
               name: technitium-secret

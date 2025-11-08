@@ -6,7 +6,7 @@ set -e
 
 TECHNITIUM_URL="${TECHNITIUM_URL:-http://technitium:5380}"
 ADMIN_USER="${ADMIN_USER:-admin}"
-ADMIN_PASSWORD="${ADMIN_PASSWORD:-$(openssl rand -base64 12)}"
+ADMIN_PASSWORD="${ADMIN_PASSWORD}"
 CATALOG_ZONE="${CATALOG_ZONE:-test.local}"
 MAX_RETRIES=30
 RETRY_INTERVAL=2
@@ -37,54 +37,60 @@ if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
   exit 1
 fi
 
-# Attempt login with admin/admin (default credentials)
+# Attempt login with provided credentials
 echo ""
-echo "Logging in to Technitium with default credentials..."
+echo "Logging in to Technitium with provided credentials..."
 LOGIN_RESPONSE=$(curl -s -X POST "$TECHNITIUM_URL/api/user/login" \
   -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "user=$ADMIN_USER&pass=admin" 2>&1)
+  -d "user=$ADMIN_USER&pass=$ADMIN_PASSWORD" 2>&1)
 
 # Check if login was successful
 if echo "$LOGIN_RESPONSE" | grep -q '"status":"ok"'; then
-  echo "✓ Successfully authenticated with default password"
+  echo "✓ Successfully authenticated with provided password"
   TOKEN=$(echo "$LOGIN_RESPONSE" | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
-  
-  # Change password to the one we need
-  if [ -n "$TOKEN" ] && [ "$ADMIN_PASSWORD" != "admin" ]; then
-    echo ""
-    echo "Changing admin password..."
-    CHANGE_RESPONSE=$(curl -s -X POST "$TECHNITIUM_URL/api/user/changePassword" \
-      -H "Content-Type: application/x-www-form-urlencoded" \
-      -d "token=$TOKEN&user=$ADMIN_USER&newPassword=$ADMIN_PASSWORD" 2>&1)
-    
-    if echo "$CHANGE_RESPONSE" | grep -q '"status":"ok"'; then
-      echo "✓ Password changed successfully"
-    else
-      echo "⚠ Password change may have failed, attempting to continue..."
-    fi
-  fi
-else
-  echo "⚠ Default login failed, attempting with configured password..."
-  LOGIN_RESPONSE=$(curl -s -X POST "$TECHNITIUM_URL/api/user/login" \
-    -H "Content-Type: application/x-www-form-urlencoded" \
-    -d "user=$ADMIN_USER&pass=$ADMIN_PASSWORD" 2>&1)
-  
-  if ! echo "$LOGIN_RESPONSE" | grep -q '"status":"ok"'; then
-    echo "✗ ERROR: Could not authenticate to Technitium"
-    echo "Response: $LOGIN_RESPONSE"
+
+  if [ -z "$TOKEN" ]; then
+    echo "✗ ERROR: Could not extract authentication token"
     exit 1
   fi
-  
-  TOKEN=$(echo "$LOGIN_RESPONSE" | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
-  echo "✓ Successfully authenticated with configured password"
-fi
 
-if [ -z "$TOKEN" ]; then
-  echo "✗ ERROR: Could not extract authentication token"
+  echo "✓ Token obtained: ${TOKEN:0:10}..."
+
+  # Add user to DNS Administrators group
+  echo "Adding user to DNS Administrators group..."
+  GROUP_RESPONSE=$(curl -s -X POST "$TECHNITIUM_URL/api/user/setUserGroup" \
+    -H "Content-Type: application/x-www-form-urlencoded" \
+    -d "token=$TOKEN&user=$ADMIN_USER&group=DNS Administrators" 2>&1)
+
+  echo "Group change response: $GROUP_RESPONSE"
+
+  if echo "$GROUP_RESPONSE" | grep -q '"status":"ok"'; then
+    echo "✓ User added to DNS Administrators group"
+  else
+    echo "⚠ Failed to add user to DNS Administrators group: $GROUP_RESPONSE"
+  fi
+else
+  echo "✗ ERROR: Could not authenticate to Technitium"
+  echo "Response: $LOGIN_RESPONSE"
   exit 1
 fi
 
-echo "✓ Token obtained: ${TOKEN:0:10}..."
+# Create primary zone if specified
+if [ -n "$ZONE" ]; then
+  echo ""
+  echo "Creating primary zone: $ZONE"
+  PRIMARY_ZONE_RESPONSE=$(curl -s -X POST "$TECHNITIUM_URL/api/zones/createZone" \
+    -H "Content-Type: application/x-www-form-urlencoded" \
+    -d "token=$TOKEN&zone=$ZONE&type=Forwarder&forwarder=this-server" 2>&1)
+
+  if echo "$PRIMARY_ZONE_RESPONSE" | grep -q '"status":"ok"'; then
+    echo "✓ Primary zone created successfully"
+  elif echo "$PRIMARY_ZONE_RESPONSE" | grep -q 'already exists'; then
+    echo "ℹ Primary zone already exists (this is OK)"
+  else
+    echo "⚠ Primary zone creation response: $PRIMARY_ZONE_RESPONSE"
+  fi
+fi
 
 # Create catalog zone
 echo ""
@@ -94,11 +100,11 @@ ZONE_RESPONSE=$(curl -s -X POST "$TECHNITIUM_URL/api/zones/createZone" \
   -d "token=$TOKEN&zone=$CATALOG_ZONE&type=Catalog" 2>&1)
 
 if echo "$ZONE_RESPONSE" | grep -q '"status":"ok"'; then
-  echo "✓ Zone created successfully"
+  echo "✓ Catalog zone created successfully"
 elif echo "$ZONE_RESPONSE" | grep -q 'already exists'; then
-  echo "ℹ Zone already exists (this is OK)"
+  echo "ℹ Catalog zone already exists (this is OK)"
 else
-  echo "⚠ Zone creation response: $ZONE_RESPONSE"
+  echo "⚠ Catalog zone creation response: $ZONE_RESPONSE"
 fi
 
 echo ""

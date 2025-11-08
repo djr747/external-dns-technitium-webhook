@@ -373,7 +373,7 @@ async def test_ensure_catalog_membership_enrolls_when_available(
         availableCatalogZoneNames=["Catalog.Example.com"],
     )
 
-    set_mock = mocker.patch.object(state.client, "set_zone_options", new_callable=AsyncMock)
+    enroll_mock = mocker.patch.object(state.client, "enroll_catalog", new_callable=AsyncMock)
     refreshed = GetZoneOptionsResponse(
         name=config.zone,
         isCatalogZone=True,
@@ -394,9 +394,9 @@ async def test_ensure_catalog_membership_enrolls_when_available(
         await state.close()
 
     assert membership == "catalog.example.com"
-    set_mock.assert_awaited_once_with(
-        state.config.zone,
-        catalogZoneName="catalog.example.com",
+    enroll_mock.assert_awaited_once_with(
+        member_zone=state.config.zone,
+        catalog_zone="catalog.example.com",
     )
 
 
@@ -671,7 +671,7 @@ async def test_ensure_catalog_membership_logs_mismatch(
         availableCatalogZoneNames=["catalog.example.com"],
     )
 
-    mocker.patch.object(state.client, "set_zone_options", new_callable=AsyncMock)
+    mocker.patch.object(state.client, "enroll_catalog", new_callable=AsyncMock)
     refreshed = GetZoneOptionsResponse(
         name=config.zone,
         isCatalogZone=False,
@@ -1098,7 +1098,7 @@ async def test_ensure_catalog_membership(mocker: MockerFixture) -> None:
     options.available_catalog_zone_names = ["catalog.example.com"]
 
     # Mock client methods
-    set_zone_mock = mocker.patch.object(state.client, "set_zone_options", new_callable=AsyncMock)
+    enroll_mock = mocker.patch.object(state.client, "enroll_catalog", new_callable=AsyncMock)
     get_zone_mock = mocker.patch.object(
         state.client,
         "get_zone_options",
@@ -1110,7 +1110,9 @@ async def test_ensure_catalog_membership(mocker: MockerFixture) -> None:
     result = await ensure_catalog_membership(state, options, "catalog.example.com")
 
     # Assertions
-    set_zone_mock.assert_awaited_once_with("example.com", catalogZoneName="catalog.example.com")
+    enroll_mock.assert_awaited_once_with(
+        member_zone="example.com", catalog_zone="catalog.example.com"
+    )
     get_zone_mock.assert_awaited_once_with("example.com", include_catalog_names=False)
     assert result == "catalog.example.com"
 
@@ -1125,6 +1127,14 @@ async def test_ensure_catalog_membership_unavailable_zone(mocker: MockerFixture)
     options = mocker.Mock()
     options.catalog_zone_name = "current.example.com"
     options.available_catalog_zone_names = ["other.example.com"]
+
+    # Mock create_zone to fail
+    mocker.patch.object(
+        state.client,
+        "create_zone",
+        new_callable=AsyncMock,
+        side_effect=TechnitiumError("Cannot create catalog zone"),
+    )
 
     # Call the function
     result = await ensure_catalog_membership(state, options, "catalog.example.com")
@@ -1145,7 +1155,7 @@ async def test_ensure_catalog_membership_different_membership(mocker: MockerFixt
     options.available_catalog_zone_names = ["catalog.example.com"]
 
     # Mock client methods
-    set_zone_mock = mocker.patch.object(state.client, "set_zone_options", new_callable=AsyncMock)
+    enroll_mock = mocker.patch.object(state.client, "enroll_catalog", new_callable=AsyncMock)
     get_zone_mock = mocker.patch.object(
         state.client,
         "get_zone_options",
@@ -1157,7 +1167,9 @@ async def test_ensure_catalog_membership_different_membership(mocker: MockerFixt
     result = await ensure_catalog_membership(state, options, "catalog.example.com")
 
     # Assertions
-    set_zone_mock.assert_awaited_once_with("example.com", catalogZoneName="catalog.example.com")
+    enroll_mock.assert_awaited_once_with(
+        member_zone="example.com", catalog_zone="catalog.example.com"
+    )
     get_zone_mock.assert_awaited_once_with("example.com", include_catalog_names=False)
     assert result == "other.example.com"
 
