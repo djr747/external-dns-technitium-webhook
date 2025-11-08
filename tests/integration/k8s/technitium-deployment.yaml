@@ -165,12 +165,15 @@ spec:
     port: 5380
     targetPort: 5380
     protocol: TCP
+    nodePort: 5380
   - name: dns-udp
     port: 53
     targetPort: 53
     protocol: UDP
+    nodePort: 5353
   - name: dns-tcp
     port: 53
     targetPort: 53
     protocol: TCP
-  type: ClusterIP
+    nodePort: 5354
+  type: NodePort
