@@ -45,7 +45,9 @@ class TestWebhookIntegration:
         username = os.getenv("TECHNITIUM_USERNAME")
         password = os.getenv("TECHNITIUM_PASSWORD")
         if not username or not password:
-            pytest.skip("TECHNITIUM_USERNAME and TECHNITIUM_PASSWORD environment variables required")
+            pytest.skip(
+                "TECHNITIUM_USERNAME and TECHNITIUM_PASSWORD environment variables required"
+            )
         return {"username": username, "password": password}
 
     @pytest.fixture(scope="class")
@@ -82,14 +84,12 @@ class TestWebhookIntegration:
             kind="Service",
             metadata=client.V1ObjectMeta(
                 name=service_name,
-                annotations={
-                    "external-dns.alpha.kubernetes.io/hostname": hostname
-                },
+                annotations={"external-dns.alpha.kubernetes.io/hostname": hostname},
             ),
             spec=client.V1ServiceSpec(
                 type="ClusterIP",
                 selector={"app": "test-app"},
-                ports=[client.V1ServicePort(port=80, target_port=8080, protocol="TCP")]
+                ports=[client.V1ServicePort(port=80, target_port=8080, protocol="TCP")],
             ),
         )
 
@@ -117,7 +117,9 @@ class TestWebhookIntegration:
                     print(f"API call failed, continuing to wait: {e}")
                     continue
 
-            assert record_found, f"DNS record for {hostname} was not created within {max_wait} seconds"
+            assert record_found, (
+                f"DNS record for {hostname} was not created within {max_wait} seconds"
+            )
 
             # Verify the record details
             records = technitium_client.get_records(hostname, technitium_zone)
@@ -152,7 +154,9 @@ class TestWebhookIntegration:
         try:
             records = technitium_client.get_records(hostname, technitium_zone)
             a_records = [r for r in records if r.get("type") == "A" and r.get("name") == hostname]
-            assert len(a_records) == 0, f"DNS record for {hostname} was not removed after service deletion"
+            assert len(a_records) == 0, (
+                f"DNS record for {hostname} was not removed after service deletion"
+            )
         except Exception as e:
             # If the API call fails, it might mean the record was successfully deleted
             # This is acceptable for cleanup verification
@@ -176,10 +180,7 @@ class TechnitiumTestClient:
 
     def _login(self):
         """Authenticate with Technitium API"""
-        data = {
-            "user": self.credentials["username"],
-            "pass": self.credentials["password"]
-        }
+        data = {"user": self.credentials["username"], "pass": self.credentials["password"]}
         response = httpx.post(f"{self.base_url}/api/user/login", data=data, timeout=10)
         response.raise_for_status()
         result = response.json()
