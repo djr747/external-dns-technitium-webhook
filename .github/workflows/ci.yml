@@ -249,7 +249,7 @@ jobs:
             --restart=Never \
             --attach=true \
             --quiet \
-            --env="TECHNITIUM_URL=http://localhost:5380" \
+            --env="TECHNITIUM_URL=http://technitium.default.svc.cluster.local:5380" \
             --env="ADMIN_PASSWORD=$DNS_SERVER_ADMIN_PASSWORD" \
             --env="ZONE=test.local" \
             --env="CATALOG_ZONE=catalog.invalid" \
