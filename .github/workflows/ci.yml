@@ -375,10 +375,37 @@ jobs:
           TECHNITIUM_PASSWORD: ${{ steps.init.outputs.technitium_password }}
           ZONE: ${{ steps.init.outputs.technitium_zone }}
         run: |
+          # Start log streaming in background
+          echo "Starting log streams for debugging..."
+          kubectl logs -l app.kubernetes.io/name=external-dns -n default -c external-dns -f > /tmp/external-dns.log 2>&1 &
+          EXTERNAL_DNS_LOG_PID=$!
+          
+          kubectl logs -l app.kubernetes.io/name=external-dns -n default -c webhook -f > /tmp/webhook.log 2>&1 &
+          WEBHOOK_LOG_PID=$!
+          
+          # Give logs a moment to start
+          sleep 2
+          
+          # Run tests
           pytest tests/integration/test_webhook_integration.py \
             -v \
             --tb=short \
             -m "integration"
+          TEST_RESULT=$?
+          
+          # Stop log streams
+          kill $EXTERNAL_DNS_LOG_PID $WEBHOOK_LOG_PID 2>/dev/null || true
+          
+          # Display captured logs
+          echo ""
+          echo "=== External DNS Logs ==="
+          cat /tmp/external-dns.log || true
+          
+          echo ""
+          echo "=== Webhook Logs ==="
+          cat /tmp/webhook.log || true
+          
+          exit $TEST_RESULT
 
       - name: Collect logs on failure
         if: failure()

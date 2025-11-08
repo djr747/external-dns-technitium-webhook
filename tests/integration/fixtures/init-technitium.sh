@@ -42,7 +42,8 @@ echo ""
 echo "Logging in to Technitium with provided credentials..."
 LOGIN_RESPONSE=$(curl -s -X POST "$TECHNITIUM_URL/api/user/login" \
   -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "user=$ADMIN_USER&pass=$ADMIN_PASSWORD" 2>&1)
+  --data-urlencode "user=$ADMIN_USER" \
+  --data-urlencode "pass=$ADMIN_PASSWORD" 2>&1)
 
 # Check if login was successful
 if echo "$LOGIN_RESPONSE" | grep -q '"status":"ok"'; then
@@ -60,7 +61,9 @@ if echo "$LOGIN_RESPONSE" | grep -q '"status":"ok"'; then
   echo "Adding user to DNS Administrators group..."
   GROUP_RESPONSE=$(curl -s -X POST "$TECHNITIUM_URL/api/user/setUserGroup" \
     -H "Content-Type: application/x-www-form-urlencoded" \
-    -d "token=$TOKEN&user=$ADMIN_USER&group=DNS Administrators" 2>&1)
+    --data-urlencode "token=$TOKEN" \
+    --data-urlencode "user=$ADMIN_USER" \
+    --data-urlencode "group=DNS Administrators" 2>&1)
 
   echo "Group change response: $GROUP_RESPONSE"
 
@@ -81,7 +84,9 @@ if [ -n "$ZONE" ]; then
   echo "Creating primary zone: $ZONE"
   PRIMARY_ZONE_RESPONSE=$(curl -s -X POST "$TECHNITIUM_URL/api/zones/create" \
     -H "Content-Type: application/x-www-form-urlencoded" \
-    -d "token=$TOKEN&zone=$ZONE&type=Primary" 2>&1)
+    --data-urlencode "token=$TOKEN" \
+    --data-urlencode "zone=$ZONE" \
+    --data-urlencode "type=Primary" 2>&1)
 
   if echo "$PRIMARY_ZONE_RESPONSE" | grep -q '"status":"ok"'; then
     echo "✓ Primary zone created successfully"
@@ -97,7 +102,9 @@ echo ""
 echo "Creating catalog zone: $CATALOG_ZONE"
 ZONE_RESPONSE=$(curl -s -X POST "$TECHNITIUM_URL/api/zones/create" \
   -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "token=$TOKEN&zone=$CATALOG_ZONE&type=Catalog" 2>&1)
+  --data-urlencode "token=$TOKEN" \
+  --data-urlencode "zone=$CATALOG_ZONE" \
+  --data-urlencode "type=Catalog" 2>&1)
 
 if echo "$ZONE_RESPONSE" | grep -q '"status":"ok"'; then
   echo "✓ Catalog zone created successfully"

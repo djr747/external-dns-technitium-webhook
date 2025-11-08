@@ -60,6 +60,9 @@ provider:
 # RBAC policies for External DNS
 policy: sync
 
+# Sync interval for faster integration testing feedback
+interval: 15s
+
 # Registry source configuration (what resources to read from)
 sources:
   - ingress
