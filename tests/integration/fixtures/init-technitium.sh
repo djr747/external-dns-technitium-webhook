@@ -79,7 +79,7 @@ fi
 if [ -n "$ZONE" ]; then
   echo ""
   echo "Creating primary zone: $ZONE"
-  PRIMARY_ZONE_RESPONSE=$(curl -s -X POST "$TECHNITIUM_URL/api/zones/createZone" \
+  PRIMARY_ZONE_RESPONSE=$(curl -s -X POST "$TECHNITIUM_URL/api/zones/create" \
     -H "Content-Type: application/x-www-form-urlencoded" \
     -d "token=$TOKEN&zone=$ZONE&type=Primary" 2>&1)
 
@@ -95,7 +95,7 @@ fi
 # Create catalog zone
 echo ""
 echo "Creating catalog zone: $CATALOG_ZONE"
-ZONE_RESPONSE=$(curl -s -X POST "$TECHNITIUM_URL/api/zones/createZone" \
+ZONE_RESPONSE=$(curl -s -X POST "$TECHNITIUM_URL/api/zones/create" \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "token=$TOKEN&zone=$CATALOG_ZONE&type=Catalog" 2>&1)
 
