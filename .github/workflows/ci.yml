@@ -189,17 +189,8 @@ jobs:
           nodes:
             - role: control-plane
               extraPortMappings:
-                - containerPort: 5380
-                  hostPort: 5380
-                  protocol: TCP
                 - containerPort: 30380
                   hostPort: 30380
-                  protocol: TCP
-                - containerPort: 53
-                  hostPort: 5353
-                  protocol: UDP
-                - containerPort: 8888
-                  hostPort: 8888
                   protocol: TCP
           EOF
 
