@@ -200,6 +200,9 @@ async def apply_record(state: AppState, changes: Changes) -> Response:
     await state.ensure_ready()
     await state.ensure_writable()
 
+    # Log the raw changes object to understand what ExternalDNS is sending
+    logger.info(f"apply_record received Changes object: {changes}")
+
     # Combine deletions (delete + updateOld)
     deletions: list[Endpoint] = []
     if changes.delete:
