@@ -153,9 +153,9 @@ class TestWebhookIntegration:
         service_name = "test-dns-service"
         hostname = f"{service_name}.{technitium_zone}"
 
-        # Create a LoadBalancer service with externalIPs
-        # ExternalDNS recognizes LoadBalancer services and creates DNS records for their IPs
-        # Kind doesn't have a LoadBalancer controller, so we use externalIPs to specify the IP manually
+        # Create a ClusterIP service with an Ingress annotation
+        # With publishInternalServices enabled, ExternalDNS will create DNS records
+        # pointing to the ClusterIP service's internal IP
         service_spec = client.V1Service(
             api_version="v1",
             kind="Service",
@@ -164,14 +164,13 @@ class TestWebhookIntegration:
                 annotations={"external-dns.alpha.kubernetes.io/hostname": hostname},
             ),
             spec=client.V1ServiceSpec(
-                type="LoadBalancer",
+                type="ClusterIP",
                 selector={"app": "test-app"},
                 ports=[client.V1ServicePort(port=80, target_port=8080, protocol="TCP")],
-                external_i_ps=["192.0.2.1"],
             ),
         )
 
-        # Create the LoadBalancer service
+        # Create the service
         k8s_client.create_namespaced_service(namespace, service_spec)
 
         try:

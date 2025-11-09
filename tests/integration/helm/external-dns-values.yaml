@@ -68,6 +68,9 @@ sources:
   - ingress
   - service
 
+# Process ClusterIP services and internal IPs
+publishInternalServices: true
+
 # Domain filtering
 domainFilters:
   - test.local
