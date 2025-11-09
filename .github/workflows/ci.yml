@@ -490,7 +490,7 @@ jobs:
           echo "Creating and pushing manifest..."
           docker buildx imagetools create \
             --tag "$COMMIT_TAG" \
+            --tag "$BRANCH_TAG" \
             "$FINAL_AMD64_TAG" \
-            "$FINAL_ARM64_TAG" \
-            "$BRANCH_TAG"
+            "$FINAL_ARM64_TAG"
  
