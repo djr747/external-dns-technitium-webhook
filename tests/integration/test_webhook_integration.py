@@ -153,54 +153,29 @@ class TestWebhookIntegration:
         service_name = "test-dns-service"
         hostname = f"{service_name}.{technitium_zone}"
 
-        # Create an Ingress with the hostname
-        # ExternalDNS recognizes Ingress resources and uses the hostname for DNS records
-        ingress_spec = client.V1Ingress(
-            api_version="networking.k8s.io/v1",
-            kind="Ingress",
-            metadata=client.V1ObjectMeta(name=service_name),
-            spec=client.V1IngressSpec(
-                rules=[
-                    client.V1IngressRule(
-                        host=hostname,
-                        http=client.V1HTTPIngressRuleValue(
-                            paths=[
-                                client.V1HTTPIngressPath(
-                                    path="/",
-                                    path_type="Prefix",
-                                    backend=client.V1IngressBackend(
-                                        service=client.V1IngressServiceBackend(
-                                            name=service_name,
-                                            port=client.V1ServiceBackendPort(number=80),
-                                        )
-                                    ),
-                                )
-                            ]
-                        ),
-                    )
-                ]
-            ),
-        )
-
-        # Create a ClusterIP service for the Ingress to route to
+        # Create a LoadBalancer service with externalIPs
+        # ExternalDNS recognizes LoadBalancer services and creates DNS records for their IPs
+        # Kind doesn't have a LoadBalancer controller, so we use externalIPs to specify the IP manually
         service_spec = client.V1Service(
             api_version="v1",
             kind="Service",
-            metadata=client.V1ObjectMeta(name=service_name),
+            metadata=client.V1ObjectMeta(
+                name=service_name,
+                annotations={"external-dns.alpha.kubernetes.io/hostname": hostname},
+            ),
             spec=client.V1ServiceSpec(
-                type="ClusterIP",
+                type="LoadBalancer",
                 selector={"app": "test-app"},
                 ports=[client.V1ServicePort(port=80, target_port=8080, protocol="TCP")],
+                external_i_ps=["192.0.2.1"],
             ),
         )
 
-        # Create both service and ingress
+        # Create the LoadBalancer service
         k8s_client.create_namespaced_service(namespace, service_spec)
-        networking_client = client.NetworkingV1Api()
-        networking_client.create_namespaced_ingress(namespace, ingress_spec)
 
         try:
-            # Wait for ExternalDNS to process the ingress and create DNS records
+            # Wait for ExternalDNS to process the service and create DNS records
             max_wait = 120  # 2 minutes max wait
             wait_time = 0
             record_found = False
@@ -244,12 +219,11 @@ class TestWebhookIntegration:
             assert ip_address, "A record should have an IP address"
 
         finally:
-            # Clean up: delete the ingress and service
+            # Clean up: delete the service
             try:
-                networking_client.delete_namespaced_ingress(service_name, namespace)
                 k8s_client.delete_namespaced_service(service_name, namespace)
             except Exception as e:
-                print(f"Warning: Failed to delete ingress/service {service_name}: {e}")
+                print(f"Warning: Failed to delete service {service_name}: {e}")
 
         # Wait for ExternalDNS to process the deletion
         time.sleep(30)
