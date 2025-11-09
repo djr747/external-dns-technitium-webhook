@@ -153,15 +153,15 @@ class TestWebhookIntegration:
         service_name = "test-dns-service"
         hostname = f"{service_name}.{technitium_zone}"
 
-        # Create a ClusterIP service with an Ingress annotation
+        # Create a ClusterIP service with internal-hostname annotation
         # With publishInternalServices enabled, ExternalDNS will create DNS records
-        # pointing to the ClusterIP service's internal IP
+        # pointing to the ClusterIP service's internal IP using the internal-hostname annotation
         service_spec = client.V1Service(
             api_version="v1",
             kind="Service",
             metadata=client.V1ObjectMeta(
                 name=service_name,
-                annotations={"external-dns.alpha.kubernetes.io/hostname": hostname},
+                annotations={"external-dns.alpha.kubernetes.io/internal-hostname": hostname},
             ),
             spec=client.V1ServiceSpec(
                 type="ClusterIP",
