@@ -153,7 +153,7 @@ class TestWebhookIntegration:
         service_name = "test-dns-service"
         hostname = f"{service_name}.{technitium_zone}"
 
-        # Create a service with ExternalDNS annotation
+        # Create a ClusterIP service with ExternalDNS annotation
         service_spec = client.V1Service(
             api_version="v1",
             kind="Service",
@@ -170,6 +170,21 @@ class TestWebhookIntegration:
 
         # Create the service
         k8s_client.create_namespaced_service(namespace, service_spec)
+        
+        # Create endpoints for the service so ExternalDNS can discover it
+        # ExternalDNS needs endpoints to generate targets for DNS records
+        endpoints_spec = client.V1Endpoints(
+            api_version="v1",
+            kind="Endpoints",
+            metadata=client.V1ObjectMeta(name=service_name),
+            subsets=[
+                client.V1EndpointSubset(
+                    addresses=[client.V1EndpointAddress(ip="192.0.2.1")],
+                    ports=[client.V1EndpointPort(port=8080, protocol="TCP")],
+                )
+            ],
+        )
+        k8s_client.create_namespaced_endpoints(namespace, endpoints_spec)
 
         try:
             # Wait for ExternalDNS to process the service and create DNS records
@@ -216,11 +231,12 @@ class TestWebhookIntegration:
             assert ip_address, "A record should have an IP address"
 
         finally:
-            # Clean up: delete the service
+            # Clean up: delete the service and endpoints
             try:
                 k8s_client.delete_namespaced_service(service_name, namespace)
+                k8s_client.delete_namespaced_endpoints(service_name, namespace)
             except Exception as e:
-                print(f"Warning: Failed to delete service {service_name}: {e}")
+                print(f"Warning: Failed to delete service/endpoints {service_name}: {e}")
 
         # Wait for ExternalDNS to process the deletion
         time.sleep(30)

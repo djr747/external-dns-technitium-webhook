@@ -423,7 +423,7 @@ jobs:
           
           echo ""
           echo "=== Webhook Sidecar Logs ==="
-          kubectl logs -l app.kubernetes.io/name=external-dns -n default -c webhook-provider --tail=100 || true
+          kubectl logs -l app.kubernetes.io/name=external-dns -n default -c webhook --tail=100 || true
 
       - name: Cleanup Kind cluster
         if: always()
