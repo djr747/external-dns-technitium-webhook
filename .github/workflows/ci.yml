@@ -414,16 +414,20 @@ jobs:
           kubectl get pods -n default
           
           echo ""
-          echo "=== Technitium Logs ==="
-          kubectl logs -l app=technitium -n default --tail=100 || true
+          echo "=== Technitium DNS Container Logs ==="
+          kubectl logs -l app=technitium -n default -c technitium-dns --all-containers=false --tail=200 || true
           
           echo ""
-          echo "=== External DNS Logs ==="
-          kubectl logs -l app.kubernetes.io/name=external-dns -n default --tail=100 || true
+          echo "=== Technitium Setup Init Container Logs ==="
+          kubectl logs -l app=technitium -n default -c setup --all-containers=false --tail=200 || true
+          
+          echo ""
+          echo "=== External DNS Container Logs ==="
+          kubectl logs -l app.kubernetes.io/name=external-dns -n default -c external-dns --all-containers=false --tail=200 || true
           
           echo ""
           echo "=== Webhook Sidecar Logs ==="
-          kubectl logs -l app.kubernetes.io/name=external-dns -n default -c webhook --tail=100 || true
+          kubectl logs -l app.kubernetes.io/name=external-dns -n default -c webhook --all-containers=false --tail=200 || true
 
       - name: Cleanup Kind cluster
         if: always()
