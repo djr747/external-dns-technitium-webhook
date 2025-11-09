@@ -165,6 +165,9 @@ async def get_records(state: AppState) -> ExternalDNSResponse:
         endpoints.append(endpoint)
 
     logger.debug(f"Found {len(endpoints)} endpoints")
+    # Log the actual endpoints being returned to ExternalDNS
+    for ep in endpoints:
+        logger.info(f"Returning endpoint: {ep.dns_name} ({ep.record_type}) -> {ep.targets}")
     return ExternalDNSResponse(content=[ep.model_dump(by_alias=True) for ep in endpoints])
 
 
@@ -210,6 +213,13 @@ async def apply_record(state: AppState, changes: Changes) -> Response:
         additions.extend(changes.create)
     if changes.update_new:
         additions.extend(changes.update_new)
+
+    # Log the changes received from ExternalDNS
+    logger.info(f"apply_record received: {len(deletions)} deletions, {len(additions)} additions")
+    for ep in deletions:
+        logger.info(f"  DELETE: {ep.dns_name} ({ep.record_type}) -> {ep.targets}")
+    for ep in additions:
+        logger.info(f"  CREATE: {ep.dns_name} ({ep.record_type}) -> {ep.targets}")
 
     if not deletions and not additions:
         logger.info("All records already up to date, skipping apply")
