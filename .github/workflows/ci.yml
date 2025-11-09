@@ -95,7 +95,7 @@ jobs:
         id: image-tag
         run: |
           COMMIT_SHA=${{ github.sha }}
-          IMAGE_TAG="external-dns-technitium-webhook:${COMMIT_SHA:0:7}"
+          IMAGE_TAG="external-dns-technitium-webhook:amd64-${COMMIT_SHA:0:7}"
           echo "tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
 
       - name: Set up Docker Buildx
@@ -103,6 +103,7 @@ jobs:
 
       - name: Build Docker image for amd64
         uses: docker/build-push-action@v6
+        id: build-amd64
         with:
           context: .
           platforms: linux/amd64
@@ -117,7 +118,7 @@ jobs:
         run: |
           echo "Checking Python version inside built image..."
           chainguard_version=$(docker run --rm --entrypoint python cgr.dev/chainguard/python:latest -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
-          image_version=$(docker run --rm --entrypoint python ${{ steps.image-tag.outputs.tag }} -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+          image_version=$(docker run --rm --entrypoint python ${{ steps.build-amd64.outputs.digest }} -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
           if [ "$image_version" != "$chainguard_version" ]; then
             echo "ERROR: Python version in built image ($image_version) does not match Chainguard latest ($chainguard_version)"
             exit 1
@@ -135,6 +136,8 @@ jobs:
     name: Build Docker Image (arm64)
     runs-on: ubuntu-24.04-arm
     needs: [test]
+    outputs:
+      image-tag: ${{ steps.image-tag.outputs.tag }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -144,7 +147,7 @@ jobs:
         id: image-tag
         run: |
           COMMIT_SHA=${{ github.sha }}
-          IMAGE_TAG="external-dns-technitium-webhook:${COMMIT_SHA:0:7}"
+          IMAGE_TAG="external-dns-technitium-webhook:arm64-${COMMIT_SHA:0:7}"
           echo "tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
 
       - name: Set up Docker Buildx
@@ -152,6 +155,7 @@ jobs:
 
       - name: Build Docker image for arm64
         uses: docker/build-push-action@v6
+        id: build-arm64
         with:
           context: .
           platforms: linux/arm64
@@ -456,26 +460,45 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: webhook-image-amd64
-          path: /tmp/amd64-image
+          path: /tmp/webhook-image-amd64.tar
       - uses: actions/download-artifact@v4
         with:
           name: webhook-image-arm64
-          path: /tmp/arm64-image
+          path: /tmp/webhook-image-arm64.tar
 
-      - name: Load both images
+      - name: Load, Tag, and Push Images
+        env:
+          IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}
+          IMAGE_TAG_SHA: ${{ github.sha }}
+          AMD64_TAG_FROM_BUILD: ${{ needs.build-amd64.outputs.image-tag }}
+          ARM64_TAG_FROM_BUILD: ${{ needs.build-arm64.outputs.image-tag }}
         run: |
-          docker load -i /tmp/amd64-image/image.tar
-          docker load -i /tmp/arm64-image/image.tar
+          set -xe
 
-      - name: Push both arch images separately
-        run: |
-          docker push $IMAGE_NAME:amd64-$IMAGE_TAG
-          docker push $IMAGE_NAME:arm64-$IMAGE_TAG
+          # --- Define Tags ---
+          TAG_BASE="${IMAGE_NAME,,}"
+          TAG_SHA_SHORT=$(echo $IMAGE_TAG_SHA | cut -c1-7)
+          MANIFEST_TAG="$TAG_BASE:$TAG_SHA_SHORT"
+          
+          # These are the full registry tags we will push
+          FINAL_AMD64_TAG="$TAG_BASE:amd64-$TAG_SHA_SHORT"
+          FINAL_ARM64_TAG="$TAG_BASE:arm64-$TAG_SHA_SHORT"
 
-      - name: Create and push multi-arch manifest
-        run: |
+          # --- Load and Push Images ---
+          echo "Loading and pushing amd64 image..."
+          docker load -i /tmp/webhook-image-amd64.tar
+          docker tag "$AMD64_TAG_FROM_BUILD" "$FINAL_AMD64_TAG"
+          docker push "$FINAL_AMD64_TAG"
+
+          echo "Loading and pushing arm64 image..."
+          docker load -i /tmp/webhook-image-arm64.tar
+          docker tag "$ARM64_TAG_FROM_BUILD" "$FINAL_ARM64_TAG"
+          docker push "$FINAL_ARM64_TAG"
+
+          # --- Create and Push Manifest ---
+          echo "Creating and pushing manifest..."
           docker buildx imagetools create \
-            -t $IMAGE_NAME:$IMAGE_TAG \
-            $IMAGE_NAME:amd64-$IMAGE_TAG \
-            $IMAGE_NAME:arm64-$IMAGE_TAG
+            --tag "$MANIFEST_TAG" \
+            "$FINAL_AMD64_TAG" \
+            "$FINAL_ARM64_TAG"
  
