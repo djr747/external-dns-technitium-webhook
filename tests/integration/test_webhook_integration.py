@@ -186,12 +186,20 @@ class TestWebhookIntegration:
                 # Query Technitium for the DNS record
                 try:
                     records = technitium_client.get_records(hostname, technitium_zone)
+                    print(f"[{wait_time}s] Query result for {hostname}: {len(records)} records")
+                    for r in records:
+                        print(f"  - {r.get('name')} ({r.get('type')}) -> {r.get('rData')}")
+
                     if records and any(r.get("name") == hostname for r in records):
                         record_found = True
+                        print(f"✓ Found record for {hostname}!")
                         break
                 except Exception as e:
                     # Continue waiting if API call fails (service might not be ready)
-                    print(f"API call failed, continuing to wait: {e}")
+                    print(f"[{wait_time}s] API call failed, continuing to wait: {e}")
+                    import traceback
+
+                    traceback.print_exc()
                     continue
 
             assert record_found, (
@@ -200,6 +208,10 @@ class TestWebhookIntegration:
 
             # Verify the record details
             records = technitium_client.get_records(hostname, technitium_zone)
+            print(f"Final query for {hostname}: {len(records)} records")
+            for r in records:
+                print(f"  - {r.get('name')} ({r.get('type')}) -> {r.get('rData')}")
+
             assert records, f"No records found for {hostname}"
 
             # Find the A record for our hostname
@@ -285,4 +297,9 @@ class TechnitiumTestClient:
             data["zone"] = zone
 
         result = self._authenticated_request("POST", "/api/zones/records/get", data)
-        return result.get("records", [])
+        records = result.get("records", [])
+        print(
+            f"[TechnitiumTestClient] Query: domain={domain}, zone={zone} -> {len(records)} records"
+        )
+        print(f"[TechnitiumTestClient] Full response: {result}")
+        return records
