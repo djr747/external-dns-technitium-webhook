@@ -301,7 +301,9 @@ class TechnitiumTestClient:
             data["zone"] = zone
 
         result = self._authenticated_request("POST", "/api/zones/records/get", data)
-        records = result.get("records", [])
+        # Records are nested under "response" key in Technitium API response
+        response_obj = result.get("response", {})
+        records = response_obj.get("records", [])
         print(
             f"[TechnitiumTestClient] Query: domain={domain}, zone={zone} -> {len(records)} records"
         )
