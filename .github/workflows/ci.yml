@@ -81,7 +81,7 @@ jobs:
 
   build-amd64:
     name: Build Docker Image (amd64)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [test]
     outputs:
       image-tag: ${{ steps.image-tag.outputs.tag }}
@@ -106,7 +106,7 @@ jobs:
         with:
           context: .
           platforms: linux/amd64
-          outputs: type=local,dest=/tmp/amd64-image
+          outputs: type=docker,dest=/tmp/webhook-image-amd64.tar
           load: true
           tags: ${{ steps.image-tag.outputs.tag }}
           cache-from: type=gha
@@ -128,18 +128,25 @@ jobs:
         uses: actions/upload-artifact@v5
         with:
           name: webhook-image-amd64
-          path: /tmp/amd64-image
+          path: /tmp/webhook-image-amd64.tar
           retention-days: 1
 
   build-arm64:
     name: Build Docker Image (arm64)
-    runs-on: ubuntu-latest-arm64
+    runs-on: ubuntu-24.04-arm
     needs: [test]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
+      - name: Generate image tag
+        id: image-tag
+        run: |
+          COMMIT_SHA=${{ github.sha }}
+          IMAGE_TAG="external-dns-technitium-webhook:${COMMIT_SHA:0:7}"
+          echo "tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -148,8 +155,8 @@ jobs:
         with:
           context: .
           platforms: linux/arm64
-          outputs: type=local,dest=/tmp/webhook-image-arm64.tar
-          push: false
+          outputs: type=docker,dest=/tmp/webhook-image-arm64.tar
+          tags: ${{ steps.image-tag.outputs.tag }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           provenance: false
