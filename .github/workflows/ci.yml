@@ -114,6 +114,10 @@ jobs:
           cache-to: type=gha,mode=max
           provenance: false
 
+      - name: Load built image tarball
+        run: |
+          docker load -i /tmp/webhook-image-amd64.tar
+
       - name: Verify built image Python version matches Chainguard latest
         run: |
           echo "Checking Python version inside built image..."
