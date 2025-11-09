@@ -170,7 +170,7 @@ class TestWebhookIntegration:
 
         # Create the service
         k8s_client.create_namespaced_service(namespace, service_spec)
-        
+
         # Create endpoints for the service so ExternalDNS can discover it
         # ExternalDNS needs endpoints to generate targets for DNS records
         endpoints_spec = client.V1Endpoints(
