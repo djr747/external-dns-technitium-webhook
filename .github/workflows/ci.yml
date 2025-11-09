@@ -106,10 +106,12 @@ jobs:
         with:
           context: .
           platforms: linux/amd64
+          outputs: type=local,dest=/tmp/amd64-image
           load: true
           tags: ${{ steps.image-tag.outputs.tag }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          provenance: false
 
       - name: Verify built image Python version matches Chainguard latest
         run: |
@@ -122,30 +124,22 @@ jobs:
           fi
           echo "Python version in built image matches Chainguard latest: $image_version"
 
-      - name: Save Docker image to artifact (for integration tests)
-        run: |
-          docker save ${{ steps.image-tag.outputs.tag }} -o /tmp/webhook-image.tar
-          
       - name: Upload image artifact (for integration tests)
         uses: actions/upload-artifact@v5
         with:
           name: webhook-image-amd64
-          path: /tmp/webhook-image.tar
+          path: /tmp/amd64-image
           retention-days: 1
 
   build-arm64:
     name: Build Docker Image (arm64)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-arm64
     needs: [test]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -154,9 +148,17 @@ jobs:
         with:
           context: .
           platforms: linux/arm64
+          outputs: type=local,dest=/tmp/webhook-image-arm64.tar
           push: false
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          provenance: false
+      - name: Upload image artifact (for integration tests)
+        uses: actions/upload-artifact@v5
+        with:
+          name: webhook-image-arm64
+          path: /tmp/webhook-image-arm64.tar
+          retention-days: 1
 
   integration:
     name: Integration Tests (Kubernetes)
@@ -175,7 +177,7 @@ jobs:
 
       - name: Load webhook image
         run: |
-          docker load -i /tmp/webhook-image.tar
+          docker load -i /tmp/webhook-image-amd64.tar
 
       - name: Create Kind cluster config
         run: |
@@ -309,13 +311,13 @@ jobs:
             kubectl get pods -n default -l app.kubernetes.io/name=external-dns
             kubectl describe pod $POD -n default || true
             kubectl get events -n default --sort-by=.lastTimestamp | grep external-dns || true
+            # If either container is in CrashLoopBackOff, print and exit
+            if echo "$CONTAINER_STATUSES" | grep -q 'CrashLoopBackOff'; then
+            echo "ERROR: At least one container is in CrashLoopBackOff."
             echo "--- ExternalDNS container logs (current) ---"
             kubectl logs $POD -c external-dns -n default --tail=50 || true
             echo "--- Webhook container logs (current) ---"
             kubectl logs $POD -c webhook -n default --tail=50 || true
-            # If either container is in CrashLoopBackOff, print and exit
-            if echo "$CONTAINER_STATUSES" | grep -q 'CrashLoopBackOff'; then
-              echo "ERROR: At least one container is in CrashLoopBackOff."
               exit 1
             fi
             # If both containers are ready, continue
@@ -329,12 +331,6 @@ jobs:
           done
           echo "ERROR: ExternalDNS pod did not become ready after 160s."
           exit 1
-
-      - name: Check External DNS pod status
-        run: |
-          kubectl get pods -n default
-          kubectl describe pod -l app.kubernetes.io/name=external-dns -n default || true
-          kubectl logs -l app.kubernetes.io/name=external-dns -n default --tail=50 || true
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -403,7 +399,7 @@ jobs:
           
           exit $TEST_RESULT
 
-      - name: Collect logs on failure
+      - name: Collect logs on test failure
         if: failure()
         run: |
           echo "=== Kubernetes Pods ==="
@@ -434,16 +430,11 @@ jobs:
     name: Push Multi-arch Docker Image to Registry
     runs-on: ubuntu-latest
     needs: [build-amd64, integration, build-arm64]
+    env:
+      IMAGE_NAME: ghcr.io/${{ github.repository }}/external-dns-technitium-webhook
+      IMAGE_TAG: ${{ needs.build-amd64.outputs.image-tag }}
     if: success()
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -454,23 +445,30 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata (tags, labels)
-        id: meta
-        uses: docker/metadata-action@v5
+      - name: Download both image artifacts
+        uses: actions/download-artifact@v4
         with:
-          images: ghcr.io/${{ github.repository }}
-          tags: |
-            type=ref,event=branch
-            type=ref,event=pr
-            type=sha,prefix=commit-
-            type=raw,value=ci-${{ github.sha }},enable={{is_default_branch}}
+          name: webhook-image-amd64
+          path: /tmp/amd64-image
+      - uses: actions/download-artifact@v4
+        with:
+          name: webhook-image-arm64
+          path: /tmp/arm64-image
 
-      - name: Push both architectures atomically from cache
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
+      - name: Load both images
+        run: |
+          docker load -i /tmp/amd64-image/image.tar
+          docker load -i /tmp/arm64-image/image.tar
+
+      - name: Push both arch images separately
+        run: |
+          docker push $IMAGE_NAME:amd64-$IMAGE_TAG
+          docker push $IMAGE_NAME:arm64-$IMAGE_TAG
+
+      - name: Create and push multi-arch manifest
+        run: |
+          docker buildx imagetools create \
+            -t $IMAGE_NAME:$IMAGE_TAG \
+            $IMAGE_NAME:amd64-$IMAGE_TAG \
+            $IMAGE_NAME:arm64-$IMAGE_TAG
+ 
