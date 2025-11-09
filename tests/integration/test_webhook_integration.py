@@ -154,6 +154,7 @@ class TestWebhookIntegration:
         hostname = f"{service_name}.{technitium_zone}"
 
         # Create a ClusterIP service with ExternalDNS annotation
+        # Note: No selector - we'll manage endpoints manually
         service_spec = client.V1Service(
             api_version="v1",
             kind="Service",
@@ -163,7 +164,6 @@ class TestWebhookIntegration:
             ),
             spec=client.V1ServiceSpec(
                 type="ClusterIP",
-                selector={"app": "test-app"},
                 ports=[client.V1ServicePort(port=80, target_port=8080, protocol="TCP")],
             ),
         )
