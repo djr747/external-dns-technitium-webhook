@@ -468,7 +468,8 @@ jobs:
           # --- Define Tags ---
           TAG_BASE="${IMAGE_NAME,,}"
           TAG_SHA_SHORT=$(echo $IMAGE_TAG_SHA | cut -c1-7)
-          MANIFEST_TAG="$TAG_BASE:$TAG_SHA_SHORT"
+          COMMIT_TAG="$TAG_BASE:$TAG_SHA_SHORT"
+          BRANCH_TAG="$TAG_BASE:$IMAGE_TAG_BRANCH"
           
           # These are the full registry tags we will push
           FINAL_AMD64_TAG="$TAG_BASE:amd64-$TAG_SHA_SHORT"
@@ -488,8 +489,8 @@ jobs:
           # --- Create and Push Manifest ---
           echo "Creating and pushing manifest..."
           docker buildx imagetools create \
-            --tag "$MANIFEST_TAG" \
+            --tag "$COMMIT_TAG" \
             "$FINAL_AMD64_TAG" \
             "$FINAL_ARM64_TAG" \
-            "${IMAGE_TAG_BRANCH}"
+            "$BRANCH_TAG"
  
