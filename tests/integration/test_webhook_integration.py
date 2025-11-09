@@ -180,7 +180,6 @@ class TestWebhookIntegration:
             subsets=[
                 client.V1EndpointSubset(
                     addresses=[client.V1EndpointAddress(ip="192.0.2.1")],
-                    ports=[client.V1EndpointPort(port=8080, protocol="TCP")],
                 )
             ],
         )
