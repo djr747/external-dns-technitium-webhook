@@ -279,13 +279,17 @@ class TechnitiumTestClient:
 
     def _authenticated_request(self, method: str, endpoint: str, data: dict | None = None):
         """Make an authenticated API request"""
-        headers = {"Authorization": f"Bearer {self.token}"}
         url = f"{self.base_url}{endpoint}"
 
+        # Add token to the data/params (Technitium expects it in form data, not headers)
+        request_data = {"token": self.token}
+        if data:
+            request_data.update(data)
+
         if method.upper() == "POST":
-            response = httpx.post(url, json=data, headers=headers, timeout=10)
+            response = httpx.post(url, data=request_data, timeout=10)
         else:
-            response = httpx.get(url, params=data, headers=headers, timeout=10)
+            response = httpx.get(url, params=request_data, timeout=10)
 
         response.raise_for_status()
         return response.json()
