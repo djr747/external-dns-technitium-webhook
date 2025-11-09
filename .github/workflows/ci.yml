@@ -124,21 +124,6 @@ jobs:
           cache-to: type=gha,mode=max
           provenance: false
 
-      # - name: Load built image tarball
-      #   run: |
-      #     docker load -i /tmp/webhook-image-amd64.tar
-
-      # - name: Verify built image Python version matches Chainguard latest
-      #   run: |
-      #     echo "Checking Python version inside built image..."
-      #     chainguard_version=$(docker run --rm --entrypoint python cgr.dev/chainguard/python:latest -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
-      #     image_version=$(docker run --rm --entrypoint python ${{ steps.image-tag.outputs.tag }} -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
-      #     if [ "$image_version" != "$chainguard_version" ]; then
-      #       echo "ERROR: Python version in built image ($image_version) does not match Chainguard latest ($chainguard_version)"
-      #       exit 1
-      #     fi
-      #     echo "Python version in built image matches Chainguard latest: $image_version"
-
       - name: Upload image artifact (for integration tests)
         uses: actions/upload-artifact@v5
         with:
@@ -367,24 +352,6 @@ jobs:
         run: |
           pip install pytest pytest-asyncio httpx kubernetes
 
-      - name: Wait for Technitium reachable inside Kind
-        env:
-          TECHNITIUM_URL: http://technitium.default.svc.cluster.local:5380
-          TECHNITIUM_USERNAME: ${{ steps.init.outputs.technitium_username }}
-          TECHNITIUM_PASSWORD: ${{ steps.init.outputs.technitium_password }}
-        run: |
-          echo "Waiting for Technitium API inside cluster to be ready..."
-          # Try for up to 120s
-          kubectl run technitium-probe \
-            --image=curlimages/curl:latest \
-            --restart=Never \
-            --attach=true \
-            --quiet \
-            --env="TECHNITIUM_URL=http://technitium.default.svc.cluster.local:5380" \
-            --env="TECHNITIUM_USERNAME=$TECHNITIUM_USERNAME" \
-            --env="TECHNITIUM_PASSWORD=$TECHNITIUM_PASSWORD" \
-            -- sh -c 'i=0; until [ $i -ge 24 ]; do i=$((i+1)); echo "Attempt $i/24"; RESPONSE=$(curl -s -X POST "$TECHNITIUM_URL/api/user/login" -H "Content-Type: application/x-www-form-urlencoded" -d "user=$TECHNITIUM_USERNAME&pass=$TECHNITIUM_PASSWORD" 2>/dev/null); if echo "$RESPONSE" | grep -q "\"status\":\"ok\""; then echo "✓ Technitium API is ready and credentials work"; exit 0; elif echo "$RESPONSE" | grep -q "\"status\":\"error\""; then echo "✗ Technitium API authentication failed: $RESPONSE"; exit 1; fi; sleep 5; done; echo "ERROR: Technitium API not reachable inside cluster after 120s"; exit 1'
-
       - name: Run integration tests
         env:
           TECHNITIUM_URL: http://localhost:30380
@@ -481,10 +448,18 @@ jobs:
           name: webhook-image-arm64
           path: /tmp/arm64-image
 
+      - name: Sanitize ref name for Docker tag
+        id: sanitize
+        run: |
+          # Convert to lowercase and replace slashes with hyphens
+          SAFE_TAG=$(echo "${{ github.ref_name }}" | tr '[:upper:]' '[:lower:]' | sed 's/\//-/g')
+          echo "tag=${SAFE_TAG}" >> $GITHUB_OUTPUT          
+
       - name: Load, Tag, and Push Images
         env:
           IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}
           IMAGE_TAG_SHA: ${{ github.sha }}
+          IMAGE_TAG_BRANCH: ${{ steps.sanitize.outputs.tag }}
           AMD64_TAG_FROM_BUILD: ${{ needs.build-amd64.outputs.image-tag }}
           ARM64_TAG_FROM_BUILD: ${{ needs.build-arm64.outputs.image-tag }}
         run: |
@@ -515,5 +490,6 @@ jobs:
           docker buildx imagetools create \
             --tag "$MANIFEST_TAG" \
             "$FINAL_AMD64_TAG" \
-            "$FINAL_ARM64_TAG"
+            "$FINAL_ARM64_TAG" \
+            "${IMAGE_TAG_BRANCH}"
  
