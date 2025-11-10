@@ -96,18 +96,23 @@ class TestWebhookIntegration:
         reach_start = time.time()
         reach_timeout = 60
         reachable = False
+        last_error = None
         while time.time() - reach_start < reach_timeout:
             try:
                 resp = httpx.get(f"{technitium_url}/api/user/login", timeout=5)
                 if resp.status_code in [200, 400]:
                     reachable = True
                     break
-            except Exception:
+            except Exception as e:
+                last_error = str(e)
                 pass
             time.sleep(2)
 
         if not reachable:
-            pytest.skip(f"Technitium API not reachable at {technitium_url} from runner")
+            error_msg = f"Technitium API not reachable at {technitium_url} from runner"
+            if last_error:
+                error_msg += f". Last error: {last_error}"
+            pytest.skip(error_msg)
 
     @pytest.fixture(scope="class")
     def technitium_url(self):
