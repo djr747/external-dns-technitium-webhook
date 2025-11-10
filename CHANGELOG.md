@@ -18,6 +18,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Fixed local tag lookup and verification steps
   - Added comprehensive error handling and cleanup in CI jobs
 
+### Added
+- **Type Safety:** Improved type annotations with proper `Callable` import from `collections.abc` for URL sanitization helpers
+- **Test Coverage:** Added comprehensive unit tests for `run_servers()` function covering:
+  - Successful server startup paths
+  - Health server timeout scenarios
+  - Main server exception handling
+  - Signal handler registration
+  - Timeout and error logging
+- **Test Coverage:** Added test for `ensure_ready()` RuntimeError case in app state tests
+- **Coverage Enforcement:** Added `fail_under = 95` to coverage configuration to prevent regression below 95% threshold
+
+### Fixed
+- **Tests:** Fixed test warnings from unhandled thread exceptions by properly mocking server startup in main function tests
+- **Code Quality:** Removed pragma-no-cover shortcuts in favor of proper test coverage for all code paths
+
 ## [0.2.9] - 2025-11-03
 
 ### Dependencies

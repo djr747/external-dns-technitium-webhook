@@ -217,6 +217,7 @@ exclude_lines = [
     "class .*\\bProtocol\\):",
     "@(abc\\.)?abstractmethod",
 ]
+fail_under = 95
 
 [tool.bandit]
 exclude_dirs = ["tests", "venv"]

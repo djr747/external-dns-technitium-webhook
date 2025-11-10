@@ -3,6 +3,7 @@
 import ipaddress
 import logging
 import re
+from collections.abc import Callable
 from typing import Any
 
 from fastapi import HTTPException, status
@@ -28,8 +29,12 @@ def sanitize_error_message(error: Exception) -> str:
     """
     error_str = str(error)
 
+    def _replace_sensitive_param(match: re.Match[str]) -> str:
+        """Replace sensitive parameter values with ***."""
+        return match.group().replace(match.group(1), "***")
+
     # Remove sensitive patterns
-    sensitive_patterns = [
+    sensitive_patterns: list[tuple[str, str | Callable[[re.Match[str]], str]]] = [
         (r"password[=:]\s*\S+", "password=***"),
         (r"token[=:]\s*\S+", "token=***"),
         (r"api[_-]?key[=:]\s*\S+", "api_key=***"),
@@ -39,8 +44,14 @@ def sanitize_error_message(error: Exception) -> str:
         (r"/Users/[^/\s]+", "/Users/***"),
         (r"C:\\Users\\[^\\s]+", r"C:\\Users\\***"),
         # Sanitize URLs with sensitive query parameters
-        (r"https?://[^\s]*?(password|token|api[_-]?key|secret|auth)[=:][^\s&]+", lambda m: m.group().replace(m.group(1), "***")),
-        (r"https?://[^\s]*?[?&](password|token|api[_-]?key|secret|auth)[=:][^\s&]+", lambda m: m.group().replace(m.group(1), "***")),
+        (
+            r"https?://[^\s]*?(password|token|api[_-]?key|secret|auth)[=:][^\s&]+",
+            _replace_sensitive_param,
+        ),
+        (
+            r"https?://[^\s]*?[?&](password|token|api[_-]?key|secret|auth)[=:][^\s&]+",
+            _replace_sensitive_param,
+        ),
     ]
 
     for pattern, replacement in sensitive_patterns:
