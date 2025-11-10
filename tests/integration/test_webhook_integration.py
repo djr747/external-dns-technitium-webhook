@@ -105,7 +105,6 @@ class TestWebhookIntegration:
                     break
             except Exception as e:
                 last_error = str(e)
-                pass
             time.sleep(2)
 
         if not reachable:
