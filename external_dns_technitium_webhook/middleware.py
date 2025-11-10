@@ -7,9 +7,11 @@ from collections.abc import Awaitable, Callable
 from datetime import datetime
 
 from fastapi import HTTPException, Request, status
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import Response
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.types import ASGIApp
+
+from .responses import ExternalDNSResponse
 
 logger = logging.getLogger(__name__)
 
@@ -143,8 +145,8 @@ class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
                 length = self.max_size + 1
 
             if length > self.max_size:
-                return JSONResponse(
-                    {"detail": "Request too large"},
+                return ExternalDNSResponse(
+                    content={"detail": "Request too large"},
                     status_code=413,
                 )
 

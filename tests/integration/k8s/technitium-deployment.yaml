@@ -1,0 +1,184 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: technitium-init
+data:
+  init-technitium.sh: |
+    #!/bin/bash
+    set -e
+    
+    # Wait for Technitium to be ready
+    echo "Waiting for Technitium API to be ready..."
+    for i in {1..30}; do
+      if curl -s -f http://localhost:5380/api/user/login > /dev/null 2>&1; then
+        echo "Technitium is ready!"
+        break
+      fi
+      echo "Attempt $i/30: waiting for API..."
+      sleep 2
+    done
+    
+    # Extract admin password from environment
+    ADMIN_PASSWORD="${ADMIN_PASSWORD:-$(openssl rand -base64 12)}"
+    echo "Admin password: $ADMIN_PASSWORD"
+    
+    # Login to Technitium API
+    echo "Logging in to Technitium..."
+    LOGIN_RESPONSE=$(curl -s -X POST http://localhost:5380/api/user/login \
+      -H "Content-Type: application/x-www-form-urlencoded" \
+      -d "user=admin&pass=$ADMIN_PASSWORD")
+    
+    TOKEN=$(echo "$LOGIN_RESPONSE" | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
+    
+    if [ -z "$TOKEN" ]; then
+      echo "ERROR: Could not authenticate with Technitium"
+      echo "Response: $LOGIN_RESPONSE"
+      exit 1
+    fi
+    
+    echo "Successfully authenticated. Token: ${TOKEN:0:10}..."
+    
+    # Create catalog zone
+    echo "Creating catalog zone..."
+    curl -s -X POST http://localhost:5380/api/zones/createZone \
+      -H "Content-Type: application/x-www-form-urlencoded" \
+      -H "Authorization: Bearer $TOKEN" \
+      -d "zone=test.local&type=Primary" \
+      -o /dev/null -w "\nZone creation status: %{http_code}\n"
+    
+    # Create catalog zone for member zones
+    echo "Creating catalog zone for member zone provisioning..."
+    curl -s -X POST http://localhost:5380/api/zones/createZone \
+      -H "Content-Type: application/x-www-form-urlencoded" \
+      -H "Authorization: Bearer $TOKEN" \
+      -d "zone=catalog.invalid&type=Catalog" \
+      -o /dev/null -w "\nCatalog zone creation status: %{http_code}\n"
+    
+    echo "Setup complete!"
+    echo "DNS Zone: test.local"
+    echo "Catalog Zone: catalog.invalid"
+    echo "API: http://technitium:5380"
+    echo "Admin user: admin"
+    echo "Admin password: $ADMIN_PASSWORD"
+    
+    # Keep container running
+    tail -f /dev/null
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: technitium
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: technitium
+  template:
+    metadata:
+      labels:
+        app: technitium
+    spec:
+      initContainers:
+      - name: setup
+        image: technitium/dns-server:latest
+        command:
+        - sh
+        - -c
+        - |
+          # Generate random password if not set
+          if [ -z "$ADMIN_PASSWORD" ]; then
+            export ADMIN_PASSWORD=$(openssl rand -base64 12)
+          fi
+          echo "ADMIN_PASSWORD=$ADMIN_PASSWORD" > /shared/admin.env
+          cat /shared/admin.env
+        env:
+        - name: ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: technitium-secret
+              key: password
+              optional: true
+        volumeMounts:
+        - name: shared-data
+          mountPath: /shared
+      
+      containers:
+      - name: technitium-dns
+        image: technitium/dns-server:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 5380
+          name: api
+        - containerPort: 53
+          name: dns-udp
+          protocol: UDP
+        - containerPort: 53
+          name: dns-tcp
+          protocol: TCP
+        env:
+        - name: DNS_SERVER_ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: technitium-secret
+              key: password
+        livenessProbe:
+          httpGet:
+            path: /api/user/login
+            port: 5380
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /api/user/login
+            port: 5380
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        volumeMounts:
+        - name: shared-data
+          mountPath: /shared
+      
+      volumes:
+      - name: shared-data
+        emptyDir: {}
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: technitium
+spec:
+  selector:
+    app: technitium
+  ports:
+  - name: api
+    port: 5380
+    targetPort: 5380
+    protocol: TCP
+  type: ClusterIP
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: technitium-external
+spec:
+  selector:
+    app: technitium
+  ports:
+  - name: api
+    port: 5380
+    targetPort: 5380
+    protocol: TCP
+    nodePort: 30380
+  type: NodePort

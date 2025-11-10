@@ -1,15 +1,18 @@
 """API handlers for ExternalDNS webhook endpoints."""
 
 import ipaddress
+import json
 import logging
 import re
+from collections.abc import Callable
 from typing import Any
 
 from fastapi import HTTPException, status
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import Response
 
 from .app_state import AppState
 from .models import Changes, DomainFilter, Endpoint
+from .responses import ExternalDNSResponse
 
 logger = logging.getLogger(__name__)
 
@@ -27,8 +30,12 @@ def sanitize_error_message(error: Exception) -> str:
     """
     error_str = str(error)
 
+    def _replace_sensitive_param(match: re.Match[str]) -> str:
+        """Replace sensitive parameter values with ***."""
+        return match.group().replace(match.group(1), "***")
+
     # Remove sensitive patterns
-    sensitive_patterns = [
+    sensitive_patterns: list[tuple[str, str | Callable[[re.Match[str]], str]]] = [
         (r"password[=:]\s*\S+", "password=***"),
         (r"token[=:]\s*\S+", "token=***"),
         (r"api[_-]?key[=:]\s*\S+", "api_key=***"),
@@ -37,18 +44,21 @@ def sanitize_error_message(error: Exception) -> str:
         (r"/home/[^/\s]+", "/home/***"),
         (r"/Users/[^/\s]+", "/Users/***"),
         (r"C:\\Users\\[^\\s]+", r"C:\\Users\\***"),
+        # Sanitize URLs with sensitive query parameters
+        (
+            r"https?://[^\s]*?(password|token|api[_-]?key|secret|auth)[=:][^\s&]+",
+            _replace_sensitive_param,
+        ),
+        (
+            r"https?://[^\s]*?[?&](password|token|api[_-]?key|secret|auth)[=:][^\s&]+",
+            _replace_sensitive_param,
+        ),
     ]
 
     for pattern, replacement in sensitive_patterns:
         error_str = re.sub(pattern, replacement, error_str, flags=re.IGNORECASE)
 
     return error_str
-
-
-class ExternalDNSResponse(JSONResponse):
-    """Custom JSON response with ExternalDNS content type."""
-
-    media_type = "application/external.dns.webhook+json;version=1"
 
 
 async def health_check(state: AppState) -> Response:
@@ -60,15 +70,11 @@ async def health_check(state: AppState) -> Response:
     Returns:
         200 OK if ready, 503 if not ready
     """
-    try:
-        await state.ensure_ready()
-        return Response(status_code=status.HTTP_200_OK)
-    except RuntimeError as e:
-        logger.warning(f"Health check failed: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=str(e),
-        ) from e
+    if not state.is_ready:
+        return ExternalDNSResponse(
+            content={"status": "unhealthy"}, status_code=status.HTTP_503_SERVICE_UNAVAILABLE
+        )
+    return ExternalDNSResponse(content={"status": "ok"}, status_code=status.HTTP_200_OK)
 
 
 async def negotiate_domain_filter(state: AppState) -> ExternalDNSResponse:
@@ -174,6 +180,9 @@ async def get_records(state: AppState) -> ExternalDNSResponse:
         endpoints.append(endpoint)
 
     logger.debug(f"Found {len(endpoints)} endpoints")
+    # Log the actual endpoints being returned to ExternalDNS
+    for ep in endpoints:
+        logger.info(f"Returning endpoint: {ep.dns_name} ({ep.record_type}) -> {ep.targets}")
     return ExternalDNSResponse(content=[ep.model_dump(by_alias=True) for ep in endpoints])
 
 
@@ -206,6 +215,19 @@ async def apply_record(state: AppState, changes: Changes) -> Response:
     await state.ensure_ready()
     await state.ensure_writable()
 
+    # Log the raw changes object to understand what ExternalDNS is sending
+    changes_dict = (
+        changes.model_dump()
+        if hasattr(changes, "model_dump")
+        else changes.dict()
+        if hasattr(changes, "dict")
+        else dict(changes)
+    )
+    sanitized_changes_json = (
+        json.dumps(changes_dict, separators=(",", ":")).replace("\r", "").replace("\n", "")
+    )
+    logger.info(f"apply_record received Changes object: {sanitized_changes_json}")
+
     # Combine deletions (delete + updateOld)
     deletions: list[Endpoint] = []
     if changes.delete:
@@ -220,9 +242,16 @@ async def apply_record(state: AppState, changes: Changes) -> Response:
     if changes.update_new:
         additions.extend(changes.update_new)
 
+    # Log the changes received from ExternalDNS
+    logger.info(f"apply_record received: {len(deletions)} deletions, {len(additions)} additions")
+    for ep in deletions:
+        logger.info(f"  DELETE: {ep.dns_name} ({ep.record_type}) -> {ep.targets}")
+    for ep in additions:
+        logger.info(f"  CREATE: {ep.dns_name} ({ep.record_type}) -> {ep.targets}")
+
     if not deletions and not additions:
         logger.info("All records already up to date, skipping apply")
-        return Response(status_code=status.HTTP_204_NO_CONTENT)
+        return ExternalDNSResponse(content=None, status_code=status.HTTP_204_NO_CONTENT)
 
     # Process deletions
     for ep in deletions:
@@ -275,13 +304,13 @@ async def apply_record(state: AppState, changes: Changes) -> Response:
                     detail=f"Failed to add record: {safe_message}",
                 ) from e
 
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+    return ExternalDNSResponse(content=None, status_code=status.HTTP_204_NO_CONTENT)
 
 
 def _get_record_data(record_type: str, target: str) -> dict[str, Any] | None:
     """Get record data for a given record type and target.
 
-    Args:
+            return ExternalDNSResponse(content=None, status_code=status.HTTP_204_NO_CONTENT)
         record_type: DNS record type
         target: Target value
 

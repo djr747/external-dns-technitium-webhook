@@ -18,6 +18,7 @@ permissions:
   packages: write
   security-events: write
   id-token: write
+  attestations: write
 
 jobs:
   check-version-changed:
@@ -66,9 +67,12 @@ jobs:
 
       - name: Set VERSION
         id: set_version
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_VERSION: ${{ github.event.inputs.version }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            VERSION="${{ github.event.inputs.version }}"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            VERSION="$INPUT_VERSION"
           else
             # push event: extract version from pyproject.toml
             VERSION=$(grep '^version = ' pyproject.toml | head -1 | cut -d'"' -f2)

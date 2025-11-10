@@ -94,7 +94,19 @@ async def test_update_status_sets_flags(config: Config) -> None:
 
 
 @pytest.mark.asyncio
-async def test_ensure_writable_requires_primary(config: Config) -> None:
+async def test_ensure_ready_not_ready_raises_error(config: Config) -> None:
+    """ensure_ready should raise RuntimeError when not ready."""
+    state = AppState(config)
+    try:
+        state.is_ready = False
+        with pytest.raises(RuntimeError, match="Service not ready yet"):
+            await state.ensure_ready()
+    finally:
+        await state.close()
+
+
+@pytest.mark.asyncio
+async def test_ensure_writable(config: Config) -> None:
     """ensure_writable should raise when connected endpoint is read-only."""
 
     state = AppState(config)

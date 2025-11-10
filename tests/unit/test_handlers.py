@@ -255,6 +255,19 @@ async def test_sanitize_error_message() -> None:
     assert "C:" in result and "Users" in result
     assert "john" not in result
 
+    # Test URL sanitization
+    error = Exception("Request failed: https://api.example.com?password=secret123&token=abc123")
+    result = sanitize_error_message(error)
+    assert "password=secret123" not in result
+    assert "token=abc123" not in result
+    assert "password=***" in result or "***" in result
+    assert "token=***" in result or "***" in result
+
+    error = Exception("Auth failed: http://example.com/auth?api_key=12345&secret=mysecret")
+    result = sanitize_error_message(error)
+    assert "api_key=12345" not in result
+    assert "secret=mysecret" not in result
+
 
 @pytest.mark.asyncio
 async def test_get_records_aaaa(app_state: AppState, mocker: MockerFixture) -> None:

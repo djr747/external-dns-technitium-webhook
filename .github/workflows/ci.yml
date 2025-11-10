@@ -2,7 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ '*' ]
+    branches:
+      - '**'
+      - '!main'
   pull_request:
     branches: [ main, develop ]
   workflow_dispatch:
@@ -12,11 +14,10 @@ permissions:
   security-events: write
   packages: write
   id-token: write
-  attestations: write
 
 jobs:
   lint:
-    name: Lint and Format Check
+    name: Lint and Format Check (Python)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -45,8 +46,9 @@ jobs:
         run: pyright
 
   test:
-    name: Test Python ${{ matrix.python-version }}
+    name: Unit Test (Python)
     runs-on: ubuntu-latest
+    needs: [lint]
     strategy:
       fail-fast: false
       matrix:
@@ -54,6 +56,16 @@ jobs:
 
     steps:
       - uses: actions/checkout@v5
+
+      - name: Verify matrix Python matches Chainguard base
+        run: |
+          chainguard_version=$(docker run --rm --entrypoint python cgr.dev/chainguard/python:latest -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+          matrix_version="${{ matrix.python-version }}"
+          if [ "$matrix_version" != "$chainguard_version" ]; then
+            echo "ERROR: matrix Python $matrix_version does not match Chainguard base $chainguard_version"
+            exit 1
+          fi
+          echo "Matrix Python version $matrix_version matches Chainguard base $chainguard_version"
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v6
@@ -68,44 +80,353 @@ jobs:
 
       - name: Run tests with coverage
         run: |
-          pytest --cov=external_dns_technitium_webhook --cov-report=xml --cov-report=html --cov-report=term-missing --cov-fail-under=95
+          pytest tests/unit/ --cov=external_dns_technitium_webhook --cov-report=xml --cov-report=html --cov-report=term-missing --cov-fail-under=95
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v5
-        if: matrix.python-version == '3.13'
         with:
           name: coverage-report
           path: htmlcov/
           retention-days: 30
 
-      - name: Upload coverage to Codecov
-        if: matrix.python-version == '3.13'
-        uses: codecov/codecov-action@v5
-        with:
-          file: ./coverage.xml
-          flags: unittests
-          name: codecov-umbrella
-          fail_ci_if_error: false
-
-  docker-build:
-    name: Build Docker Image and Scan
-    runs-on: ubuntu-latest
+  build-amd64:
+    name: Build Docker Image (amd64)
+    runs-on: ubuntu-24.04
     needs: [test]
-    permissions:
-      contents: read
-      packages: write
-      security-events: write
-      id-token: write
-      attestations: write
+    outputs:
+      image-tag: ${{ steps.image-tag.outputs.tag }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+      - name: Generate image tag
+        id: image-tag
+        run: |
+          COMMIT_SHA=${{ github.sha }}
+          IMAGE_TAG="external-dns-technitium-webhook:amd64-${COMMIT_SHA:0:7}"
+          echo "tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image for amd64
+        uses: docker/build-push-action@v6
+        id: build-amd64
+        with:
+          context: .
+          platforms: linux/amd64
+          outputs: type=docker,dest=/tmp/webhook-image-amd64.tar
+          load: true
+          tags: ${{ steps.image-tag.outputs.tag }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: false
+
+      - name: Upload image artifact (for integration tests)
+        uses: actions/upload-artifact@v5
+        with:
+          name: webhook-image-amd64
+          path: /tmp/webhook-image-amd64.tar
+          retention-days: 1
+
+  build-arm64:
+    name: Build Docker Image (arm64)
+    runs-on: ubuntu-24.04-arm
+    needs: [test]
+    outputs:
+      image-tag: ${{ steps.image-tag.outputs.tag }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Generate image tag
+        id: image-tag
+        run: |
+          COMMIT_SHA=${{ github.sha }}
+          IMAGE_TAG="external-dns-technitium-webhook:arm64-${COMMIT_SHA:0:7}"
+          echo "tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image for arm64
+        uses: docker/build-push-action@v6
+        id: build-arm64
+        with:
+          context: .
+          platforms: linux/arm64
+          outputs: type=docker,dest=/tmp/webhook-image-arm64.tar
+          tags: ${{ steps.image-tag.outputs.tag }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: false
+      - name: Upload image artifact (for integration tests)
+        uses: actions/upload-artifact@v5
+        with:
+          name: webhook-image-arm64
+          path: /tmp/webhook-image-arm64.tar
+          retention-days: 1
+
+  integration:
+    name: Integration Tests (Kubernetes)
+    runs-on: ubuntu-latest
+    needs: [build-amd64]
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Download webhook image
+        uses: actions/download-artifact@v5
+        with:
+          name: webhook-image-amd64
+          path: /tmp
+
+      - name: Load webhook image
+        run: |
+          docker load -i /tmp/webhook-image-amd64.tar
+
+      - name: Create Kind cluster config
+        run: |
+          cat > /tmp/kind-config.yaml <<EOF
+          kind: Cluster
+          apiVersion: kind.x-k8s.io/v1alpha4
+          nodes:
+            - role: control-plane
+              extraPortMappings:
+                - containerPort: 30380
+                  hostPort: 30380
+                  protocol: TCP
+          EOF
+
+      - name: Set up Kind cluster
+        uses: helm/kind-action@v1
+        with:
+          cluster_name: integration-test
+          config: /tmp/kind-config.yaml
+
+      - name: Load webhook image into Kind
+        run: |
+          kind load docker-image ${{ needs.build-amd64.outputs.image-tag }} --name integration-test
+
+      - name: Pull and load Technitium image into Kind
+        run: |
+          docker pull technitium/dns-server:latest
+          kind load docker-image technitium/dns-server:latest --name integration-test
+
+      - name: Generate test credentials
+        id: creds
+        run: |
+          PASSWORD=$(openssl rand -base64 12)
+          echo "admin_password=$PASSWORD" >> $GITHUB_OUTPUT
+
+      - name: Create Technitium secret
+        run: |
+          kubectl create secret generic technitium-secret \
+            --from-literal=username=admin \
+            --from-literal=password=${{ steps.creds.outputs.admin_password }} \
+            -n default
+
+      - name: Deploy Technitium DNS
+        run: |
+          kubectl apply -f tests/integration/k8s/technitium-deployment.yaml
+
+      - name: Wait for Technitium deployment
+        run: |
+          kubectl wait --for=condition=ready pod \
+            -l app=technitium \
+            --timeout=300s \
+            -n default
+
+      - name: Run Technitium initialization script
+        id: init
+        env:
+          DNS_SERVER_ADMIN_PASSWORD: ${{ steps.creds.outputs.admin_password }}
+        run: |
+          kubectl run technitium-init \
+            --image=curlimages/curl:latest \
+            --restart=Never \
+            --attach=true \
+            --quiet \
+            --env="TECHNITIUM_URL=http://technitium.default.svc.cluster.local:5380" \
+            --env="ADMIN_PASSWORD=$DNS_SERVER_ADMIN_PASSWORD" \
+            --env="ZONE=test.local" \
+            --env="CATALOG_ZONE=catalog.invalid" \
+            -- sh -c "$(cat tests/integration/fixtures/init-technitium.sh)"
+          
+          # Get logs and capture credentials
+          echo ""
+          echo "=== Technitium Init Pod Logs ==="
+          INIT_LOGS=$(kubectl logs technitium-init -n default 2>&1 || true)
+          echo "$INIT_LOGS"
+          
+          # Extract credentials from logs
+          TECH_USERNAME=$(echo "$INIT_LOGS" | grep "^TECHNITIUM_USERNAME=" | cut -d= -f2)
+          TECH_PASSWORD=$(echo "$INIT_LOGS" | grep "^TECHNITIUM_PASSWORD=" | cut -d= -f2)
+          TECH_ZONE=$(echo "$INIT_LOGS" | grep "^TECHNITIUM_ZONE=" | cut -d= -f2)
+          
+          echo "technitium_username=$TECH_USERNAME" >> $GITHUB_OUTPUT
+          echo "technitium_password=$TECH_PASSWORD" >> $GITHUB_OUTPUT
+          echo "technitium_zone=$TECH_ZONE" >> $GITHUB_OUTPUT
+          
+          # Clean up the pod - force delete if needed
+          kubectl delete pod technitium-init -n default --force --grace-period=0 2>/dev/null || true
+          
+          # Check if initialization succeeded by verifying outputs
+          if [ -z "$TECH_PASSWORD" ] || [ -z "$TECH_USERNAME" ]; then
+            echo ""
+            echo "ERROR: Technitium initialization failed - could not extract credentials"
+            exit 1
+          fi
+
+      - name: Add External DNS Helm repository
+        run: |
+          helm repo add external-dns https://kubernetes-sigs.github.io/external-dns/
+          helm repo update
+
+      - name: Deploy External DNS with webhook
+        run: |
+          # The build step emits an image reference like "external-dns-technitium-webhook:d244611"
+          # Split that into repository and tag and pass them separately to Helm so we don't
+          # end up with a malformed image name (repo:repo:tag)
+          FULL_IMAGE="${{ needs.build-amd64.outputs.image-tag }}"
+          REPO="${FULL_IMAGE%:*}"
+          TAG="${FULL_IMAGE##*:}"
+
+          echo "Using image repository: $REPO"
+          echo "Using image tag: $TAG"
+
+            helm install external-dns external-dns/external-dns \
+            -f tests/integration/helm/external-dns-values.yaml \
+            --set provider.webhook.image.repository="${REPO}" \
+            --set provider.webhook.image.tag="${TAG}" \
+            -n default \
+            --timeout=5m
+
+      - name: Wait for External DNS deployment (loop with event logging)
+        run: |
+          set -x
+          set +e
+          echo "Waiting for ExternalDNS pod to become ready (max 160s)..."
+
+          for i in $(seq 1 8); do
+            POD=$(kubectl get pods -n default -l app.kubernetes.io/name=external-dns -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
+            STATUS=$(kubectl get pods -n default -l app.kubernetes.io/name=external-dns -o jsonpath='{.items[0].status.phase}' 2>/dev/null)
+            CONTAINER_STATUSES=$(kubectl get pods $POD -n default -o json | jq -r '.status.containerStatuses[] | "\(.name):ready=\(.ready),state=\(.state),reason=\(.lastState.terminated.reason // .state.waiting.reason // .state.running.reason // \"\")"')
+            echo "[${i}/8] Pod: $POD status: $STATUS"
+            echo "$CONTAINER_STATUSES"
+            kubectl get pods -n default -l app.kubernetes.io/name=external-dns
+            kubectl describe pod $POD -n default || true
+            kubectl get events -n default --sort-by=.lastTimestamp | grep external-dns || true
+            # If either container is in CrashLoopBackOff, print and exit
+            if echo "$CONTAINER_STATUSES" | grep -q 'CrashLoopBackOff'; then
+            echo "ERROR: At least one container is in CrashLoopBackOff."
+            echo "--- ExternalDNS container logs (current) ---"
+            kubectl logs $POD -c external-dns -n default --tail=50 || true
+            echo "--- Webhook container logs (current) ---"
+            kubectl logs $POD -c webhook -n default --tail=50 || true
+              exit 1
+            fi
+            # If both containers are ready, continue
+            # Check if all containers are ready instead of looking for specific names
+            ALL_CONTAINERS_READY=$(kubectl get pods $POD -n default -o jsonpath='{.status.containerStatuses[*].ready}' | grep -q 'false' && echo false || echo true)
+            if [ "$ALL_CONTAINERS_READY" = "true" ]; then
+              echo "All containers are ready!"
+              exit 0
+            fi
+            sleep 20
+          done
+          echo "ERROR: ExternalDNS pod did not become ready after 160s."
+          exit 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: 'pip'
+
+      - name: Install integration test dependencies
+        run: |
+          pip install pytest pytest-asyncio httpx kubernetes
+
+      - name: Run integration tests
+        env:
+          TECHNITIUM_URL: http://localhost:30380
+          TECHNITIUM_USERNAME: ${{ steps.init.outputs.technitium_username }}
+          TECHNITIUM_PASSWORD: ${{ steps.init.outputs.technitium_password }}
+          ZONE: ${{ steps.init.outputs.technitium_zone }}
+        run: |
+          # Start log streaming in background
+          echo "Starting log streams for debugging..."
+          kubectl logs -l app.kubernetes.io/name=external-dns -n default -c external-dns -f > /tmp/external-dns.log 2>&1 &
+          EXTERNAL_DNS_LOG_PID=$!
+          
+          kubectl logs -l app.kubernetes.io/name=external-dns -n default -c webhook -f > /tmp/webhook.log 2>&1 &
+          WEBHOOK_LOG_PID=$!
+          
+          # Give logs a moment to start
+          sleep 2
+          
+          # Run tests
+          pytest tests/integration/test_webhook_integration.py \
+            -v \
+            --tb=short \
+            -m "integration"
+          TEST_RESULT=$?
+          
+          # Stop log streams
+          kill $EXTERNAL_DNS_LOG_PID $WEBHOOK_LOG_PID 2>/dev/null || true
+          
+          # Display captured logs
+          echo ""
+          echo "=== External DNS Logs ==="
+          cat /tmp/external-dns.log || true
+          
+          echo ""
+          echo "=== Webhook Logs ==="
+          cat /tmp/webhook.log || true
+          
+          exit $TEST_RESULT
+
+      - name: Collect logs on test failure
+        if: failure()
+        run: |
+          echo "=== Kubernetes Pods ==="
+          kubectl get pods -n default
+          
+          echo ""
+          echo "=== Technitium DNS Container Logs ==="
+          kubectl logs -l app=technitium -n default -c technitium-dns --all-containers=false --tail=200 || true
+          
+          echo ""
+          echo "=== Technitium Setup Init Container Logs ==="
+          kubectl logs -l app=technitium -n default -c setup --all-containers=false --tail=200 || true
+          
+          echo ""
+          echo "=== External DNS Container Logs ==="
+          kubectl logs -l app.kubernetes.io/name=external-dns -n default -c external-dns --all-containers=false --tail=200 || true
+          
+          echo ""
+          echo "=== Webhook Sidecar Logs ==="
+          kubectl logs -l app.kubernetes.io/name=external-dns -n default -c webhook --all-containers=false --tail=200 || true
+
+      - name: Cleanup Kind cluster
+        if: always()
+        run: |
+          kind delete cluster --name integration-test
+
+  push:
+    name: Push Multi-arch Docker Image to Registry
+    runs-on: ubuntu-latest
+    needs: [build-amd64, integration, build-arm64]
+    env:
+      IMAGE_NAME: ghcr.io/${{ github.repository }}/external-dns-technitium-webhook
+      IMAGE_TAG: ${{ needs.build-amd64.outputs.image-tag }}
+    if: success()
+    steps:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -116,54 +437,60 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata (tags, labels)
-        id: meta
-        uses: docker/metadata-action@v5
+      - name: Download amd64 image artifact
+        uses: actions/download-artifact@v4
         with:
-          images: ghcr.io/${{ github.repository }}
-          tags: |
-            type=ref,event=branch
-            type=ref,event=pr
-            # Use a stable prefix for SHA tags to avoid generating tags that
-            # begin with a hyphen when the branch name is empty in certain
-            # CI contexts (which produced invalid tags like ":-489026a").
-            type=sha,prefix=commit-
-            type=raw,value=ci-${{ github.sha }},enable={{is_default_branch}}
-
-      - name: Build and push Docker image
-        id: build
-        uses: docker/build-push-action@v6
+          name: webhook-image-amd64
+          path: /tmp/amd64-image
+      - name: Download arm64 image artifact
+        uses: actions/download-artifact@v4
         with:
-          context: .
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          sbom: true
-          provenance: true
+          name: webhook-image-arm64
+          path: /tmp/arm64-image
 
-      - name: Generate artifact attestation
-        if: success()
-        uses: actions/attest-build-provenance@v3
-        with:
-          subject-name: ghcr.io/${{ github.repository }}
-          subject-digest: ${{ steps.build.outputs.digest }}
-          push-to-registry: true
-
-      - name: Verify built image Python version matches Chainguard latest
+      - name: Sanitize ref name for Docker tag
+        id: sanitize
         run: |
-          echo "Checking Python version inside built image..."
-          chainguard_version=$(docker run --rm --entrypoint python cgr.dev/chainguard/python:latest -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
-          # Construct an explicit image reference using the pushed digest (repository@digest).
-          # For multi-platform builds the 'image' output may be empty; the digest is a reliable identifier.
-          IMAGE_REF="ghcr.io/${{ github.repository }}@${{ steps.build.outputs.digest }}"
-          echo "Pulling built image by digest: $IMAGE_REF"
-          docker pull "$IMAGE_REF"
-          image_version=$(docker run --rm --entrypoint python "$IMAGE_REF" -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
-          if [ "$image_version" != "$chainguard_version" ]; then
-            echo "ERROR: Python version in built image ($image_version) does not match Chainguard latest ($chainguard_version)"
-            exit 1
-          fi
-          echo "Python version in built image matches Chainguard latest: $image_version"
+          # Convert to lowercase and replace slashes with hyphens
+          SAFE_TAG=$(echo "${{ github.ref_name }}" | tr '[:upper:]' '[:lower:]' | sed 's/\//-/g')
+          echo "tag=${SAFE_TAG}" >> $GITHUB_OUTPUT          
+
+      - name: Load, Tag, and Push Images
+        env:
+          IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}
+          IMAGE_TAG_SHA: ${{ github.sha }}
+          IMAGE_TAG_BRANCH: ${{ steps.sanitize.outputs.tag }}
+          AMD64_TAG_FROM_BUILD: ${{ needs.build-amd64.outputs.image-tag }}
+          ARM64_TAG_FROM_BUILD: ${{ needs.build-arm64.outputs.image-tag }}
+        run: |
+          set -xe
+
+          # --- Define Tags ---
+          TAG_BASE="${IMAGE_NAME,,}"
+          TAG_SHA_SHORT=$(echo $IMAGE_TAG_SHA | cut -c1-7)
+          COMMIT_TAG="$TAG_BASE:$TAG_SHA_SHORT"
+          BRANCH_TAG="$TAG_BASE:$IMAGE_TAG_BRANCH"
+          
+          # These are the full registry tags we will push
+          FINAL_AMD64_TAG="$TAG_BASE:amd64-$TAG_SHA_SHORT"
+          FINAL_ARM64_TAG="$TAG_BASE:arm64-$TAG_SHA_SHORT"
+
+          # --- Load and Push Images ---
+          echo "Loading and pushing amd64 image..."
+          docker load -i /tmp/amd64-image/webhook-image-amd64.tar
+          docker tag "$AMD64_TAG_FROM_BUILD" "$FINAL_AMD64_TAG"
+          docker push "$FINAL_AMD64_TAG"
+
+          echo "Loading and pushing arm64 image..."
+          docker load -i /tmp/arm64-image/webhook-image-arm64.tar
+          docker tag "$ARM64_TAG_FROM_BUILD" "$FINAL_ARM64_TAG"
+          docker push "$FINAL_ARM64_TAG"
+
+          # --- Create and Push Manifest ---
+          echo "Creating and pushing manifest..."
+          docker buildx imagetools create \
+            --tag "$COMMIT_TAG" \
+            --tag "$BRANCH_TAG" \
+            "$FINAL_AMD64_TAG" \
+            "$FINAL_ARM64_TAG"
+ 

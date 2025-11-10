@@ -13,6 +13,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2025-11-09
+
+### Changed
+- **CI/CD Pipeline:** Major overhaul of GitHub Actions workflow for improved reliability and efficiency
+  - Streamlined multi-architecture Docker builds with artifact-based job separation
+  - Added Chainguard Python version guard to prevent drift between test matrix and base image
+  - Implemented atomic manifest push after successful testing
+  - Enhanced branch tagging and artifact handling for better CI performance
+  - Fixed local tag lookup and verification steps
+  - Added comprehensive error handling and cleanup in CI jobs
+
+### Added
+- **Type Safety:** Improved type annotations with proper `Callable` import from `collections.abc` for URL sanitization helpers
+- **Test Coverage:** Added comprehensive unit tests for `run_servers()` function covering:
+  - Successful server startup paths
+  - Health server timeout scenarios
+  - Main server exception handling
+  - Signal handler registration
+  - Timeout and error logging
+- **Test Coverage:** Added test for `ensure_ready()` RuntimeError case in app state tests
+- **Coverage Enforcement:** Added `fail_under = 95` to coverage configuration to prevent regression below 95% threshold
+
+### Fixed
+- **Tests:** Fixed test warnings from unhandled thread exceptions by properly mocking server startup in main function tests
+- **Code Quality:** Removed pragma-no-cover shortcuts in favor of proper test coverage for all code paths
+
 ## [0.2.9] - 2025-11-03
 
 ### Dependencies
