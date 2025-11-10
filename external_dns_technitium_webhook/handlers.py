@@ -3,6 +3,7 @@
 import ipaddress
 import logging
 import re
+import json
 from collections.abc import Callable
 from typing import Any
 
@@ -215,7 +216,9 @@ async def apply_record(state: AppState, changes: Changes) -> Response:
     await state.ensure_writable()
 
     # Log the raw changes object to understand what ExternalDNS is sending
-    logger.info(f"apply_record received Changes object: {changes}")
+    changes_dict = changes.model_dump() if hasattr(changes, "model_dump") else changes.dict() if hasattr(changes, "dict") else dict(changes)
+    sanitized_changes_json = json.dumps(changes_dict, separators=(",", ":")).replace("\r", "").replace("\n", "")
+    logger.info(f"apply_record received Changes object: {sanitized_changes_json}")
 
     # Combine deletions (delete + updateOld)
     deletions: list[Endpoint] = []
