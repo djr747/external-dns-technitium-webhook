@@ -38,6 +38,9 @@ def sanitize_error_message(error: Exception) -> str:
         (r"/home/[^/\s]+", "/home/***"),
         (r"/Users/[^/\s]+", "/Users/***"),
         (r"C:\\Users\\[^\\s]+", r"C:\\Users\\***"),
+        # Sanitize URLs with sensitive query parameters
+        (r"https?://[^\s]*?(password|token|api[_-]?key|secret|auth)[=:][^\s&]+", lambda m: m.group().replace(m.group(1), "***")),
+        (r"https?://[^\s]*?[?&](password|token|api[_-]?key|secret|auth)[=:][^\s&]+", lambda m: m.group().replace(m.group(1), "***")),
     ]
 
     for pattern, replacement in sensitive_patterns:
