@@ -1,9 +1,9 @@
 """API handlers for ExternalDNS webhook endpoints."""
 
 import ipaddress
+import json
 import logging
 import re
-import json
 from collections.abc import Callable
 from typing import Any
 
