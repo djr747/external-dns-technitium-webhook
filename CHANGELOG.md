@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2025-11-09
+
+### Changed
+- **CI/CD Pipeline:** Major overhaul of GitHub Actions workflow for improved reliability and efficiency
+  - Streamlined multi-architecture Docker builds with artifact-based job separation
+  - Added Chainguard Python version guard to prevent drift between test matrix and base image
+  - Implemented atomic manifest push after successful testing
+  - Enhanced branch tagging and artifact handling for better CI performance
+  - Fixed local tag lookup and verification steps
+  - Added comprehensive error handling and cleanup in CI jobs
+
 ## [0.2.9] - 2025-11-03
 
 ### Dependencies
