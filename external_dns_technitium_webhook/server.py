@@ -62,8 +62,13 @@ def run_health_server(health_app: FastAPI, config: AppConfig) -> None:
 
         try:
             loop.run_until_complete(health_server.serve())
-        except (Exception, KeyboardInterrupt, SystemExit) as e:
-            # Catch regular exceptions and shutdown signals (SystemExit, KeyboardInterrupt)
+        except (KeyboardInterrupt, SystemExit) as e:
+            # Log shutdown signals at INFO level without stack trace
+            logging.info(f"[HEALTH] Health server received shutdown signal: {type(e).__name__}")
+            sys.stderr.write(f"[HEALTH] Shutdown: {e}\n")
+            sys.stderr.flush()
+        except Exception as e:
+            # Log unexpected exceptions at ERROR level with stack trace
             logging.error(f"[HEALTH] Health server serve error: {e}", exc_info=True)
             sys.stderr.write(f"[HEALTH] Error: {e}\n")
             sys.stderr.flush()
