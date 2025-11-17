@@ -4,13 +4,15 @@ import ipaddress
 import json
 import logging
 import re
-from collections.abc import Callable
+from collections.abc import AsyncGenerator, Callable
+from contextlib import suppress
 from typing import Any
 
 from fastapi import HTTPException, status
-from fastapi.responses import Response
+from fastapi.responses import Response, StreamingResponse
 
 from .app_state import AppState
+from .logging_utils import safe_log_payload
 from .models import Changes, DomainFilter, Endpoint
 from .responses import ExternalDNSResponse
 
@@ -97,93 +99,112 @@ async def negotiate_domain_filter(state: AppState) -> ExternalDNSResponse:
     return ExternalDNSResponse(content=domain_filter.model_dump())
 
 
-async def get_records(state: AppState) -> ExternalDNSResponse:
+async def get_records(state: AppState) -> Response:
     """Get current DNS records.
 
     Args:
         state: Application state
 
     Returns:
-        List of current endpoints
+        Streaming response with list of current endpoints
     """
     await state.ensure_ready()
 
+    import time
+
     logger.debug("Fetching DNS records")
+    start = time.monotonic()
 
     response = await state.client.get_records(
         domain=state.config.zone,
         list_zone=True,
     )
 
-    endpoints: list[Endpoint] = []
-    for record in response.records:
-        record_type = record.type
-        r_data = record.r_data
+    duration_ms = (time.monotonic() - start) * 1000.0
+    # Increment the in-memory counter on AppState (lightweight metric hook)
+    with suppress(Exception):
+        state.record_fetch_count += 1
 
-        # Skip unsupported record types
-        if record_type not in (
-            "A",
-            "AAAA",
-            "CNAME",
-            "TXT",
-            "ANAME",
-            "CAA",
-            "URI",
-            "SSHFP",
-            "SVCB",
-            "HTTPS",
-        ):
-            continue
+    # Emit a single INFO-level summary so operators know retrieval succeeded
+    logger.info(
+        f"Successfully retrieved {len(response.records)} DNS record(s) for zone {state.config.zone} in {duration_ms:.1f}ms"
+    )
 
-        endpoint = Endpoint(
-            dnsName=record.name,
-            recordType=record_type,
-            recordTTL=record.ttl,
-            setIdentifier="",
-            targets=[],
-        )
+    # Stream the response as JSON array to avoid building large in-memory list
+    async def generate_endpoints() -> AsyncGenerator[str]:
+        yield "["
+        first = True
+        for record in response.records:
+            record_type = record.type
+            r_data = record.r_data
 
-        # Extract target from record data
-        if record_type == "A" or record_type == "AAAA":
-            endpoint.targets = [r_data.get("ipAddress", "")]
-        elif record_type == "CNAME":
-            endpoint.targets = [r_data.get("cname", "")]
-        elif record_type == "TXT":
-            endpoint.targets = [r_data.get("text", "")]
-        elif record_type == "ANAME":
-            endpoint.targets = [r_data.get("aname", "")]
-        elif record_type == "CAA":
-            # Format: flags tag "value"
-            flags = r_data.get("flags", 0)
-            tag = r_data.get("tag", "")
-            value = r_data.get("value", "")
-            endpoint.targets = [f'{flags} {tag} "{value}"']
-        elif record_type == "URI":
-            # Format: priority weight "uri"
-            priority = r_data.get("priority", 0)
-            weight = r_data.get("weight", 0)
-            uri = r_data.get("uri", "")
-            endpoint.targets = [f'{priority} {weight} "{uri}"']
-        elif record_type == "SSHFP":
-            # Format: algorithm fptype fingerprint
-            algorithm = r_data.get("algorithm", 0)
-            fp_type = r_data.get("fingerprintType", 0)
-            fingerprint = r_data.get("fingerprint", "")
-            endpoint.targets = [f"{algorithm} {fp_type} {fingerprint}"]
-        elif record_type in ("SVCB", "HTTPS"):
-            # Format: priority target params
-            priority = r_data.get("svcPriority", 0)
-            target = r_data.get("svcTargetName", "")
-            params = r_data.get("svcParams", "")
-            endpoint.targets = [f"{priority} {target} {params}".strip()]
+            # Skip unsupported record types
+            if record_type not in (
+                "A",
+                "AAAA",
+                "CNAME",
+                "TXT",
+                "ANAME",
+                "CAA",
+                "URI",
+                "SSHFP",
+                "SVCB",
+                "HTTPS",
+            ):
+                continue
 
-        endpoints.append(endpoint)
+            endpoint = Endpoint(
+                dnsName=record.name,
+                recordType=record_type,
+                recordTTL=record.ttl,
+                setIdentifier="",
+                targets=[],
+            )
 
-    logger.debug(f"Found {len(endpoints)} endpoints")
-    # Log the actual endpoints being returned to ExternalDNS
-    for ep in endpoints:
-        logger.info(f"Returning endpoint: {ep.dns_name} ({ep.record_type}) -> {ep.targets}")
-    return ExternalDNSResponse(content=[ep.model_dump(by_alias=True) for ep in endpoints])
+            # Extract target from record data
+            if record_type == "A" or record_type == "AAAA":
+                endpoint.targets = [r_data.get("ipAddress", "")]
+            elif record_type == "CNAME":
+                endpoint.targets = [r_data.get("cname", "")]
+            elif record_type == "TXT":
+                endpoint.targets = [r_data.get("text", "")]
+            elif record_type == "ANAME":
+                endpoint.targets = [r_data.get("aname", "")]
+            elif record_type == "CAA":
+                # Format: flags tag "value"
+                flags = r_data.get("flags", 0)
+                tag = r_data.get("tag", "")
+                value = r_data.get("value", "")
+                endpoint.targets = [f'{flags} {tag} "{value}"']
+            elif record_type == "URI":
+                # Format: priority weight "uri"
+                priority = r_data.get("priority", 0)
+                weight = r_data.get("weight", 0)
+                uri = r_data.get("uri", "")
+                endpoint.targets = [f'{priority} {weight} "{uri}"']
+            elif record_type == "SSHFP":
+                # Format: algorithm fptype fingerprint
+                algorithm = r_data.get("algorithm", 0)
+                fp_type = r_data.get("fingerprintType", 0)
+                fingerprint = r_data.get("fingerprint", "")
+                endpoint.targets = [f"{algorithm} {fp_type} {fingerprint}"]
+            elif record_type in ("SVCB", "HTTPS"):
+                # Format: priority target params
+                priority = r_data.get("svcPriority", 0)
+                target = r_data.get("svcTargetName", "")
+                params = r_data.get("svcParams", "")
+                endpoint.targets = [f"{priority} {target} {params}".strip()]
+
+            if not first:
+                yield ","
+            first = False
+            yield json.dumps(endpoint.model_dump(by_alias=True))
+        yield "]"
+
+    return StreamingResponse(
+        generate_endpoints(),
+        media_type="application/external.dns.webhook+json;version=1",
+    )
 
 
 async def adjust_endpoints(state: AppState, endpoints: list[Endpoint]) -> ExternalDNSResponse:
@@ -197,6 +218,14 @@ async def adjust_endpoints(state: AppState, endpoints: list[Endpoint]) -> Extern
         Adjusted endpoints (no changes in this implementation)
     """
     await state.ensure_ready()
+
+    # Log the incoming endpoints payload safely for diagnostics.
+    try:
+        safe_log_payload(
+            "adjust_endpoints.endpoints", [ep.model_dump(by_alias=True) for ep in endpoints], logger
+        )
+    except Exception:
+        logger.debug("Failed to log adjust_endpoints payload", exc_info=True)
 
     # We don't do any endpoint adjustment
     return ExternalDNSResponse(content=[ep.model_dump(by_alias=True) for ep in endpoints])
@@ -215,18 +244,19 @@ async def apply_record(state: AppState, changes: Changes) -> Response:
     await state.ensure_ready()
     await state.ensure_writable()
 
-    # Log the raw changes object to understand what ExternalDNS is sending
-    changes_dict = (
-        changes.model_dump()
-        if hasattr(changes, "model_dump")
-        else changes.dict()
-        if hasattr(changes, "dict")
-        else dict(changes)
-    )
-    sanitized_changes_json = (
-        json.dumps(changes_dict, separators=(",", ":")).replace("\r", "").replace("\n", "")
-    )
-    logger.info(f"apply_record received Changes object: {sanitized_changes_json}")
+    # Safely log the incoming Changes payload for diagnostics (redacts sensitive keys)
+    try:
+        # Convert to a serializable structure then log
+        changes_dict = (
+            changes.model_dump()
+            if hasattr(changes, "model_dump")
+            else changes.dict()
+            if hasattr(changes, "dict")
+            else dict(changes)
+        )
+        safe_log_payload("apply_record.changes", changes_dict, logger, level=logging.INFO)
+    except Exception:
+        logger.info("apply_record received Changes object (failed to serialize)")
 
     # Combine deletions (delete + updateOld)
     deletions: list[Endpoint] = []

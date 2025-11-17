@@ -149,8 +149,13 @@ Alternative health check endpoint (same as `/health`). Provided for Kubernetes p
 **Returns:** Same as `/health`
 
 ## Rate Limiting & Payload Limits
-- Requests are limited using a token bucket (`REQUESTS_PER_MINUTE` and `RATE_LIMIT_BURST`). 429 responses include a descriptive error string.
-- The request body size is capped (default 1 MB) and returns `413` when exceeded.
+- Requests are limited using a token bucket (`REQUESTS_PER_MINUTE` and `RATE_LIMIT_BURST`). Rate limiting is enabled by default and controlled via environment variables:
+
+- `REQUESTS_PER_MINUTE` (default: `1000`) — sustained tokens per minute per client
+- `RATE_LIMIT_BURST` (default: `10`) — burst capacity in tokens
+
+- 429 responses include a descriptive error string when the limit is exceeded.
+- The request body size is capped (default 1 MB) and returns `413` when exceeded.
 
 ## Authentication
 The webhook does not expose endpoint-level authentication (relies on network isolation in Kubernetes). It authenticates to Technitium using the configured credentials (username/password) and automatically refreshes tokens as needed. Default bind address is `0.0.0.0` (all interfaces); it's typically deployed as a sidecar with ExternalDNS in the same pod.

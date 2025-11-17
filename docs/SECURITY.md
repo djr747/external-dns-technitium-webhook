@@ -6,7 +6,7 @@ We release patches for security vulnerabilities for the following versions:
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 0.1.x   | :white_check_mark: |
+| 0.3.x   | :white_check_mark: |
 
 ## Reporting a Vulnerability
 
@@ -35,9 +35,10 @@ This project implements several security measures:
 
 ### Container Security
 - **Trivy**: Container image vulnerability scanning
+- **Chainguard Python**: Ultra-minimal base image with zero CVEs, daily security updates, SLSA Level 3 provenance
 - Multi-stage Docker builds to minimize attack surface
 - Non-root user in container
-- Minimal base image (python:3.11-slim)
+- Distroless runtime image (no shell, package managers, or unnecessary tools)
 
 ### Dependencies
 - Regular dependency updates via Dependabot

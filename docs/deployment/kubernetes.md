@@ -204,8 +204,6 @@ spec:
 | `TECHNITIUM_CA_BUNDLE_FILE` | No | None | Path to PEM file with CA certificate |
 | `LOG_LEVEL` | No | `INFO` | Logging level: DEBUG, INFO, WARNING, ERROR |
 | `LISTEN_ADDRESS` | No | `0.0.0.0` | Address to bind the webhook server |
-| `LISTEN_PORT` | No | `8888` | Port for ExternalDNS webhook communication |
-| `HEALTH_PORT` | No | `8080` | Port for health check endpoints |
 
 ### Resource Requirements
 

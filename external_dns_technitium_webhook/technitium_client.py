@@ -1,8 +1,10 @@
 """Technitium DNS API client."""
 
+import gzip
 import logging
 import ssl
 from typing import Any, TypeVar, cast
+from urllib.parse import urlencode
 
 import httpx
 from pydantic import BaseModel
@@ -84,6 +86,8 @@ class TechnitiumClient:
         timeout: float = 10.0,
         verify_ssl: bool = True,
         ca_bundle: str | None = None,
+        enable_request_compression: bool = False,
+        compression_threshold_bytes: int = 32768,
     ) -> None:
         """Initialize the Technitium client.
 
@@ -93,12 +97,16 @@ class TechnitiumClient:
             timeout: Request timeout in seconds
             verify_ssl: Verify SSL certificates
             ca_bundle: Optional path to a PEM file with CA certificates
+            enable_request_compression: Enable gzip compression for large request bodies
+            compression_threshold_bytes: Minimum size for request compression
         """
         self.base_url = base_url.rstrip("/")
         self.token = token
         self.timeout = timeout
         self.verify_ssl = verify_ssl
         self.ca_bundle = ca_bundle
+        self.enable_request_compression = enable_request_compression
+        self.compression_threshold_bytes = compression_threshold_bytes
 
         # Configure TLS verification
         verify: Any = verify_ssl
@@ -162,8 +170,31 @@ class TechnitiumClient:
         url = f"{self.base_url}{endpoint}"
         logger.debug(f"Sending POST request to {url}")
 
+        # Technitium API expects form-encoded data (application/x-www-form-urlencoded).
+        # For unit tests and httpx mocking we prefer to pass a dict to `data` so
+        # callers that inspect the call args see the original mapping. Only
+        # encode/compress to bytes when request-compression is enabled and the
+        # payload size exceeds the threshold.
+        form_encoded = urlencode(data)
+        headers = {"Content-Type": "application/x-www-form-urlencoded"}
+
         try:
-            response = await self._client.post(url, data=data)
+            # Compress if enabled and payload is large enough
+            if (
+                self.enable_request_compression
+                and len(form_encoded.encode("utf-8")) >= self.compression_threshold_bytes
+            ):
+                raw_bytes = form_encoded.encode("utf-8")
+                content = gzip.compress(raw_bytes)
+                headers["Content-Encoding"] = "gzip"
+                logger.debug(
+                    f"Compressed request payload from {len(raw_bytes)} to {len(content)} bytes"
+                )
+                response = await self._client.post(url, content=content, headers=headers)
+            else:
+                # Pass the original mapping to httpx so tests/mocks can inspect it
+                response = await self._client.post(url, data=data, headers=headers)
+
             response.raise_for_status()
         except httpx.HTTPStatusError as e:
             raise TechnitiumError(

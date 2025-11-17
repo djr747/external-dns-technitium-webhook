@@ -164,12 +164,6 @@ reportUnknownVariableType = false
 reportMissingParameterType = false
 reportMissingTypeArgument = false
 
-# Ignore unused warnings for FastAPI route handlers
-[[tool.pyright.executionEnvironments]]
-root = "external_dns_technitium_webhook"
-extraPaths = []
-reportUnusedFunction = false
-
 # Less strict type checking for tests
 [[tool.pyright.executionEnvironments]]
 root = "tests"
@@ -194,12 +188,6 @@ asyncio_mode = "auto"
 markers = [
     "unit: Unit tests",
     "integration: Integration tests",
-]
-filterwarnings = [
-    "ignore::RuntimeWarning",
-    # Ignore deprecation warnings from external dependencies (uvicorn using websockets.legacy)
-    # This is not our code; waiting for uvicorn to update to websockets.asyncio
-    "ignore:.*websockets.*:DeprecationWarning",
 ]
 
 [tool.coverage.run]

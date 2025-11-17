@@ -33,9 +33,11 @@ Please be respectful and constructive in all interactions related to this projec
 3. Make your changes
 4. Run tests and linting:
    ```bash
-   make test
-   make lint
-   make type-check
+   make test           # Unit tests
+   make test-integration  # Integration tests (requires kind/kubectl)
+   make lint           # Code linting
+   make type-check     # Type checking
+   make all            # Full CI pipeline
    ```
 5. Commit your changes with clear messages
 6. Push to your fork
@@ -55,34 +57,42 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 # Install development dependencies
 make install-dev
 
-# Run tests
+# Run unit tests
 make test
+
+# For integration testing (requires kind, kubectl, helm):
+# 1. Set up local cluster: bash local-ci-setup/setup.sh
+# 2. Run integration tests: make test-integration
 ```
 
 ## Code Style
 
 This project uses:
-- **Ruff** for linting and formatting
-- **mypy** for type checking
-- **Bandit** for security scanning
+- **Ruff** for linting and formatting (replaces flake8, isort, black)
+- **mypy** for static type checking with strict settings
+- **pyright** for additional type checking (VS Code/Pylance compatible)
+- **semgrep** for security scanning
 
 Run formatting and checks:
 ```bash
-make format      # Format code
-make lint        # Check linting
-make type-check  # Type checking
-make security    # Security scanning
+make format        # Format code with ruff
+make format-check  # Check formatting without changes
+make lint          # Check linting (ruff + pyright)
+make type-check    # Type checking (mypy + pyright)
+make security      # Security scanning with semgrep
+make all           # Run all checks (full CI pipeline)
 ```
 
 ## Testing
 
-- Write tests for new features
-- Maintain or improve code coverage
+- Write tests for new features (unit tests in `tests/unit/`, integration tests in `tests/integration/`)
+- Maintain or improve code coverage (target: ≥95%)
 - Run the full test suite before submitting PRs
 
 ```bash
-make test        # Run tests
-make test-cov    # Run with coverage report
+make test              # Run unit tests
+make test-integration  # Run integration tests with local kind cluster
+make test-cov          # Run unit tests with coverage report
 ```
 
 ## Commit Messages

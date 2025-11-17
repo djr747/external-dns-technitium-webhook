@@ -74,9 +74,6 @@ kubectl set env deployment/external-dns LOG_LEVEL=DEBUG
 
 # Docker
 docker run -e LOG_LEVEL=DEBUG ...
-
-# Docker Compose
-LOG_LEVEL=DEBUG docker-compose up
 ```
 
 Debug logs include operation details that help identify performance issues:
@@ -161,17 +158,16 @@ kubectl logs -f deployment/external-dns -c webhook
 
 # Docker
 docker logs -f <container-id>
-
-# Docker Compose
-docker-compose logs -f webhook
 ```
 
 ### Common Log Patterns
 
-**Successful DNS creation**:
+**Successful DNS operations**:
 ```
-time="2025-11-02T20:33:18Z" level=info module=external_dns_technitium_webhook.handlers msg="Creating DNS record: example.com (A) -> 192.0.2.1"
-time="2025-11-02T20:33:19Z" level=info module=external_dns_technitium_webhook.technitium_client msg="Successfully created record in zone example.com"
+time="2025-11-02T20:33:18Z" level=info module=external_dns_technitium_webhook.handlers msg="  CREATE: test.example.com (A) -> ['192.0.2.1']"
+time="2025-11-02T20:33:19Z" level=info module=external_dns_technitium_webhook.handlers msg="Adding record test.example.com with data {'ipAddress': '192.0.2.1'}"
+time="2025-11-02T20:33:20Z" level=info module=external_dns_technitium_webhook.handlers msg="  DELETE: old.example.com (A) -> ['192.0.2.2']"
+time="2025-11-02T20:33:21Z" level=info module=external_dns_technitium_webhook.handlers msg="Deleting record old.example.com with data {'ipAddress': '192.0.2.2'}"
 ```
 
 **Authentication renewal**:
@@ -182,7 +178,7 @@ time="2025-11-02T20:33:16Z" level=info module=external_dns_technitium_webhook.te
 
 **Rate limiting**:
 ```
-time="2025-11-02T20:33:20Z" level=warning module=external_dns_technitium_webhook.middleware msg="Rate limit exceeded for client 10.0.0.1"
+time="2025-11-02T20:33:20Z" level=warning module=external_dns_technitium_webhook.middleware msg="Rate limit exceeded for client 10.0.0.1. Tokens: 0.50"
 ```
 
 **Connection issues**:

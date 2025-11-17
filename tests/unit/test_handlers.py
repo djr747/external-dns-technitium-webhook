@@ -1,11 +1,12 @@
 """Unit tests for API handlers."""
 
 import json
+import logging
 import re
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 from pytest_mock import MockerFixture
 
 from external_dns_technitium_webhook.app_state import AppState
@@ -27,6 +28,98 @@ from external_dns_technitium_webhook.models import (
     RecordInfo,
     ZoneInfo,
 )
+
+
+class TestGetRecordsErrorHandling:
+    """Test error handling in get_records handler."""
+
+
+class TestAdjustEndpointsErrorHandling:
+    """Test error handling in adjust_endpoints handler."""
+
+    @pytest.mark.asyncio
+    async def test_adjust_endpoints_payload_logging_failure(self, mock_state, mocker, caplog):
+        """Test adjust_endpoints when payload logging fails."""
+        # Mock safe_log_payload to raise an exception
+        mocker.patch(
+            "external_dns_technitium_webhook.handlers.safe_log_payload",
+            side_effect=Exception("Payload logging failed"),
+        )
+
+        endpoints = [
+            Endpoint(
+                dnsName="test.example.com",
+                recordType="A",
+                recordTTL=300,
+                setIdentifier="",
+                targets=["192.0.2.1"],
+            )
+        ]
+
+        with caplog.at_level(logging.DEBUG):
+            result = await adjust_endpoints(mock_state, endpoints)
+
+        # Should still return successfully despite logging failure
+        assert result is not None
+        # Should log the debug message about failure
+        assert "Failed to log adjust_endpoints payload" in caplog.text
+
+
+class TestApplyRecordErrorHandling:
+    """Test error handling in apply_record handler."""
+
+    @pytest.mark.asyncio
+    async def test_apply_record_payload_logging_failure(self, mock_state, mocker, caplog):
+        """Test apply_record when Changes payload logging fails."""
+        # Mock safe_log_payload to raise an exception
+        mocker.patch(
+            "external_dns_technitium_webhook.handlers.safe_log_payload",
+            side_effect=Exception("Payload logging failed"),
+        )
+
+        # Mock client methods
+        mock_state.client.delete_record = AsyncMock()
+        mock_state.client.add_record = AsyncMock()
+
+        changes = Changes(
+            create=[
+                Endpoint(
+                    dnsName="test.example.com",
+                    recordType="A",
+                    recordTTL=300,
+                    setIdentifier="",
+                    targets=["192.0.2.1"],
+                )
+            ],
+            delete=[],
+            updateOld=[],
+            updateNew=[],
+        )
+
+        with caplog.at_level(logging.INFO):
+            result = await apply_record(mock_state, changes)
+
+        # Should still process changes despite logging failure
+        assert result is not None
+        # Should log the failure at INFO level
+        assert "apply_record received Changes object (failed to serialize)" in caplog.text
+
+
+async def collect_streaming_response(response) -> bytes:
+    """Collect the content of a StreamingResponse or Response for testing."""
+    if hasattr(response, "body_iterator"):
+        # StreamingResponse
+        content = b""
+        async for chunk in response.body_iterator:
+            if isinstance(chunk, str):
+                content += chunk.encode()
+            else:
+                content += chunk
+        return content
+    else:
+        # Regular Response
+        raw_body = response.body
+        return raw_body.tobytes() if isinstance(raw_body, memoryview) else raw_body or b""
 
 
 @pytest.fixture
@@ -51,6 +144,27 @@ def app_state(config: Config) -> AppState:
     state.client.delete_record = AsyncMock()  # type: ignore[method-assign]
     state.client.get_records = AsyncMock()  # type: ignore[method-assign]
     return state
+
+
+@pytest.fixture
+def mock_state(mocker):
+    """Create a mock AppState for error handling tests."""
+    state = AsyncMock(spec=AppState)
+    state.ensure_ready = AsyncMock()
+    state.ensure_writable = AsyncMock()
+    state.client = AsyncMock()
+    state.config = MagicMock()
+    state.config.zone = "example.com"
+    state.record_fetch_count = 0
+    return state
+
+
+@pytest.fixture
+def mock_request():
+    """Create a mock Request for header logging tests."""
+    request = MagicMock(spec=Request)
+    request.headers = {"Accept-Encoding": "gzip", "User-Agent": "ExternalDNS"}
+    return request
 
 
 @pytest.mark.asyncio
@@ -116,8 +230,7 @@ async def test_get_records(app_state: AppState, mocker: MockerFixture) -> None:
     )
 
     response = await get_records(app_state)
-    raw_body = response.body
-    body_bytes = raw_body.tobytes() if isinstance(raw_body, memoryview) else raw_body or b""
+    body_bytes = await collect_streaming_response(response)
     endpoints = json.loads(body_bytes.decode())
     assert endpoints and endpoints[0]["dnsName"] == "test.example.com"
     assert "1.2.3.4" in endpoints[0].get("targets", [])
@@ -287,7 +400,8 @@ async def test_get_records_aaaa(app_state: AppState, mocker: MockerFixture) -> N
 
     mocker.patch.object(app_state.client, "get_records", return_value=mock_response)
     response = await get_records(app_state)
-    data = json.loads(bytes(response.body))
+    body_bytes = await collect_streaming_response(response)
+    data = json.loads(body_bytes)
     assert data[0]["targets"][0] == "2001:db8::1"
 
 
@@ -309,7 +423,8 @@ async def test_get_records_cname(app_state: AppState, mocker: MockerFixture) -> 
 
     mocker.patch.object(app_state.client, "get_records", return_value=mock_response)
     response = await get_records(app_state)
-    data = json.loads(bytes(response.body))
+    body_bytes = await collect_streaming_response(response)
+    data = json.loads(body_bytes)
     assert data[0]["targets"][0] == "example.com"
 
 
@@ -331,7 +446,8 @@ async def test_get_records_txt(app_state: AppState, mocker: MockerFixture) -> No
 
     mocker.patch.object(app_state.client, "get_records", return_value=mock_response)
     response = await get_records(app_state)
-    data = json.loads(bytes(response.body))
+    body_bytes = await collect_streaming_response(response)
+    data = json.loads(body_bytes)
     assert data[0]["targets"][0] == "v=spf1 include:_spf.example.com ~all"
 
 
@@ -353,7 +469,8 @@ async def test_get_records_aname(app_state: AppState, mocker: MockerFixture) -> 
 
     mocker.patch.object(app_state.client, "get_records", return_value=mock_response)
     response = await get_records(app_state)
-    data = json.loads(bytes(response.body))
+    body_bytes = await collect_streaming_response(response)
+    data = json.loads(body_bytes)
     assert data[0]["targets"][0] == "target.example.com"
 
 
@@ -375,7 +492,8 @@ async def test_get_records_caa(app_state: AppState, mocker: MockerFixture) -> No
 
     mocker.patch.object(app_state.client, "get_records", return_value=mock_response)
     response = await get_records(app_state)
-    data = json.loads(bytes(response.body))
+    body_bytes = await collect_streaming_response(response)
+    data = json.loads(body_bytes)
     assert data[0]["targets"][0] == '0 issue "letsencrypt.org"'
 
 
@@ -397,7 +515,8 @@ async def test_get_records_uri(app_state: AppState, mocker: MockerFixture) -> No
 
     mocker.patch.object(app_state.client, "get_records", return_value=mock_response)
     response = await get_records(app_state)
-    data = json.loads(bytes(response.body))
+    body_bytes = await collect_streaming_response(response)
+    data = json.loads(body_bytes)
     assert data[0]["targets"][0] == '10 1 "https://example.com"'
 
 
@@ -419,7 +538,8 @@ async def test_get_records_sshfp(app_state: AppState, mocker: MockerFixture) -> 
 
     mocker.patch.object(app_state.client, "get_records", return_value=mock_response)
     response = await get_records(app_state)
-    data = json.loads(bytes(response.body))
+    body_bytes = await collect_streaming_response(response)
+    data = json.loads(body_bytes)
     assert data[0]["targets"][0] == "1 1 abc123"
 
 
@@ -445,7 +565,8 @@ async def test_get_records_svcb(app_state: AppState, mocker: MockerFixture) -> N
 
     mocker.patch.object(app_state.client, "get_records", return_value=mock_response)
     response = await get_records(app_state)
-    data = json.loads(bytes(response.body))
+    body_bytes = await collect_streaming_response(response)
+    data = json.loads(body_bytes)
     assert data[0]["dnsName"] == "_8443._https.api.example.com"
     assert data[0]["targets"][0] == "1 svc.example.com alpn=h2"
 
@@ -468,7 +589,8 @@ async def test_get_records_with_https_record(app_state: AppState, mocker: Mocker
 
     mocker.patch.object(app_state.client, "get_records", return_value=mock_response)
     response = await get_records(app_state)
-    data = json.loads(bytes(response.body))
+    body_bytes = await collect_streaming_response(response)
+    data = json.loads(body_bytes)
     assert data[0]["targets"][0] == "1 . alpn=h3"
 
 
@@ -648,10 +770,7 @@ async def test_get_records_with_uri_record(app_state: AppState, mocker: MockerFi
     )
 
     response = await get_records(app_state)
-    assert response.status_code == 200
-    data = response.body
-    assert data is not None
-    body_bytes = data.tobytes() if isinstance(data, memoryview) else data or b""
+    body_bytes = await collect_streaming_response(response)
     endpoints_resp = json.loads(body_bytes.decode())
     assert len(endpoints_resp) == 1
     assert endpoints_resp[0]["recordType"] == "URI"

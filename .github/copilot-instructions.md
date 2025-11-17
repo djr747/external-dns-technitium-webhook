@@ -35,9 +35,6 @@ make all                 # Run full CI pipeline locally
 # Docker workflow
 make docker-build        # Build Docker image
 make docker-run          # Run container with example config
-make docker-compose-up   # Start with docker-compose
-make docker-compose-logs # View logs
-make docker-compose-down # Stop services
 ```
 
 **Important:** Always use `make` commands, not direct tool invocation. The project uses:
@@ -109,8 +106,13 @@ Required vars (see `config.py`):
 ### Testing Patterns
 - Use `pytest-asyncio` for async tests
 - `conftest.py` resets environment variables between tests
+- Having warnings on tests is not acceptable
+- Skipping any form of coverage testing is not allowed
 - Mock external HTTP calls with `pytest-mock`
 - Test both success and error scenarios for all handlers
+- Unit tests file names must start with `test_` and be placed in the `tests/unit` directory.  These test files should be named after the corresponding module they are testing (e.g., `test_handlers.py` for `handlers.py`).
+- Integration tests can be added in `tests/integration/` with the file name of test_modules they are testing (e.g., `test_integration_handlers.py`).
+- Coverage must be at least 95% for all code paths; CI enforces this strictly.  Do not preference skipping coverage for core functions of the application over code that is infrequently used.
 
 ### Type Checking Standards
 The project uses **three** type checkers to ensure type safety:
@@ -204,7 +206,7 @@ All responses use custom media type: `application/external.dns.webhook+json;vers
 - **Test coverage**: pytest with asyncio support, mock external HTTP calls with pytest-mock
 - **Security scanning**: semgrep for code analysis
 - **Formatting**: Ruff format (black-compatible, 100 char line length)
-- **Python version**: 3.11+ required (uses modern type hints like `dict[str, Any]`)
+- **Python version**: 3.13+ required (uses modern type hints like `dict[str, Any]`)
 
 ## Provider-Specific Properties
 Advanced Technitium features via `providerSpecific` in Endpoint model:

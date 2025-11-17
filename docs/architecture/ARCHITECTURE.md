@@ -122,7 +122,6 @@ args:
 - `TECHNITIUM_API_TOKEN` - Authentication token
 - `DOMAIN_FILTER` - Domain filtering
 - `LISTEN_ADDRESS` - Bind address
-- `LISTEN_PORT` - HTTP port
 - `LOG_LEVEL` - Logging verbosity
 
 #### 2.6 Application State (`app_state.py`)

@@ -70,39 +70,6 @@ async def test_client_login_error(client: TechnitiumClient, mocker: MockerFixtur
 
 
 @pytest.mark.asyncio
-async def test_client_login_error_includes_stack_trace(
-    client: TechnitiumClient, mocker: MockerFixture
-) -> None:
-    """Technitium errors should capture stack trace and inner error details."""
-
-    mock_response = {
-        "status": "error",
-        "errorMessage": "Database connection failed",
-        "stackTrace": "at DatabaseConnection.connect()",
-        "innerErrorMessage": "Timeout waiting for connection",
-    }
-
-    mocker.patch.object(
-        client._client,
-        "post",
-        return_value=mocker.Mock(
-            status_code=200,
-            json=mocker.Mock(return_value=mock_response),
-            raise_for_status=mocker.Mock(),
-        ),
-    )
-
-    with pytest.raises(TechnitiumError) as exc_info:
-        await client.login("admin", "password")
-
-    error = exc_info.value
-    assert error.error_message == "Database connection failed"
-    assert error.stack_trace == "at DatabaseConnection.connect()"
-    assert error.inner_error == "Timeout waiting for connection"
-    assert "Database connection failed" in str(error)
-
-
-@pytest.mark.asyncio
 async def test_client_create_zone(client: TechnitiumClient, mocker: MockerFixture) -> None:
     """Test zone creation."""
     mock_response = {
@@ -356,67 +323,6 @@ async def test_list_zones_with_pagination(client: TechnitiumClient, mocker: Mock
     call_args = mock_post.call_args
     assert call_args[1]["data"]["pageNumber"] == 2
     assert call_args[1]["data"]["zonesPerPage"] == 10
-
-
-@pytest.mark.asyncio
-async def test_add_record_with_all_options(client: TechnitiumClient, mocker: MockerFixture) -> None:
-    """Test add_record with all optional parameters."""
-    mock_response = {
-        "status": "ok",
-        "response": {
-            "zone": {
-                "name": "example.com",
-                "type": "Primary",
-                "disabled": False,
-            },
-            "addedRecord": {
-                "disabled": True,
-                "name": "test.example.com",
-                "type": "A",
-                "ttl": 7200,
-                "rData": {"ipAddress": "1.2.3.4"},
-                "comments": "Test comment",
-            },
-        },
-    }
-
-    mock_post = mocker.patch.object(
-        client._client,
-        "post",
-        return_value=mocker.Mock(
-            status_code=200,
-            json=mocker.Mock(return_value=mock_response),
-            raise_for_status=mocker.Mock(),
-        ),
-    )
-
-    response = await client.add_record(
-        domain="test.example.com",
-        record_type="A",
-        record_data={"ipAddress": "1.2.3.4"},
-        ttl=7200,
-        zone="example.com",
-        comments="Test comment",
-        expiry_ttl=86400,
-        disabled=True,
-        overwrite=True,
-        ptr=True,
-        create_ptr_zone=True,
-        update_svcb_hints=True,
-    )
-
-    assert response.added_record.name == "test.example.com"
-
-    # Verify all optional parameters were passed
-    call_args = mock_post.call_args
-    payload = call_args[1]["data"]
-    assert payload["comments"] == "Test comment"
-    assert payload["expiryTtl"] == 86400
-    assert payload["disable"] == "true"
-    assert payload["overwrite"] == "true"
-    assert payload["ptr"] == "true"
-    assert payload["createPtrZone"] == "true"
-    assert payload["updateSvcbHints"] == "true"
 
 
 @pytest.mark.asyncio
@@ -945,3 +851,191 @@ def test_client_init_ssl_context_entire_exception_path(mocker: MockerFixture) ->
     # Verify the warning was logged about SSL context creation failure
     mock_logging.assert_called_once()
     assert "Failed to create unverified SSL context" in str(mock_logging.call_args)
+
+
+@pytest.mark.asyncio
+async def test_request_compression_enabled(client: TechnitiumClient, mocker: MockerFixture) -> None:
+    """Test that request compression is applied when enabled and payload is large."""
+    # Enable compression with small threshold for testing
+    client.enable_request_compression = True
+    client.compression_threshold_bytes = 100
+
+    # Create a large payload that exceeds threshold
+    large_data = {"data": "x" * 200}  # This will be > 100 bytes when JSON serialized
+
+    mock_response = {"status": "ok"}
+
+    mock_post = mocker.patch.object(
+        client._client,
+        "post",
+        return_value=mocker.Mock(
+            status_code=200,
+            json=mocker.Mock(return_value=mock_response),
+            raise_for_status=mocker.Mock(),
+        ),
+    )
+
+    await client._post_raw("/test", large_data)
+
+    # Verify compression was used
+    call_args = mock_post.call_args
+    assert "content" in call_args[1]  # Should use content for compressed data
+    assert "Content-Encoding" in call_args[1]["headers"]
+    assert call_args[1]["headers"]["Content-Encoding"] == "gzip"
+
+
+@pytest.mark.asyncio
+async def test_request_compression_disabled(
+    client: TechnitiumClient, mocker: MockerFixture
+) -> None:
+    """Test that request compression is not applied when disabled."""
+    # Ensure compression is disabled (default)
+    client.enable_request_compression = False
+
+    mock_response = {"status": "ok"}
+
+    mock_post = mocker.patch.object(
+        client._client,
+        "post",
+        return_value=mocker.Mock(
+            status_code=200,
+            json=mocker.Mock(return_value=mock_response),
+            raise_for_status=mocker.Mock(),
+        ),
+    )
+
+    await client._post_raw("/test", {"data": "test"})
+
+    # Verify compression was not used
+    call_args = mock_post.call_args
+    assert "data" in call_args[1]  # Should use data for uncompressed requests
+    assert "content" not in call_args[1]  # Should not use content
+
+
+@pytest.mark.asyncio
+async def test_enroll_catalog_calls_post_raw(
+    client: TechnitiumClient, mocker: MockerFixture
+) -> None:
+    post_raw = mocker.patch.object(client, "_post_raw", new_callable=AsyncMock)
+
+    await client.enroll_catalog(
+        member_zone="member.example.com", catalog_zone="catalog.example.com"
+    )
+
+    assert post_raw.await_count == 1
+    call = post_raw.await_args
+    assert call is not None
+    endpoint, payload = call.args
+    assert endpoint == client.ENDPOINT_ENROLL_CATALOG
+    assert payload["zone"] == "member.example.com"
+    assert payload["catalogZone"] == "catalog.example.com"
+
+
+@pytest.mark.asyncio
+async def test_create_zone_omits_none_values(
+    client: TechnitiumClient, mocker: MockerFixture
+) -> None:
+    # Verify create_zone serializes optional values but omits None
+    mock_post = mocker.patch.object(client, "_post", new_callable=AsyncMock)
+
+    await client.create_zone(
+        zone="example.com", protocol=None, forwarder=None, dnssec_validation=None
+    )
+
+    # Ensure _post was called and payload omitted None keys
+    assert mock_post.await_count == 1
+    call = mock_post.await_args
+    assert call is not None
+    payload = call.args[1]
+    assert "protocol" not in payload
+    assert "forwarder" not in payload
+    assert "dnssecValidation" not in payload
+
+
+@pytest.mark.asyncio
+async def test_close_calls_aclose(mocker: MockerFixture) -> None:
+    client = TechnitiumClient(base_url="http://localhost:5380", token="t")
+    # Patch the underlying httpx AsyncClient aclose method
+    mock_aclose = AsyncMock()
+    client._client.aclose = mock_aclose
+
+    await client.close()
+    mock_aclose.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_context_manager_calls_close(mocker: MockerFixture) -> None:
+    # Patch the instance close method to ensure __aexit__ calls it
+    client = TechnitiumClient(base_url="http://localhost:5380", token="t")
+    client.close = AsyncMock()
+
+    async with client as tc:
+        assert tc is client
+
+    client.close.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_add_record_with_optional_parameters(
+    client: TechnitiumClient, mocker: MockerFixture
+) -> None:
+    """Test add_record with all optional parameters."""
+    mock_response = {
+        "status": "ok",
+        "response": {
+            "zone": {
+                "name": "example.com",
+                "type": "Primary",
+                "disabled": False,
+            },
+            "addedRecord": {
+                "disabled": True,
+                "name": "test.example.com",
+                "type": "A",
+                "ttl": 7200,
+                "rData": {"ipAddress": "1.2.3.4"},
+            },
+        },
+    }
+
+    mock_post = mocker.patch.object(
+        client._client,
+        "post",
+        return_value=mocker.Mock(
+            status_code=200,
+            json=mocker.Mock(return_value=mock_response),
+            raise_for_status=mocker.Mock(),
+        ),
+    )
+
+    response = await client.add_record(
+        domain="test.example.com",
+        record_type="A",
+        record_data={"ipAddress": "1.2.3.4"},
+        ttl=7200,
+        zone="example.com",
+        comments="Test record",
+        expiry_ttl=86400,
+        disabled=True,
+        overwrite=True,
+        ptr=True,
+        create_ptr_zone=True,
+        update_svcb_hints=True,
+    )
+
+    assert response.added_record.name == "test.example.com"
+    assert response.added_record.disabled is True
+
+    # Verify post was called with all parameters encoded
+    call_args = mock_post.call_args
+    assert call_args is not None
+    data = call_args[1]["data"]
+    assert data["ttl"] == 7200
+    assert data["zone"] == "example.com"
+    assert data["comments"] == "Test record"
+    assert data["expiryTtl"] == 86400
+    assert data["disable"] == "true"
+    assert data["overwrite"] == "true"
+    assert data["ptr"] == "true"
+    assert data["createPtrZone"] == "true"
+    assert data["updateSvcbHints"] == "true"

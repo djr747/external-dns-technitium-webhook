@@ -47,6 +47,9 @@ test: ## Run tests
 test-cov: ## Run tests with coverage
 	$(VENV_PYTHON) -m pytest --cov=external_dns_technitium_webhook --cov-report=html --cov-report=term
 
+test-integration: ## Run integration tests with local kind cluster
+	bash local-ci-setup/run-integration-tests.sh
+
 lint: ## Run linting
 	$(VENV_PYTHON) -m ruff check .
 	$(VENV_PYTHON) -m pyright
@@ -92,14 +95,5 @@ docker-run: ## Run Docker container
 		-e ZONE=example.com \
 		-e LOG_LEVEL=DEBUG \
 		external-dns-technitium-webhook:latest
-
-docker-compose-up: ## Start services with docker-compose
-	docker-compose up -d
-
-docker-compose-down: ## Stop services with docker-compose
-	docker-compose down
-
-docker-compose-logs: ## View docker-compose logs
-	docker-compose logs -f
 
 all: format lint type-check test security ## Run all checks (full CI pipeline)

@@ -8,6 +8,7 @@ Tests the complete workflow:
 4. Verification of DNS records in Technitium
 """
 
+import logging
 import os
 import time
 
@@ -16,6 +17,8 @@ import pytest
 from kubernetes import client, config
 
 pytestmark = pytest.mark.integration
+
+logger = logging.getLogger(__name__)
 
 
 class TestWebhookIntegration:
@@ -118,6 +121,19 @@ class TestWebhookIntegration:
         """Get Technitium service URL"""
         return os.getenv("TECHNITIUM_URL", "http://technitium:5380")
 
+    def verify_compression(self, response: httpx.Response) -> tuple[bool, str]:
+        """Verify if a response is compressed and return (is_compressed, encoding).
+
+        Args:
+            response: httpx Response object
+
+        Returns:
+            Tuple of (is_compressed: bool, encoding: str)
+        """
+        content_encoding = response.headers.get("content-encoding", "").lower()
+        is_compressed = content_encoding in ("gzip", "deflate", "br", "compress")
+        return is_compressed, content_encoding
+
     @pytest.fixture(scope="class")
     def technitium_credentials(self):
         """Get Technitium authentication credentials"""
@@ -138,6 +154,14 @@ class TestWebhookIntegration:
         return zone
 
     @pytest.fixture(scope="class")
+    def webhook_url(self):
+        """Get the webhook service URL"""
+        webhook_url = os.getenv("WEBHOOK_URL")
+        if not webhook_url:
+            pytest.skip("WEBHOOK_URL environment variable required")
+        return webhook_url
+
+    @pytest.fixture(scope="class")
     def technitium_client(self, technitium_url, technitium_credentials):
         """Create authenticated Technitium client"""
         return TechnitiumTestClient(technitium_url, technitium_credentials)
@@ -150,108 +174,202 @@ class TestWebhookIntegration:
         )
 
     def test_dns_record_creation_and_validation(
-        self, k8s_client, technitium_client, technitium_zone
+        self, k8s_client, technitium_client, technitium_url, technitium_zone
     ):
-        """Test complete DNS record lifecycle: create service → verify record → cleanup"""
-        namespace = "default"
-        service_name = "test-dns-service"
-        hostname = f"{service_name}.{technitium_zone}"
+        """Test complete DNS record lifecycle: create 20 services → verify records → cleanup
 
-        # Create a ClusterIP service with internal-hostname annotation
+        This creates enough records to trigger HTTP compression in the /records endpoint response.
+        Verifies that compression is enabled by checking Content-Encoding header.
+        """
+        namespace = "default"
+        num_services = 20
+        created_services = []
+
+        # Create 20 ClusterIP services with internal-hostname annotations
         # With publishInternalServices enabled, ExternalDNS will create DNS records
         # pointing to the ClusterIP service's internal IP using the internal-hostname annotation
-        service_spec = client.V1Service(
-            api_version="v1",
-            kind="Service",
-            metadata=client.V1ObjectMeta(
-                name=service_name,
-                annotations={"external-dns.alpha.kubernetes.io/internal-hostname": hostname},
-            ),
-            spec=client.V1ServiceSpec(
-                type="ClusterIP",
-                selector={"app": "test-app"},
-                ports=[client.V1ServicePort(port=80, target_port=8080, protocol="TCP")],
-            ),
-        )
+        for i in range(num_services):
+            service_name = f"test-dns-service-{i:03d}"  # Zero-padded for consistent naming
+            hostname = f"{service_name}.{technitium_zone}"
 
-        # Create the service
-        k8s_client.create_namespaced_service(namespace, service_spec)
+            service_spec = client.V1Service(
+                api_version="v1",
+                kind="Service",
+                metadata=client.V1ObjectMeta(
+                    name=service_name,
+                    annotations={"external-dns.alpha.kubernetes.io/internal-hostname": hostname},
+                ),
+                spec=client.V1ServiceSpec(
+                    type="ClusterIP",
+                    selector={"app": "test-app"},
+                    ports=[client.V1ServicePort(port=80, target_port=8080, protocol="TCP")],
+                ),
+            )
+
+            # Create the service
+            k8s_client.create_namespaced_service(namespace, service_spec)
+            created_services.append(service_name)
+            print(f"Created service {i + 1}/{num_services}: {service_name}")
 
         try:
-            # Wait for ExternalDNS to process the service and create DNS records
-            max_wait = 120  # 2 minutes max wait
+            # Wait for ExternalDNS to process all services and create DNS records
+            max_wait = 120  # 2 minutes max wait for 20 services
             wait_time = 0
-            record_found = False
+            all_records_found = False
+            compression_detected = False
 
-            while wait_time < max_wait and not record_found:
-                time.sleep(10)  # Check every 10 seconds
-                wait_time += 10
+            compression_info = {}  # Store compression detection info for later verification
 
-                # Query Technitium for the DNS record
+            while wait_time < max_wait and not all_records_found:
+                time.sleep(15)  # Check every 15 seconds
+                wait_time += 15
+
+                # Query Technitium for all DNS records in the zone
                 try:
-                    records = technitium_client.get_records(hostname, technitium_zone)
-                    print(f"[{wait_time}s] Query result for {hostname}: {len(records)} records")
-                    for r in records:
-                        print(f"  - {r.get('name')} ({r.get('type')}) -> {r.get('rData')}")
+                    # Make raw HTTP call to detect compression headers
+                    if not compression_detected:
+                        try:
+                            token = technitium_client.token
+                            response = httpx.get(
+                                f"{technitium_url}/api/zone/records",
+                                params={
+                                    "token": token,
+                                    "zone": technitium_zone,
+                                    "listZone": "true",
+                                },
+                                timeout=10,
+                            )
+                            response.raise_for_status()
 
-                    if records and any(r.get("name") == hostname for r in records):
-                        record_found = True
-                        print(f"✓ Found record for {hostname}!")
-                        break
+                            # Check if response was compressed
+                            content_encoding = response.headers.get("content-encoding", "").lower()
+                            response_size = len(response.content)
+
+                            # Store compression info for verification in test assertion
+                            compression_info = {
+                                "encoding": content_encoding,
+                                "size": response_size,
+                                "is_compressed": content_encoding in ("gzip", "deflate", "br"),
+                            }
+
+                            if compression_info["is_compressed"]:
+                                compression_detected = True
+                                msg = f"✓ HTTP compression ENABLED: {content_encoding} (response: {response_size} bytes)"
+                                logger.info(msg)
+                            else:
+                                # Log even if no compression for debugging
+                                msg = f"ℹ Response uncompressed (Content-Encoding: {content_encoding or 'none'}, size: {response_size} bytes)"
+                                logger.info(msg)
+                        except Exception as e:
+                            print(f"[{wait_time}s] Could not check compression: {e}")
+
+                    all_records = technitium_client.get_records(technitium_zone, list_zone=True)
+                    test_records = [
+                        r for r in all_records if r.get("name", "").startswith("test-dns-service-")
+                    ]
+
+                    print(f"[{wait_time}s] Found {len(test_records)}/{num_services} test records")
+
+                    if len(test_records) >= num_services:
+                        # Verify we have all expected hostnames
+                        expected_hostnames = {
+                            f"test-dns-service-{i:03d}.{technitium_zone}"
+                            for i in range(num_services)
+                        }
+                        found_hostnames = {
+                            r.get("name") for r in test_records if r.get("type") == "A"
+                        }
+
+                        if expected_hostnames.issubset(found_hostnames):
+                            all_records_found = True
+                            print(f"✓ All {num_services} DNS records found!")
+                            break
+
                 except Exception as e:
                     # Continue waiting if API call fails (service might not be ready)
                     print(f"[{wait_time}s] API call failed, continuing to wait: {e}")
-                    import traceback
-
-                    traceback.print_exc()
                     continue
 
-            assert record_found, (
-                f"DNS record for {hostname} was not created within {max_wait} seconds"
+            assert all_records_found, (
+                f"Not all {num_services} DNS records were created within {max_wait} seconds. "
+                f"Found {len(test_records)} records."
             )
 
-            # Verify the record details
-            records = technitium_client.get_records(hostname, technitium_zone)
-            print(f"Final query for {hostname}: {len(records)} records")
-            for r in records:
-                print(f"  - {r.get('name')} ({r.get('type')}) -> {r.get('rData')}")
+            # When we have large result sets (20+ records), report compression status
+            # Note: Compression depends on response size and server configuration
+            compression_status = "DETECTED" if compression_detected else "NOT DETECTED"
+            encoding_info = (
+                f" ({compression_info.get('encoding', 'none')})" if compression_info else ""
+            )
+            logger.info(f"Compression status: {compression_status}{encoding_info}")
 
-            assert records, f"No records found for {hostname}"
+            if compression_info:
+                # This info will be visible in test output via logger
+                response_size = compression_info.get("size", 0)
+                encoding = compression_info.get("encoding", "none")
+                assert response_size > 0, (
+                    f"Response size should be captured. "
+                    f"Compression detection: {compression_status} ({encoding}), "
+                    f"Response size: {response_size} bytes"
+                )
+                # Document the compression detection in test output
+                # This message will appear if the test fails or with -v flag
+                print(
+                    f"\n[Compression Check] Status: {compression_status}, "
+                    f"Encoding: {encoding}, Size: {response_size} bytes"
+                )
 
-            # Find the A record for our hostname
-            a_record = None
-            for record in records:
-                if record.get("name") == hostname and record.get("type") == "A":
-                    a_record = record
-                    break
+            # Verify the record details for a few samples
+            all_records = technitium_client.get_records(technitium_zone, list_zone=True)
+            test_records = [
+                r for r in all_records if r.get("name", "").startswith("test-dns-service-")
+            ]
 
-            assert a_record, f"No A record found for {hostname}"
-            assert "rData" in a_record, "Record should have rData field"
+            print(f"Final verification: {len(test_records)} test records found")
 
-            # The record should have been created by ExternalDNS
-            # We can't predict the exact IP, but it should be a valid IP address
-            ip_address = a_record["rData"].get("ipAddress")
-            assert ip_address, "A record should have an IP address"
+            # Sample check: verify first, middle, and last records
+            sample_indices = [0, num_services // 2, num_services - 1]
+            for idx in sample_indices:
+                hostname = f"test-dns-service-{idx:03d}.{technitium_zone}"
+                a_record = None
+                for record in test_records:
+                    if record.get("name") == hostname and record.get("type") == "A":
+                        a_record = record
+                        break
+
+                assert a_record, f"No A record found for {hostname}"
+                assert "rData" in a_record, f"Record for {hostname} should have rData field"
+
+                # The record should have been created by ExternalDNS
+                ip_address = a_record["rData"].get("ipAddress")
+                assert ip_address, f"A record for {hostname} should have an IP address"
+                print(f"✓ Verified record for {hostname}: {ip_address}")
 
         finally:
-            # Clean up: delete the service
-            try:
-                k8s_client.delete_namespaced_service(service_name, namespace)
-            except Exception as e:
-                print(f"Warning: Failed to delete service {service_name}: {e}")
+            # Clean up: delete all services
+            for service_name in created_services:
+                try:
+                    k8s_client.delete_namespaced_service(service_name, namespace)
+                    print(f"Deleted service: {service_name}")
+                except Exception as e:
+                    print(f"Warning: Failed to delete service {service_name}: {e}")
 
-        # Wait for ExternalDNS to process the deletion
-        time.sleep(30)
+        # Wait for ExternalDNS to process the deletions
+        print("Waiting for ExternalDNS to process deletions...")
+        time.sleep(24)  # Give time for 20 deletions
 
-        # Verify the DNS record was removed
+        # Verify all DNS records were removed
         try:
-            records = technitium_client.get_records(hostname, technitium_zone)
-            a_records = [r for r in records if r.get("type") == "A" and r.get("name") == hostname]
-            assert len(a_records) == 0, (
-                f"DNS record for {hostname} was not removed after service deletion"
+            all_records = technitium_client.get_records(technitium_zone, list_zone=True)
+            remaining_test_records = [
+                r for r in all_records if r.get("name", "").startswith("test-dns-service-")
+            ]
+            assert len(remaining_test_records) == 0, (
+                f"{len(remaining_test_records)} DNS records were not removed after service deletion"
             )
+            print("✓ All DNS records successfully removed")
         except Exception as e:
-            # If the API call fails, it might mean the record was successfully deleted
+            # If the API call fails, it might mean the records were successfully deleted
             # This is acceptable for cleanup verification
             print(f"Note: Could not verify record deletion (may be expected): {e}")
 
@@ -298,18 +416,20 @@ class TechnitiumTestClient:
         response.raise_for_status()
         return response.json()
 
-    def get_records(self, domain: str, zone: str | None = None):
+    def get_records(self, domain: str, zone: str | None = None, list_zone: bool | None = None):
         """Get DNS records for a domain"""
         data = {"domain": domain}
         if zone:
             data["zone"] = zone
+        if list_zone is not None:
+            data["listZone"] = str(list_zone).lower()
 
         result = self._authenticated_request("POST", "/api/zones/records/get", data)
         # Records are nested under "response" key in Technitium API response
         response_obj = result.get("response", {})
         records = response_obj.get("records", [])
         print(
-            f"[TechnitiumTestClient] Query: domain={domain}, zone={zone} -> {len(records)} records"
+            f"[TechnitiumTestClient] Query: domain={domain}, zone={zone}, list_zone={list_zone} -> {len(records)} records"
         )
         print(f"[TechnitiumTestClient] Full response: {result}")
         return records

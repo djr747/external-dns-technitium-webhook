@@ -17,7 +17,7 @@ class Config(BaseSettings):
     )
 
     listen_address: str = "0.0.0.0"
-    listen_port: int = 8888  # Changed from 3000 to 8888 for Helm sidecar compatibility
+    listen_port: int = 8888
     health_port: int = 8080  # Separate port for health checks (security separation)
     technitium_url: str  # Required: Technitium DNS API endpoint
     technitium_username: str  # Required: Technitium authentication username
@@ -35,6 +35,8 @@ class Config(BaseSettings):
     # Intended to be mounted via ConfigMap (like username/password secrets).
     # When verify_ssl is True and ca_bundle_file is set, the file must exist and be readable.
     technitium_ca_bundle_file: str | None = None
+    technitium_enable_request_compression: bool = False
+    technitium_compression_threshold_bytes: int = 32768
 
     def __init__(self, **values: Any) -> None:
         """Allow instantiation without explicit arguments for env loading."""

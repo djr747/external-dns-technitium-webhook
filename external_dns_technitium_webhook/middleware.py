@@ -23,7 +23,12 @@ class RateLimiter:
     Each client gets a bucket of tokens that refills over time.
     """
 
-    def __init__(self, requests_per_minute: int = 1000, burst: int = 10):
+    def __init__(
+        self,
+        requests_per_minute: int = 1000,
+        burst: int = 10,
+        now_fn: Callable[[], datetime] | None = None,
+    ):
         """Initialize rate limiter.
 
         Args:
@@ -32,8 +37,10 @@ class RateLimiter:
         """
         self.rate = requests_per_minute / 60.0  # Tokens per second
         self.burst = float(burst)
+        # Allow injecting a deterministic clock for testing
+        self._now: Callable[[], datetime] = now_fn or datetime.now
         self.tokens: dict[str, float] = defaultdict(lambda: self.burst)
-        self.last_update: dict[str, datetime] = defaultdict(datetime.now)
+        self.last_update: dict[str, datetime] = defaultdict(self._now)
         self._lock = asyncio.Lock()
 
     async def check_rate_limit(self, client_id: str) -> bool:
@@ -46,7 +53,7 @@ class RateLimiter:
             True if within limit, False if rate limit exceeded
         """
         async with self._lock:
-            now = datetime.now()
+            now = self._now()
             time_passed = (now - self.last_update[client_id]).total_seconds()
 
             # Add tokens based on time passed (refill bucket)
@@ -82,6 +89,19 @@ def set_rate_limiter(rl: RateLimiter) -> None:
     """
     global rate_limiter
     rate_limiter = rl
+
+
+def configure_rate_limiter(
+    requests_per_minute: int, burst: int, now_fn: Callable[[], datetime] | None = None
+) -> None:
+    """Create and set the module-level RateLimiter from explicit inputs.
+
+    This helper is intended for application initialization where rate limits
+    are loaded from configuration (env vars or a settings object). It is a
+    convenience wrapper around :func:`set_rate_limiter`.
+    """
+    rl = RateLimiter(requests_per_minute=requests_per_minute, burst=burst, now_fn=now_fn)
+    set_rate_limiter(rl)
 
 
 async def rate_limit_middleware(

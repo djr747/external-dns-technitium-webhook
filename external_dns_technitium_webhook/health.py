@@ -32,7 +32,6 @@ def create_health_app() -> FastAPI:
         openapi_url=None,
     )
 
-    @app.get("/health")
     async def health() -> dict[str, str]:
         if is_main_server_ready():
             return {"status": "ok"}
@@ -42,7 +41,6 @@ def create_health_app() -> FastAPI:
                 detail="Main application not responding",
             )
 
-    @app.get("/healthz")
     async def healthz() -> dict[str, str]:
         """Kubernetes-style health check endpoint for liveness/readiness probes."""
         if is_main_server_ready():
@@ -52,5 +50,9 @@ def create_health_app() -> FastAPI:
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Main application not responding",
             )
+
+    # Register routes explicitly
+    app.add_api_route("/health", health, methods=["GET"])
+    app.add_api_route("/healthz", healthz, methods=["GET"])
 
     return app

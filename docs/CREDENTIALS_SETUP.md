@@ -113,9 +113,15 @@ volumes:
 | `DOMAIN_FILTERS` | No | None | Semicolon-separated list of domains |
 | `TECHNITIUM_VERIFY_SSL` | No | `true` | Enable/disable SSL certificate verification (set to `false` for self-signed certs) |
 | `TECHNITIUM_CA_BUNDLE_FILE` | No | None | Path to PEM file with CA certificate |
+| `TECHNITIUM_TIMEOUT` | No | `10.0` | HTTP client timeout in seconds |
+| `TECHNITIUM_FAILOVER_URLS` | No | None | Semicolon-separated list of failover Technitium URLs for HA |
+| `TECHNITIUM_ENABLE_REQUEST_COMPRESSION` | No | `false` | Enable gzip compression for large request bodies |
+| `TECHNITIUM_COMPRESSION_THRESHOLD_BYTES` | No | `32768` | Minimum request size for compression (32KB) |
+| `CATALOG_ZONE` | No | None | Catalog zone name for advanced DNS setups |
 | `LOG_LEVEL` | No | `INFO` | Logging level: DEBUG, INFO, WARNING, ERROR |
 | `LISTEN_ADDRESS` | No | `0.0.0.0` | Address to bind the webhook server |
- endpoints |
+| `REQUESTS_PER_MINUTE` | No | `1000` | Rate limiting: requests per minute |
+| `RATE_LIMIT_BURST` | No | `10` | Rate limiting: burst allowance |
 
 ## Troubleshooting
 
