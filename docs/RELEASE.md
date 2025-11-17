@@ -4,32 +4,13 @@ This document describes the complete release process for the ExternalDNS Technit
 
 ## Overview
 
-Releases are **automated and triggered by version changes** in `pyproject.toml`. There are two types of dependency updates:
+Releases are **automated and triggered by version changes** in `pyproject.toml`. The workflow detects when the `version =` line changes and automatically creates a release.
 
-| Type | Target Branch | Version Bump | Release? | Automation |
-|------|---------------|--------------|----------|-----------|
-| **Production deps** (fastapi, uvicorn, httpx, pydantic) | `develop` | ✅ Manual | ✅ Yes | Full release pipeline |
-| **Dev/test deps** (pytest, ruff, mypy, semgrep) | `main` | ❌ No | ❌ No | Skipped by version detection |
+## Release Process
 
-## Production Dependency Release Workflow
+### Step 1: Update Version and CHANGELOG
 
-When a **production dependency needs updating** (fastapi, uvicorn, httpx, pydantic):
-
-### Step 1: Accept Dependabot PR on develop
-
-Dependabot creates a PR targeting the `develop` branch:
-
-```
-dependabot/pip/develop/fastapi-0.121.0 → develop
-```
-
-1. Review the PR for compatibility
-2. Run tests: `make test`
-3. **Merge to develop** (don't merge to main directly)
-
-### Step 2: Update Version and CHANGELOG
-
-On the `develop` branch:
+When ready to release:
 
 ```bash
 # 1. Update pyproject.toml version
@@ -44,34 +25,35 @@ On the `develop` branch:
 
 # 3. Commit both changes
 git add pyproject.toml CHANGELOG.md
-git commit -m "deps: bump fastapi to 0.121.0 + release v0.2.9"
+git commit -m "release: v0.2.9 - fastapi update"
 ```
 
-### Step 3: Merge to Main (Triggers Release)
+### Step 2: Create Pull Request
 
-Create a pull request from `develop` → `main`:
+Create a pull request to merge your changes to the `main` branch:
 
 ```bash
-gh pr create --base main --head develop \
-  --title "release: v0.2.9 - fastapi update" \
-  --body "Production release with fastapi update"
+git push origin your-branch
+gh pr create --base main --head your-branch \
+  --title "release: v0.2.9" \
+  --body "Release version 0.2.9 with fastapi update"
 ```
 
-### Step 4: Merge and Watch Release Pipeline
+### Step 3: Merge and Watch Release Pipeline
 
-When you **merge develop → main**, the release workflow automatically:
+When you **merge to main**, the release workflow automatically:
 
 1. **check-version-changed**: Detects that `version =` line changed ✅
-2. **validate-version**: Extracts v0.2.9 from pyproject.toml
+2. **validate-version**: Extracts version from pyproject.toml
 3. **create-git-tag**: Creates git tag `v0.2.9` and pushes
-4. **create-release**: Creates GitHub Release draft
-5. **build-and-publish-container**: 
+4. **create-release**: Creates GitHub Release with auto-generated notes
+5. **build-and-publish-container**:
    - Builds multi-arch Docker image (linux/amd64, linux/arm64)
-   - Pushes to registry
-   - Generates and uploads SBOM (Anchore/SPDX format)
-   - Runs Trivy container scan
-   - Generates SARIF report
-6. **update-changelog**: Updates release notes with artifacts
+   - Pushes to GitHub Container Registry
+   - Generates and uploads SBOM (SPDX format)
+   - Runs Trivy security scan
+   - Signs image with Cosign
+6. **update-changelog**: Updates CHANGELOG.md with release info
 
 **Monitor the workflow:**
 ```bash
@@ -82,55 +64,65 @@ gh run watch -R djr747/external-dns-technitium-webhook
 gh run list --workflow=release.yml --limit=1
 ```
 
-## Development Dependency Workflow
+## Dependency Updates
 
-When **dev/test dependencies update** (pytest, ruff, mypy, semgrep):
+### Production Dependencies (fastapi, uvicorn, httpx, pydantic)
 
-### Automatic Handling
+When Dependabot creates a PR for production dependencies:
+
+1. **Review the PR** for compatibility and test it
+2. **Merge to main** (Dependabot typically targets main)
+3. **The version detection will skip release** (no version change)
+4. **Manually bump version** if you want to release:
+   - Update `pyproject.toml` version
+   - Update `CHANGELOG.md`
+   - Commit and push to trigger release
+
+### Development Dependencies (pytest, ruff, mypy, semgrep)
+
+When dev/test dependencies update:
 
 1. **Dependabot creates PR on `main` branch** automatically
 2. **Merge directly to main** - no manual steps needed
-3. **Version detection catches it**: 
+3. **Version detection catches it**:
    - Checks if `version =` line changed
-   - It didn't (only pytest changed)
+   - It didn't (only dependencies changed)
    - **Release is skipped automatically** ✅
 4. **No git tag, no release, no container build**
 
-This is the desired behavior - dev changes don't trigger releases.
+This is the desired behavior - dev dependency changes don't trigger releases.
 
-## If Something Goes Wrong
+## Troubleshooting
 
-### Case 1: PR Created on Wrong Branch
+### Release didn't trigger after merge
 
-**Problem:** Dependabot creates production dep PR on `main` instead of `develop`
+**Check:**
+1. Was `version =` line changed in pyproject.toml?
+2. Look at workflow run details in Actions tab
+3. Check `check-version-changed` job output
+
+### Container image not built
+
+**Check:**
+1. Is `build-and-publish-container` job running?
+2. Check Docker registry push logs
+3. Verify registry credentials are valid
+
+### SBOM upload failed
 
 **Solution:**
-1. Close the PR
-2. Comment: `@dependabot reopen` then `@dependabot recreate`
-3. Wait for Dependabot to recreate it targeting `develop`
+- Release.yml uses `gh release upload` with permissions
+- If it fails, check `contents: write` permission is set in workflow
 
-OR manually apply the changes to develop following "Step 1-3" above.
+### Forgot to bump version
 
-### Case 2: Forgot to Bump Version
-
-**Problem:** Merged develop → main but forgot to update `version =` in pyproject.toml
+**Problem:** Merged changes but forgot to update `version =` in pyproject.toml
 
 **Solution:**
 1. Create a new commit on main bumping the version
 2. Push to main
 3. Release workflow will detect the version change and trigger
 4. No need to revert - just fix forward
-
-### Case 3: Want to Release Without Dependency Changes
-
-**Problem:** Fixed a bug/security issue, want to release without dependency updates
-
-**Solution:**
-1. On develop branch: bump `version =` in pyproject.toml
-2. Update CHANGELOG.md
-3. Commit and push to develop
-4. Merge develop → main
-5. Release workflow triggers automatically
 
 ## Important Files
 
@@ -140,7 +132,6 @@ OR manually apply the changes to develop following "Step 1-3" above.
 | `CHANGELOG.md` | Release notes and history |
 | `.github/workflows/release.yml` | Release automation pipeline |
 | `.github/dependabot.yml` | Dependency update configuration |
-| `.github/copilot-instructions.md` | AI assistant instructions (references this file) |
 
 ## Version Numbering
 
@@ -214,17 +205,17 @@ The release workflow requires:
 
 ## FAQs
 
-**Q: Can I release without going through develop?**
-A: You can, but it's not recommended. The develop branch workflow ensures testing and review before release.
+**Q: How do I trigger a release?**
+A: Update the `version =` line in `pyproject.toml` and merge to main. The release workflow detects the change and runs automatically.
 
 **Q: What if a dev dependency has a critical security fix?**
-A: It still goes through the normal dev workflow on main. Version detection skips the release, but the code is deployed with your next production release.
+A: Dev dependency updates don't trigger releases (version detection skips them). The fix will be included in your next production release.
 
 **Q: How do I rollback a release?**
 A: Releases are immutable in this setup. Create a new patch release fixing the issue instead.
 
 **Q: Can multiple people work on releases simultaneously?**
-A: Yes - each person creates PRs from develop → main. Merge conflicts are handled by git. Only one release workflow runs at a time per merge.
+A: Yes - each person creates PRs to main. Merge conflicts are handled by git. Only one release workflow runs at a time per merge.
 
 **Q: What's in the SBOM?**
 A: All Python dependencies (from pyproject.toml requirements). Useful for compliance, license tracking, and security audits.
@@ -241,4 +232,3 @@ A: Typically 5-10 minutes:
 - [CHANGELOG.md](../CHANGELOG.md) - Release history
 - [.github/workflows/release.yml](../.github/workflows/release.yml) - Automation source
 - [.github/dependabot.yml](../.github/dependabot.yml) - Dependency update config
-- [.github/copilot-instructions.md](.github/copilot-instructions.md) - AI assistant context

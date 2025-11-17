@@ -10,7 +10,8 @@ FastAPI webhook provider that lets [ExternalDNS](https://github.com/kubernetes-s
 ## Highlights
 - Async-first architecture with graceful startup/shutdown and token auto-renewal
 - Technitium client with failover rotation, zone auto-create, and catalog enrollment
-- Rate limiting and request size middleware for defensive operation
+- Rate limiting and request size middleware for defensive operation (enabled by default: REQUESTS_PER_MINUTE=1000, RATE_LIMIT_BURST=10)
+- Optional request compression (gzip) for large payloads sent to remote Technitium servers
 - 10 DNS record types supported; provider-specific properties are preserved end-to-end
 
 ## How It Fits Together
@@ -77,14 +78,17 @@ Run the project's quality gates before opening a pull request:
 make lint        # Ruff lint + format check
 make type-check  # mypy (strict) + Pyright
 make test-cov    # pytest with coverage
+make test-integration  # Integration tests with local kind cluster
 ```
-See `docs/DEVELOPMENT.md` for contributor tips and Docker usage.
+See `docs/DEVELOPMENT.md` for contributor tips and `docs/LOCAL_TESTING.md` for local integration testing.
 
 ## Documentation Map
 - [API reference](docs/API.md) – Webhook endpoints and payload examples
 - [Credentials setup](docs/CREDENTIALS_SETUP.md) – Create Technitium credentials and Kubernetes secrets
 - [Kubernetes deployment (Helm)](docs/deployment/kubernetes.md) – Helm-based sidecar deployment
-- [Development guide](docs/DEVELOPMENT.md) – Extended development guidance
+- [Development guide](docs/DEVELOPMENT.md) – Extended development guidance and coding conventions
+- [Local testing guide](docs/LOCAL_TESTING.md) – Running integration tests locally with kind
+- [Performance & reliability](docs/PERFORMANCE.md) – Optimization techniques and tuning guide
 - [CI/CD & security](docs/CICD_SECURITY.md) – Overview of GitHub Actions CI/CD and security tooling
 - [Architecture](docs/architecture/ARCHITECTURE.md) – System diagram and runtime details
 - [Security policy](docs/SECURITY.md) – Security policy and disclosure process

@@ -8,10 +8,16 @@ import sys
 import threading
 
 from fastapi import FastAPI
-from uvicorn import Config as UvicornConfig
-from uvicorn import Server
 
 from .config import Config as AppConfig
+
+# Lazy import placeholders for uvicorn symbols. We avoid importing uvicorn
+# (which pulls in `websockets`) at module import time so unit tests that
+# import this module don't trigger upstream deprecation warnings. Tests can
+# still patch `Server` (the attribute exists) because we expose these
+# names at module scope.
+UvicornConfig = None
+Server = None
 
 
 def run_health_server(health_app: FastAPI, config: AppConfig) -> None:
@@ -26,6 +32,13 @@ def run_health_server(health_app: FastAPI, config: AppConfig) -> None:
         sys.stderr.write("[HEALTH-THREAD-START] Health server thread function called\n")
         sys.stderr.flush()
 
+        # Import uvicorn.Config and Server lazily to avoid importing
+        # optional protocol backends (like `websockets`) during module
+        # import. This keeps unit tests clean of those third-party
+        # deprecation warnings unless the servers are actually started.
+        from uvicorn import Config as UvicornConfig
+        from uvicorn import Server as UvicornServer
+
         health_config = UvicornConfig(
             app=health_app,
             host=config.listen_address,
@@ -33,8 +46,12 @@ def run_health_server(health_app: FastAPI, config: AppConfig) -> None:
             log_level=config.log_level.lower(),
             access_log=False,
             log_config=None,  # Disable uvicorn's default logging
+            ws="websockets-sansio",  # Use sans-I/O implementation, avoid deprecated websockets.legacy
         )
-        health_server = Server(health_config)
+        # Use the real Server class unless tests have patched the module
+        # level `Server` symbol. Prefer the patched value when present.
+        real_server_cls = Server if Server is not None else UvicornServer
+        health_server = real_server_cls(health_config)
 
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
@@ -45,8 +62,13 @@ def run_health_server(health_app: FastAPI, config: AppConfig) -> None:
 
         try:
             loop.run_until_complete(health_server.serve())
-        except BaseException as e:
-            # Catch BaseException to handle both regular exceptions and shutdown signals (SystemExit, KeyboardInterrupt)
+        except (KeyboardInterrupt, SystemExit) as e:
+            # Log shutdown signals at INFO level without stack trace
+            logging.info(f"[HEALTH] Health server received shutdown signal: {type(e).__name__}")
+            sys.stderr.write(f"[HEALTH] Shutdown: {e}\n")
+            sys.stderr.flush()
+        except Exception as e:
+            # Log unexpected exceptions at ERROR level with stack trace
             logging.error(f"[HEALTH] Health server serve error: {e}", exc_info=True)
             sys.stderr.write(f"[HEALTH] Error: {e}\n")
             sys.stderr.flush()
@@ -61,14 +83,22 @@ def run_health_server(health_app: FastAPI, config: AppConfig) -> None:
 
 def run_servers(app: FastAPI, health_app: FastAPI, config: AppConfig) -> None:
     logging.info("run_servers() called")
+    # Lazy-import uvicorn symbols here as well to avoid importing
+    # the websockets backend during module import.
+    from uvicorn import Config as UvicornConfig
+    from uvicorn import Server as UvicornServer
+
     main_config = UvicornConfig(
         app=app,
         host=config.listen_address,
         port=config.listen_port,
         log_level=config.log_level.lower(),
         log_config=None,  # Disable uvicorn's default logging, use app's structured logging
+        ws="websockets-sansio",  # Use sans-I/O implementation, avoid deprecated websockets.legacy
     )
-    main_server = Server(main_config)
+    real_server_cls = Server if Server is not None else UvicornServer
+    main_server = real_server_cls(main_config)
+
     health_config = UvicornConfig(
         app=health_app,
         host=config.listen_address,
@@ -76,8 +106,9 @@ def run_servers(app: FastAPI, health_app: FastAPI, config: AppConfig) -> None:
         log_level=config.log_level.lower(),
         access_log=False,
         log_config=None,  # Disable uvicorn's default logging
+        ws="websockets-sansio",  # Use sans-I/O implementation, avoid deprecated websockets.legacy
     )
-    health_server = Server(health_config)
+    health_server = real_server_cls(health_config)
     shutdown_event = threading.Event()
 
     def handle_signal(signum: int, _frame: object) -> None:

@@ -360,8 +360,39 @@ Potential areas for optimization:
 1. **DNS Record Caching** - Cache Technitium responses to reduce API calls
 2. **Connection Pool Tuning** - Optimize httpx connection limits
 3. **Batch API Support** - Single API call for multiple DNS records (if Technitium supports)
-4. **Response Compression** - Compress large responses (gzip)
-5. **Keep-alive Tuning** - Optimize HTTP keep-alive settings
+4. **Keep-alive Tuning** - Optimize HTTP keep-alive settings
+
+## Implemented Optimizations
+
+### Response Compression (Gzip)
+
+The webhook automatically compresses HTTP responses using gzip when beneficial:
+
+**How it works:**
+- Automatically enabled for responses ≥ 1 KB
+- Only applied when client sends `Accept-Encoding: gzip` header
+- Modern HTTP clients handle decompression transparently
+
+**Configuration:**
+- Compression is always enabled (no environment variable to disable)
+- Minimum response size threshold: 1 KB
+
+**Benefits:**
+- 50-80% bandwidth reduction for large DNS record sets
+- Especially beneficial over high-latency or metered networks
+- No performance penalty on the server (compression happens after processing)
+
+**Implementation:**
+The webhook uses FastAPI's built-in `GZipMiddleware`, which handles compression negotiation automatically.
+
+**Example:**
+```bash
+# Client automatically handles compression
+curl http://localhost:8888/records
+
+# Or explicitly request compression
+curl -H "Accept-Encoding: gzip" http://localhost:8888/records
+```
 
 ## Contributing Performance Improvements
 

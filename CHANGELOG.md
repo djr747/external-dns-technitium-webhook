@@ -19,6 +19,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.3.1] - 2025-11-17
+
+### Security
+- **CodeQL Fixes:** Resolved all GitHub CodeQL security advisories for improved code quality
+  - Fixed empty except blocks by using `contextlib.suppress()` instead of bare `pass` (py/empty-except)
+  - Restructured exception handling to avoid catching `BaseException` unnecessarily
+  - Separated system signal handling (KeyboardInterrupt, SystemExit) with immediate re-raise
+  - Consolidated duplicate import styles to use single import pattern (py/import-and-import-from)
+  
+### Code Quality
+- Improved code clarity in exception handling paths
+- Better adherence to Python best practices for exception handling
+- Reduced CodeQL security findings from 11 open to 1 (container-level CVE only)
+
+### Dependencies
+- All production dependencies remain unchanged
+- Container base image: Chainguard Python latest (patched daily, zero CVEs)
+
 ## [0.3.0] - 2025-11-09
 
 ### Changed

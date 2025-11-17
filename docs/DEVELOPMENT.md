@@ -21,8 +21,7 @@ make all
 - Python 3.13+ (3.14 supported for local development, production uses Chainguard Python 3.13)
 - pip and virtualenv
 - Git
-- (Optional) Docker + Docker Compose
-- (Optional) Make
+- (Optional) kind, kubectl, helm - For local integration testing
 
 ## Environment Setup
 
@@ -42,22 +41,6 @@ make install-dev
 # or
 pip install -e ".[dev]"
 ```
-
-### Configure Environment
-
-```bash
-# For HTTP (default Technitium setup)
-export TECHNITIUM_URL="http://localhost:5380"
-# For HTTPS (use port 53443 and disable SSL verification for self-signed certs)
-# export TECHNITIUM_URL="https://localhost:53443"
-# export TECHNITIUM_VERIFY_SSL="false"
-
-export TECHNITIUM_USERNAME="admin"
-export TECHNITIUM_PASSWORD="admin"
-export ZONE="example.com"
-```
-
-**Note:** Technitium DNS uses port 5380 for HTTP and port 53443 for HTTPS.
 
 ## Development Workflow
 
@@ -102,14 +85,30 @@ curl http://127.0.0.1:8080/health
 curl http://127.0.0.1:8080/healthz
 ```
 
-### Docker Development
+### Integration Testing with Local Kubernetes
+
+For end-to-end testing with real Kubernetes services, use the kind-based local cluster setup:
 
 ```bash
-make docker-build
-make docker-compose-up
-make docker-compose-logs
-make docker-compose-down
+# Create local cluster and deploy services (one-time setup)
+bash local-ci-setup/setup.sh
+
+# Configure environment for integration tests
+export TECHNITIUM_URL="http://localhost:30380"  # NodePort service
+export TECHNITIUM_USERNAME="admin"
+export TECHNITIUM_PASSWORD="admin"
+export ZONE="example.com"
+
+# Run integration tests
+make test-integration
+
+# Clean up cluster
+kind delete cluster --name local-integration-test
 ```
+
+**Note:** The integration tests automatically handle port-forwarding and credential extraction from Kubernetes secrets. The environment variables above are set by the test script but shown here for reference.
+
+See [docs/LOCAL_TESTING.md](LOCAL_TESTING.md) for detailed guidance on local integration testing.
 
 ## Project Structure
 
@@ -127,22 +126,37 @@ external-dns-technitium-webhook/
 │   ├── health.py              # Health check endpoint logic
 │   └── __init__.py            # Package initialization
 ├── tests/
-│   ├── conftest.py            # Pytest fixtures
-│   ├── test_config.py         # Configuration tests
-│   ├── test_handlers.py       # Webhook endpoint tests
-│   ├── test_technitium_client.py  # Client tests
-│   ├── test_models.py         # Model validation tests
-│   ├── test_app_state.py      # Application state tests
-│   ├── test_middleware.py     # Middleware tests
-│   ├── test_server.py         # Server thread tests
-│   ├── test_health.py         # Health endpoint tests
-│   ├── test_main.py           # Main app tests
-│   ├── test_python_version.py # Python version compatibility test
+│   ├── unit/                  # Unit tests for each module
+│   │   ├── conftest.py        # Pytest fixtures for unit tests
+│   │   ├── test_config.py     # Configuration tests
+│   │   ├── test_handlers.py   # Webhook endpoint tests
+│   │   ├── test_technitium_client.py  # Client tests
+│   │   ├── test_models.py     # Model validation tests
+│   │   ├── test_app_state.py  # Application state tests
+│   │   ├── test_middleware.py # Middleware tests
+│   │   ├── test_server.py     # Server thread tests
+│   │   ├── test_health.py     # Health endpoint tests
+│   │   ├── test_main.py       # Main app tests
+│   │   └── test_python_version.py # Python version compatibility test
+│   ├── integration/           # Integration tests with real services
+│   │   ├── conftest.py        # Pytest configuration for integration tests
+│   │   ├── test_webhook_integration.py  # End-to-end webhook tests
+│   │   ├── k8s/               # Kubernetes manifests for testing
+│   │   ├── helm/              # Helm values for integration testing
+│   │   └── fixtures/          # Technitium initialization scripts
 │   └── __init__.py            # Test package initialization
+├── local-ci-setup/
+│   ├── setup.sh               # Create local kind cluster with services
+│   └── run-integration-tests.sh  # Run integration tests with port-forward
 ├── docs/                      # Documentation
-├── Dockerfile                 # Container image
-├── docker-compose.yml         # Development stack
-├── Makefile                   # Common tasks
+│   ├── LOCAL_TESTING.md       # Guide for local integration testing
+│   ├── DEVELOPMENT.md         # This file
+│   ├── API.md                 # Webhook API reference
+│   ├── PERFORMANCE.md         # Performance tuning guide
+│   └── deployment/            # Deployment documentation
+├── Dockerfile                 # Container image for production deployment
+├── Makefile                   # Development tasks and CI commands
+├── pyproject.toml             # Python project configuration (dependencies, etc)
 └── README.md                  # Project overview
 ```
 

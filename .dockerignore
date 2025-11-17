@@ -40,7 +40,6 @@ docs/
 
 # Development
 Makefile
-docker-compose.yml
 scripts/
 
 # Misc

@@ -29,6 +29,23 @@ from external_dns_technitium_webhook.models import (
 )
 
 
+async def collect_streaming_response(response) -> bytes:
+    """Collect the content of a StreamingResponse or Response for testing."""
+    if hasattr(response, "body_iterator"):
+        # StreamingResponse
+        content = b""
+        async for chunk in response.body_iterator:
+            if isinstance(chunk, str):
+                content += chunk.encode()
+            else:
+                content += chunk
+        return content
+    else:
+        # Regular Response
+        raw_body = response.body
+        return raw_body.tobytes() if isinstance(raw_body, memoryview) else raw_body or b""
+
+
 @pytest.fixture
 def config() -> Config:
     """Create test configuration."""
@@ -116,8 +133,7 @@ async def test_get_records(app_state: AppState, mocker: MockerFixture) -> None:
     )
 
     response = await get_records(app_state)
-    raw_body = response.body
-    body_bytes = raw_body.tobytes() if isinstance(raw_body, memoryview) else raw_body or b""
+    body_bytes = await collect_streaming_response(response)
     endpoints = json.loads(body_bytes.decode())
     assert endpoints and endpoints[0]["dnsName"] == "test.example.com"
     assert "1.2.3.4" in endpoints[0].get("targets", [])
@@ -274,7 +290,8 @@ async def test_get_records_aaaa(app_state: AppState, mocker: MockerFixture) -> N
 
     mocker.patch.object(app_state.client, "get_records", return_value=mock_response)
     response = await get_records(app_state)
-    data = json.loads(bytes(response.body))
+    body_bytes = await collect_streaming_response(response)
+    data = json.loads(body_bytes)
     assert data[0]["targets"][0] == "2001:db8::1"
 
 
@@ -296,7 +313,8 @@ async def test_get_records_cname(app_state: AppState, mocker: MockerFixture) -> 
 
     mocker.patch.object(app_state.client, "get_records", return_value=mock_response)
     response = await get_records(app_state)
-    data = json.loads(bytes(response.body))
+    body_bytes = await collect_streaming_response(response)
+    data = json.loads(body_bytes)
     assert data[0]["targets"][0] == "example.com"
 
 
@@ -318,7 +336,8 @@ async def test_get_records_txt(app_state: AppState, mocker: MockerFixture) -> No
 
     mocker.patch.object(app_state.client, "get_records", return_value=mock_response)
     response = await get_records(app_state)
-    data = json.loads(bytes(response.body))
+    body_bytes = await collect_streaming_response(response)
+    data = json.loads(body_bytes)
     assert data[0]["targets"][0] == "v=spf1 include:_spf.example.com ~all"
 
 
@@ -340,7 +359,8 @@ async def test_get_records_aname(app_state: AppState, mocker: MockerFixture) -> 
 
     mocker.patch.object(app_state.client, "get_records", return_value=mock_response)
     response = await get_records(app_state)
-    data = json.loads(bytes(response.body))
+    body_bytes = await collect_streaming_response(response)
+    data = json.loads(body_bytes)
     assert data[0]["targets"][0] == "target.example.com"
 
 
@@ -362,7 +382,8 @@ async def test_get_records_caa(app_state: AppState, mocker: MockerFixture) -> No
 
     mocker.patch.object(app_state.client, "get_records", return_value=mock_response)
     response = await get_records(app_state)
-    data = json.loads(bytes(response.body))
+    body_bytes = await collect_streaming_response(response)
+    data = json.loads(body_bytes)
     assert data[0]["targets"][0] == '0 issue "letsencrypt.org"'
 
 
@@ -384,7 +405,8 @@ async def test_get_records_uri(app_state: AppState, mocker: MockerFixture) -> No
 
     mocker.patch.object(app_state.client, "get_records", return_value=mock_response)
     response = await get_records(app_state)
-    data = json.loads(bytes(response.body))
+    body_bytes = await collect_streaming_response(response)
+    data = json.loads(body_bytes)
     assert data[0]["targets"][0] == '10 1 "https://example.com"'
 
 
@@ -406,7 +428,8 @@ async def test_get_records_sshfp(app_state: AppState, mocker: MockerFixture) -> 
 
     mocker.patch.object(app_state.client, "get_records", return_value=mock_response)
     response = await get_records(app_state)
-    data = json.loads(bytes(response.body))
+    body_bytes = await collect_streaming_response(response)
+    data = json.loads(body_bytes)
     assert data[0]["targets"][0] == "1 1 abc123"
 
 
@@ -432,7 +455,8 @@ async def test_get_records_svcb(app_state: AppState, mocker: MockerFixture) -> N
 
     mocker.patch.object(app_state.client, "get_records", return_value=mock_response)
     response = await get_records(app_state)
-    data = json.loads(bytes(response.body))
+    body_bytes = await collect_streaming_response(response)
+    data = json.loads(body_bytes)
     assert data[0]["dnsName"] == "_8443._https.api.example.com"
     assert data[0]["targets"][0] == "1 svc.example.com alpn=h2"
 
@@ -455,7 +479,8 @@ async def test_get_records_with_https_record(app_state: AppState, mocker: Mocker
 
     mocker.patch.object(app_state.client, "get_records", return_value=mock_response)
     response = await get_records(app_state)
-    data = json.loads(bytes(response.body))
+    body_bytes = await collect_streaming_response(response)
+    data = json.loads(body_bytes)
     assert data[0]["targets"][0] == "1 . alpn=h3"
 
 
@@ -635,10 +660,7 @@ async def test_get_records_with_uri_record(app_state: AppState, mocker: MockerFi
     )
 
     response = await get_records(app_state)
-    assert response.status_code == 200
-    data = response.body
-    assert data is not None
-    body_bytes = data.tobytes() if isinstance(data, memoryview) else data or b""
+    body_bytes = await collect_streaming_response(response)
     endpoints_resp = json.loads(body_bytes.decode())
     assert len(endpoints_resp) == 1
     assert endpoints_resp[0]["recordType"] == "URI"

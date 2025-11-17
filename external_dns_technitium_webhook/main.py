@@ -5,7 +5,7 @@ import logging
 import sys
 import threading
 from collections.abc import AsyncGenerator, Callable
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import cast
@@ -16,7 +16,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from . import handlers
 from .app_state import AppState
 from .config import Config as AppConfig
-from .middleware import RequestSizeLimitMiddleware, rate_limit_middleware
+from .middleware import (
+    RequestSizeLimitMiddleware,
+    configure_rate_limiter,
+    rate_limit_middleware,
+)
 from .models import Changes, Endpoint, GetZoneOptionsResponse
 from .responses import ExternalDNSResponse
 from .technitium_client import TechnitiumError
@@ -93,12 +97,10 @@ _apply_structured_formatter_to_logger("httpx")
 logger.debug("main.py imported")
 
 # Coverage hook for testing
-try:
+with suppress(ImportError):
     import coverage
 
-    coverage.process_startup()  # pragma: no cover
-except ImportError:  # pragma: no cover
-    pass
+    coverage.process_startup()
 
 
 @asynccontextmanager
@@ -113,6 +115,20 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     """
     # Startup
     config = AppConfig()
+
+    # Configure module-level rate limiter from environment-backed settings
+    try:
+        configure_rate_limiter(
+            requests_per_minute=config.requests_per_minute,
+            burst=config.rate_limit_burst,
+        )
+        logger.debug(
+            "Configured rate limiter from settings: requests_per_minute=%s, burst=%s",
+            config.requests_per_minute,
+            config.rate_limit_burst,
+        )
+    except Exception:
+        logger.exception("Failed to configure rate limiter from settings")
 
     # Configure logging level
     logging.getLogger().setLevel(config.log_level)
@@ -274,7 +290,7 @@ async def setup_technitium_connection(state: AppState) -> None:
                 )
 
             return
-        except Exception as exc:  # noqa: BLE001 - ensure we try all endpoints
+        except Exception as exc:
             logger.error(
                 "Failed to initialize Technitium endpoint %s: %s",
                 endpoint,
@@ -534,10 +550,24 @@ def create_app() -> FastAPI:
     )
 
     # Exception handlers for proper JSON responses
-    @app.exception_handler(RuntimeError)
-    async def runtime_error_handler(_request: Request, exc: RuntimeError) -> ExternalDNSResponse:
+    async def runtime_error_handler(_request: Request, exc: Exception) -> ExternalDNSResponse:
         """Handle RuntimeError exceptions with JSON response."""
-        if "Service not ready yet" in str(exc):
+        try:
+            # Prefer explicit readiness from application state when available
+            state = get_app_state(_request.app)
+            if getattr(state, "ready", None) is False:
+                # Service not ready - return 503 with JSON
+                return ExternalDNSResponse(
+                    status_code=503,
+                    content={"error": "Service not ready yet. Try again later."},
+                )
+        except Exception:
+            # If app state isn't available, fall back to text-based detection
+            pass
+
+        # Backwards-compatible, case-insensitive message detection
+        err_text = str(exc).lower()
+        if "service not ready" in err_text or "not ready yet" in err_text:
             # Service not ready - return 503 with JSON
             return ExternalDNSResponse(
                 status_code=503,
@@ -549,7 +579,6 @@ def create_app() -> FastAPI:
             content={"error": "Internal server error"},
         )
 
-    @app.exception_handler(Exception)
     async def general_exception_handler(_request: Request, _exc: Exception) -> ExternalDNSResponse:
         """Handle general exceptions with JSON response."""
         return ExternalDNSResponse(
@@ -557,24 +586,50 @@ def create_app() -> FastAPI:
             content={"error": "Internal server error"},
         )
 
+    # ExceptionGroup is available in Python 3.11+
+    async def exception_group_handler(_request: Request, _exc: Exception) -> ExternalDNSResponse:
+        """Catch ExceptionGroup from TaskGroup failures and return 500 JSON."""
+        logger.exception("Unhandled exception group: %s", _exc)
+        return ExternalDNSResponse(
+            status_code=500,
+            content={"error": "Internal server error"},
+        )
+
+    # Register exception handlers
+    app.add_exception_handler(RuntimeError, runtime_error_handler)
+    app.add_exception_handler(Exception, general_exception_handler)
+    app.add_exception_handler(ExceptionGroup, exception_group_handler)
+
     # Routes
     state_dependency = create_state_dependency(app)
 
-    @app.get("/")
     async def domain_filter(
         state: AppState = Depends(state_dependency),
     ) -> Response:
         """Negotiate domain filter."""
-        return await handlers.negotiate_domain_filter(state)
+        try:
+            return await handlers.negotiate_domain_filter(state)
+        except (Exception, KeyboardInterrupt, SystemExit) as exc:
+            logger.exception("Unhandled exception in domain_filter: %s", exc)
+            # Convert service-not-ready to 503, others to 500
+            if "Service not ready yet" in str(exc):
+                return ExternalDNSResponse(
+                    status_code=503,
+                    content={"error": "Service not ready yet. Try again later."},
+                )
+            return ExternalDNSResponse(
+                status_code=500,
+                content={"error": "Internal server error"},
+            )
 
-    @app.get("/records")
     async def records(
         state: AppState = Depends(state_dependency),
     ) -> Response:
         """Get current DNS records."""
+        # Call handler with only state to preserve compatibility with
+        # unit tests that mock handlers.get_records expecting a single arg.
         return await handlers.get_records(state)
 
-    @app.post("/adjustendpoints")
     async def adjust(
         endpoints: list[Endpoint],
         state: AppState = Depends(state_dependency),
@@ -582,13 +637,18 @@ def create_app() -> FastAPI:
         """Adjust endpoints."""
         return await handlers.adjust_endpoints(state, endpoints)
 
-    @app.post("/records", status_code=204)
     async def apply(
         changes: Changes,
         state: AppState = Depends(state_dependency),
     ) -> Response:
         """Apply DNS record changes."""
         return await handlers.apply_record(state, changes)
+
+    # Register routes explicitly
+    app.add_api_route("/", domain_filter, methods=["GET"], response_class=Response)
+    app.add_api_route("/records", records, methods=["GET"], response_class=Response)
+    app.add_api_route("/adjustendpoints", adjust, methods=["POST"], response_class=Response)
+    app.add_api_route("/records", apply, methods=["POST"], status_code=204, response_class=Response)
 
     return app
 
@@ -603,14 +663,28 @@ async def exception_logging_middleware(request: Request, call_next: Callable) ->
     try:
         response = await call_next(request)
         return cast(Response, response)
-    except Exception as e:
-        logger.error("Unhandled exception: %s", e, exc_info=True)
+    except (KeyboardInterrupt, SystemExit):
+        # Re-raise system-critical signals immediately
+        raise
+    except Exception as e:  # catches Exception and ExceptionGroup in 3.11+
+        # Check ExceptionGroup for modern Python versions
+        try:
+            is_group = isinstance(e, ExceptionGroup)
+        except Exception:
+            is_group = False
+
+        if is_group:
+            logger.exception("Unhandled exception group: %s", e)
+        else:
+            logger.error("Unhandled exception: %s", e, exc_info=True)
+
         # Return 503 for service not ready errors
         if "Service not ready yet" in str(e):
             return ExternalDNSResponse(
                 status_code=503,
                 content={"message": "Service Unavailable"},
             )
+
         # Return 500 for other errors
         return ExternalDNSResponse(
             status_code=500,
@@ -628,13 +702,13 @@ async def log_requests_middleware(request: Request, call_next: Callable) -> Resp
 
 
 def main() -> None:
-    from .health import create_health_app  # pragma: no cover
-    from .server import run_servers  # pragma: no cover
+    from .health import create_health_app
+    from .server import run_servers
 
     health_app = create_health_app()
     config = AppConfig()
     run_servers(app, health_app, config)
 
 
-if __name__ == "__main__":  # pragma: no cover
-    main()  # pragma: no cover
+if __name__ == "__main__":
+    main()

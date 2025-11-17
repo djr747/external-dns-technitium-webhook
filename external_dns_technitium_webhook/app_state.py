@@ -37,6 +37,8 @@ class AppState:
             timeout=config.technitium_timeout,
             verify_ssl=config.technitium_verify_ssl,
             ca_bundle=config.technitium_ca_bundle_file,
+            enable_request_compression=config.technitium_enable_request_compression,
+            compression_threshold_bytes=config.technitium_compression_threshold_bytes,
         )
         # Use provided helper to replace the module-level rate limiter.
         # This avoids a direct module-level assignment which some static
@@ -53,6 +55,12 @@ class AppState:
         self.is_writable = False
         self.server_role: str | None = None
         self.catalog_membership = None
+        # Lightweight in-memory counters for basic operational metrics.
+        # These are intentionally simple so they are safe to use in tests
+        # and in environments without a metrics backend. Projects that
+        # want structured metrics can wire a Prometheus client or similar
+        # and use these fields as hooks.
+        self.record_fetch_count = 0
 
     async def ensure_ready(self) -> None:
         """Ensure the application is ready.
@@ -92,6 +100,8 @@ class AppState:
             timeout=self.config.technitium_timeout,
             verify_ssl=self.config.technitium_verify_ssl,
             ca_bundle=self.config.technitium_ca_bundle_file,
+            enable_request_compression=self.config.technitium_enable_request_compression,
+            compression_threshold_bytes=self.config.technitium_compression_threshold_bytes,
         )
         self.active_endpoint = normalized
         await old_client.close()

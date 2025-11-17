@@ -51,18 +51,13 @@ export IMAGE_TAG="external-dns-technitium-webhook:${COMMIT_SHA}"
 docker build -t "${IMAGE_TAG}" .
 
 echo "--- Creating kind cluster (this will switch your kubectl context) ---"
+# Note: On macOS with Docker Desktop, extraPortMappings don't work reliably in kind.
+# We'll use kubectl port-forward instead after the cluster is created.
 cat > /tmp/kind-config.yaml <<EOF
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 nodes:
   - role: control-plane
-    extraPortMappings:
-      - containerPort: 5380
-        hostPort: ${HOST_PORT_WEB}
-        protocol: TCP
-      - containerPort: 53
-        hostPort: ${HOST_PORT_DNS}
-        protocol: UDP
 EOF
 kind create cluster --name "${CLUSTER_NAME}" --config /tmp/kind-config.yaml
 
@@ -119,12 +114,31 @@ kubectl --context "${KIND_CONTEXT}" wait --for=condition=Available=True deployme
 echo "---"
 echo "--- Local environment is ready! ---"
 echo "Your kubectl context has been switched to '${KIND_CONTEXT}'."
-echo "Technitium UI is available at: http://localhost:${HOST_PORT_WEB}"
 echo ""
-echo "To stream logs, use the following commands:"
-echo "  Webhook:      kubectl --context ${KIND_CONTEXT} logs -l app.kubernetes.io/name=external-dns -c webhook-provider -f"
-echo "  ExternalDNS:  kubectl --context ${KIND_CONTEXT} logs -l app.kubernetes.io/name=external-dns -c external-dns -f"
+echo "=== Next Steps ==="
 echo ""
-echo "To clean up the cluster and restore your original context, run:"
-echo "  kind delete cluster --name ${CLUSTER_NAME} ${RESTORE_COMMAND}"
+echo "1. Run integration tests:"
+echo "   bash local-ci-setup/run-integration-tests.sh"
+echo ""
+echo "   This script will:"
+echo "   - Set up kubectl port-forwarding to Technitium (localhost:30380)"
+echo "   - Extract credentials from the Kubernetes secret"
+echo "   - Run pytest with proper environment variables"
+echo "   - Stream logs for debugging"
+echo ""
+echo "2. To manually interact with the cluster:"
+echo "   kubectl --context ${KIND_CONTEXT} get pods -n default"
+echo ""
+echo "3. To access Technitium UI (requires port-forward in separate terminal):"
+echo "   kubectl --context ${KIND_CONTEXT} port-forward svc/technitium 5380:5380 -n default"
+echo "   Then open: http://localhost:5380"
+echo ""
+echo "4. To stream logs:"
+echo "   Webhook:      kubectl --context ${KIND_CONTEXT} logs -l app.kubernetes.io/name=external-dns -c webhook -f"
+echo "   ExternalDNS:  kubectl --context ${KIND_CONTEXT} logs -l app.kubernetes.io/name=external-dns -c external-dns -f"
+echo "   Technitium:   kubectl --context ${KIND_CONTEXT} logs -l app=technitium -f"
+echo ""
+echo "5. To clean up and restore your original context:"
+echo "   kind delete cluster --name ${CLUSTER_NAME} ${RESTORE_COMMAND}"
+echo ""
 echo "---"
