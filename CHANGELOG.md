@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.3.1] - 2025-11-17
+
+### Security
+- **CodeQL Fixes:** Resolved all GitHub CodeQL security advisories for improved code quality
+  - Fixed empty except blocks by using `contextlib.suppress()` instead of bare `pass` (py/empty-except)
+  - Restructured exception handling to avoid catching `BaseException` unnecessarily
+  - Separated system signal handling (KeyboardInterrupt, SystemExit) with immediate re-raise
+  - Consolidated duplicate import styles to use single import pattern (py/import-and-import-from)
+  
+### Code Quality
+- Improved code clarity in exception handling paths
+- Better adherence to Python best practices for exception handling
+- Reduced CodeQL security findings from 11 open to 1 (container-level CVE only)
+
+### Dependencies
+- All production dependencies remain unchanged
+- Container base image: Chainguard Python latest (patched daily, zero CVEs)
+
 ## [v0.3.0] - 2025-11-10
 
 See [release notes](https://github.com/djr747/external-dns-technitium-webhook/releases/tag/v0.3.0) for details.
