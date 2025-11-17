@@ -13,7 +13,6 @@ from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 from pytest_mock import MockerFixture
 
-import external_dns_technitium_webhook.main
 from external_dns_technitium_webhook.app_state import AppState
 from external_dns_technitium_webhook.config import Config
 from external_dns_technitium_webhook.handlers import (
@@ -1427,12 +1426,16 @@ async def test_ensure_catalog_membership_zone_created_but_not_available(
 
 def test_import_main() -> None:
     """Ensure main.py can be imported without errors."""
-    assert external_dns_technitium_webhook.main is not None
+    import sys
+
+    assert "external_dns_technitium_webhook.main" in sys.modules
 
 
 def test_force_import_main() -> None:
     """Force import of main.py to ensure coverage."""
-    assert external_dns_technitium_webhook.main is not None
+    import sys
+
+    assert "external_dns_technitium_webhook.main" in sys.modules
 
 
 def test_coverage_process_startup() -> None:
@@ -1787,6 +1790,7 @@ async def trigger_exception_group():
         # If coverage import fails, the except block handles it
         # We can't easily test this since it runs at module import time
         # But we verify the pattern exists in the code
+        import sys
 
         # Module should be importable even if coverage fails
-        assert external_dns_technitium_webhook.main is not None
+        assert "external_dns_technitium_webhook.main" in sys.modules
