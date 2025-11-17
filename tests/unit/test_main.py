@@ -13,6 +13,7 @@ from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 from pytest_mock import MockerFixture
 
+import external_dns_technitium_webhook.main
 from external_dns_technitium_webhook.app_state import AppState
 from external_dns_technitium_webhook.config import Config
 from external_dns_technitium_webhook.handlers import (
@@ -52,7 +53,9 @@ from external_dns_technitium_webhook.models import (
     LoginResponse,
     ZoneInfo,
 )
-from external_dns_technitium_webhook.technitium_client import TechnitiumError
+from external_dns_technitium_webhook.technitium_client import (
+    TechnitiumError,
+)
 
 
 def test_app_creation(mocker: MockerFixture) -> None:
@@ -1424,16 +1427,12 @@ async def test_ensure_catalog_membership_zone_created_but_not_available(
 
 def test_import_main() -> None:
     """Ensure main.py can be imported without errors."""
-    import external_dns_technitium_webhook.main as main_module
-
-    assert main_module is not None
+    assert external_dns_technitium_webhook.main is not None
 
 
 def test_force_import_main() -> None:
     """Force import of main.py to ensure coverage."""
-    import external_dns_technitium_webhook.main as main_module
-
-    assert main_module is not None
+    assert external_dns_technitium_webhook.main is not None
 
 
 def test_coverage_process_startup() -> None:
@@ -1442,11 +1441,14 @@ def test_coverage_process_startup() -> None:
     # Re-import main to trigger the coverage hook
     import sys
 
+    # Remove from sys.modules to force reimport, then re-import to trigger coverage hook
     if "external_dns_technitium_webhook.main" in sys.modules:
         del sys.modules["external_dns_technitium_webhook.main"]
 
-    # This will execute the try/except block for coverage.process_startup()
-    import external_dns_technitium_webhook.main as main_module  # noqa: F401
+    # Import fresh to trigger coverage.process_startup()
+    import importlib
+
+    main_module = importlib.import_module("external_dns_technitium_webhook.main")
 
     # Verify the module is loaded
     assert main_module is not None
@@ -1779,22 +1781,12 @@ async def trigger_exception_group():
         assert response.status_code == 503
 
     @pytest.mark.asyncio
-    async def test_coverage_import_skipped_gracefully(self, mocker):
+    async def test_coverage_import_skipped_gracefully(self, mocker):  # noqa: ARG002
         """Test coverage import failure is handled gracefully."""
         # This is tested implicitly during module import
         # If coverage import fails, the except block handles it
         # We can't easily test this since it runs at module import time
         # But we verify the pattern exists in the code
-        import external_dns_technitium_webhook.main
-
-        # Module should be importable even if coverage fails
-        assert external_dns_technitium_webhook.main is not None
-        """Test coverage import failure is handled gracefully."""
-        # This is tested implicitly during module import
-        # If coverage import fails, the except block handles it
-        # We can't easily test this since it runs at module import time
-        # But we verify the pattern exists in the code
-        import external_dns_technitium_webhook.main
 
         # Module should be importable even if coverage fails
         assert external_dns_technitium_webhook.main is not None

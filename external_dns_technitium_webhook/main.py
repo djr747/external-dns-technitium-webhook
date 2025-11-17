@@ -611,7 +611,7 @@ def create_app() -> FastAPI:
         """Negotiate domain filter."""
         try:
             return await handlers.negotiate_domain_filter(state)
-        except BaseException as exc:
+        except (Exception, KeyboardInterrupt, SystemExit) as exc:
             logger.exception("Unhandled exception in domain_filter: %s", exc)
             # Convert service-not-ready to 503, others to 500
             if "Service not ready yet" in str(exc):
