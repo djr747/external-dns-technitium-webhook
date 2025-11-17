@@ -244,7 +244,8 @@ def test_run_health_server_system_exit_in_serve(mocker, config):
 
     # Verify SystemExit was handled and logged at INFO level
     assert any(
-        "Health server received shutdown signal" in str(call) for call in mock_logging_info.call_args_list
+        "Health server received shutdown signal" in str(call)
+        for call in mock_logging_info.call_args_list
     )
     mock_loop.close.assert_called_once()
 
