@@ -5,7 +5,7 @@ import logging
 import sys
 import threading
 from collections.abc import AsyncGenerator, Callable
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import cast
@@ -97,12 +97,10 @@ _apply_structured_formatter_to_logger("httpx")
 logger.debug("main.py imported")
 
 # Coverage hook for testing
-try:
+with suppress(ImportError):
     import coverage
 
     coverage.process_startup()
-except ImportError:
-    pass
 
 
 @asynccontextmanager
