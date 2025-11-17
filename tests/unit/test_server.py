@@ -231,20 +231,20 @@ def test_run_health_server_system_exit_in_serve(mocker, config):
     mock_server.return_value.serve = mocker.Mock()
     mocker.patch("external_dns_technitium_webhook.server.UvicornConfig")
     mock_loop = mocker.Mock()
-    # SystemExit is a BaseException, not Exception, so it's caught by our BaseException handler
+    # SystemExit is now caught separately and logged at INFO level
     mock_loop.run_until_complete = mocker.Mock(side_effect=SystemExit(1))
     mock_loop.close = mocker.Mock()
     mocker.patch(
         "external_dns_technitium_webhook.server.asyncio.new_event_loop", return_value=mock_loop
     )
     mocker.patch("external_dns_technitium_webhook.server.asyncio.set_event_loop")
-    mock_logging_error = mocker.patch("external_dns_technitium_webhook.server.logging.error")
+    mock_logging_info = mocker.patch("external_dns_technitium_webhook.server.logging.info")
 
     server_mod.run_health_server(health_app, config)
 
-    # Verify SystemExit was handled and logged
+    # Verify SystemExit was handled and logged at INFO level
     assert any(
-        "Health server serve error" in str(call) for call in mock_logging_error.call_args_list
+        "Health server received shutdown signal" in str(call) for call in mock_logging_info.call_args_list
     )
     mock_loop.close.assert_called_once()
 
