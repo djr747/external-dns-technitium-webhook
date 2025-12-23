@@ -25,6 +25,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.4.0] - 2025-12-23
+
+### ⚠️ Breaking Changes
+- **Python 3.13 Support Removed:** Minimum Python version is now 3.14+
+  - Updated `requires-python` constraint to `>=3.14,<3.15`
+  - Updated Python classifiers to remove 3.13 support
+  - This aligns with Chainguard Python base image latest tag
+
+### Dependencies
+- **Updated Production Dependencies:**
+  - FastAPI: 0.121.2 → 0.127.0 (improved Pydantic 2 compatibility)
+  - Uvicorn: 0.38.0 → 0.40.0 (bug fixes and performance improvements)
+  - Pydantic: 2.12.4 → 2.12.5 (patch fixes)
+  - All packages tested for full Python 3.14 compatibility
+
+- **Updated Development Dependencies:**
+  - pytest: 8.2+ → 9.0+ (new test runner features)
+  - ruff: 0.14.5 → 0.14.10 (improved linting)
+  - mypy: 1.18.2 → 1.19.1 (better type checking)
+
+### CI/CD
+- Updated GitHub Actions to latest stable versions
+- All workflows validated for Python 3.14 compatibility
+- Improved security scanning pipeline
+
 ## [v0.3.1] - 2025-11-17
 
 ### Security
