@@ -32,7 +32,7 @@ dependencies = [
     # Bumped to releases that declare support for modern Python (>=3.8) and
     # are known to be compatible with CPython 3.13 when no upper bound
     # is present in their metadata.
-    "fastapi==0.121.1",
+    "fastapi==0.127.0",
     "uvicorn[standard]==0.38.0",
     "httpx==0.28.1",
     "pydantic==2.12.4",
