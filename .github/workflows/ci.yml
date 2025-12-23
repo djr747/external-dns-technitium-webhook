@@ -83,7 +83,7 @@ jobs:
           pytest tests/unit/ --cov=external_dns_technitium_webhook --cov-report=xml --cov-report=html --cov-report=term-missing --cov-fail-under=95
 
       - name: Upload coverage report
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: coverage-report
           path: htmlcov/
@@ -125,7 +125,7 @@ jobs:
           provenance: false
 
       - name: Upload image artifact (for integration tests)
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: webhook-image-amd64
           path: /tmp/webhook-image-amd64.tar
@@ -164,7 +164,7 @@ jobs:
           cache-to: type=gha,mode=max
           provenance: false
       - name: Upload image artifact (for integration tests)
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: webhook-image-arm64
           path: /tmp/webhook-image-arm64.tar
