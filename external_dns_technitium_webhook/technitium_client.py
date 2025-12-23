@@ -146,7 +146,7 @@ class TechnitiumClient:
         """Close the HTTP client."""
         await self._client.aclose()
 
-    async def __aenter__(self) -> "TechnitiumClient":
+    async def __aenter__(self) -> TechnitiumClient:
         """Async context manager entry."""
         return self
 

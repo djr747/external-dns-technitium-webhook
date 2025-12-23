@@ -4,10 +4,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "external-dns-technitium-webhook"
-version = "0.3.1"
+version = "0.4.0"
 description = "ExternalDNS webhook provider for Technitium DNS"
 readme = "README.md"
-requires-python = ">=3.13,<3.15"
+requires-python = ">=3.14,<3.15"
 license = {text = "MIT"}
 authors = [
     {name = "Derek Robson", email = "djr747@users.noreply.github.com"}
@@ -20,9 +20,6 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
     "Topic :: Internet :: Name Service (DNS)",
     "Topic :: System :: Systems Administration",
@@ -30,28 +27,26 @@ classifiers = [
 
 dependencies = [
     # Bumped to releases that declare support for modern Python (>=3.8) and
-    # are known to be compatible with CPython 3.13 when no upper bound
+    # are known to be compatible with CPython 3.14 when no upper bound
     # is present in their metadata.
-    "fastapi==0.121.1",
-    "uvicorn[standard]==0.38.0",
+    "fastapi==0.127.0",
+    "uvicorn[standard]==0.40.0",
     "httpx==0.28.1",
-    "pydantic==2.12.4",
+    "pydantic==2.12.5",
     "pydantic-settings==2.12.0",
 ]
 
 [project.optional-dependencies]
 dev = [
-    # Keep pytest compatible with pytest-asyncio==1.3.0 (pytest<9),
-    # or upgrade pytest-asyncio to a version that supports pytest 9.
-    # For now use a compatible range to avoid dependency conflicts.
-    "pytest>=8.2,<10",
+    # Keep pytest compatible with modern versions
+    "pytest>=9.0,<10",
     "pytest-cov==7.0.0",
     "pytest-asyncio==1.3.0",
     "pytest-mock==3.15.1",
     "httpx==0.28.1",
     "kubernetes==34.1.0",
-    "ruff==0.14.5",
-    "mypy==1.18.2",
+    "ruff==0.14.10",
+    "mypy==1.19.1",
     "pyright==1.1.407",
     "semgrep",
     "types-urllib3",
@@ -68,7 +63,7 @@ include = ["external_dns_technitium_webhook*"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py313"
+target-version = "py314"
 
 [tool.ruff.lint]
 select = [
@@ -93,7 +88,7 @@ ignore = [
 "tests/*" = ["ARG", "S101"]
 
 [tool.mypy]
-python_version = "3.13"
+python_version = "3.14"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
@@ -124,7 +119,7 @@ exclude = [
 stubPath = ""
 venvPath = "."
 venv = "venv"
-pythonVersion = "3.13"
+pythonVersion = "3.14"
 pythonPlatform = "All"
 typeCheckingMode = "basic"
 reportMissingImports = true

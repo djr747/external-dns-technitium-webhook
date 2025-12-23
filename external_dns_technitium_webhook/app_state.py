@@ -106,9 +106,7 @@ class AppState:
         self.active_endpoint = normalized
         await old_client.close()
 
-    def start_token_renewal(
-        self, renewer: Callable[["AppState"], Coroutine[Any, Any, None]]
-    ) -> None:
+    def start_token_renewal(self, renewer: Callable[[AppState], Coroutine[Any, Any, None]]) -> None:
         """Start the background token renewal loop if not already running."""
 
         if self._token_task and not self._token_task.done():
