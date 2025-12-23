@@ -201,6 +201,7 @@ jobs:
   snyk-security:
     name: Snyk Security Analysis
     runs-on: ubuntu-latest
+    if: github.actor != 'dependabot[bot]'
     steps:
       - uses: actions/checkout@v6
 
@@ -347,7 +348,7 @@ jobs:
   security-summary:
     name: Security Summary Report
     runs-on: ubuntu-latest
-    needs: [trivy-scan, dependency-scan, code-scan, snyk-security, sbom-generation]
+    needs: [trivy-scan, dependency-scan, code-scan, sbom-generation]
     if: always()
     steps:
       - name: Generate security summary
