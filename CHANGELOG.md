@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.4.1] - 2025-12-23
+
+### Fixed
+- **CodeQL Alert Fix:** Refactored token task cleanup to use `asyncio.gather(return_exceptions=True)` instead of `contextlib.suppress()` for better async pattern compliance and clearer static analysis
+- Removed unused `contextlib.suppress` import from app_state.py
+
 ## [v0.4.0] - 2025-12-23
 
 See [release notes](https://github.com/djr747/external-dns-technitium-webhook/releases/tag/v0.4.0) for details.
