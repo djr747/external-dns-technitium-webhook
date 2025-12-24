@@ -50,7 +50,7 @@ jobs:
 
       - name: Create Pull Request
         if: steps.check_update.outputs.update_needed == 'true'
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@v8
         with:
           commit-message: "chore: update Python requires-python to ${{ steps.get_version.outputs.python_version }} from Chainguard image"
           title: "chore: Update Python version to ${{ steps.get_version.outputs.python_version }} (nightly)"
