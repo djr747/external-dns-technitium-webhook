@@ -290,6 +290,7 @@ jobs:
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: 'trivy-release-scan.sarif'
+          category: 'release-trivy'
 
       - name: Sign container image
         run: |
