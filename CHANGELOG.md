@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 - **CodeQL Alert Fix:** Refactored token task cleanup to use `asyncio.gather(return_exceptions=True)` instead of `contextlib.suppress()` for better async pattern compliance and clearer static analysis
 - Removed unused `contextlib.suppress` import from app_state.py
+- **GitHub Advanced Security Warning:** Added explicit `category` to scheduled rebuild Trivy SARIF upload to prevent stale configuration warnings in code scanning
 
 ## [v0.4.0] - 2025-12-23
 
