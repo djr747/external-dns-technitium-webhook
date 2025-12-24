@@ -118,6 +118,7 @@ jobs:
         if: always()
         with:
           sarif_file: 'trivy-results.sarif'
+          category: 'rebuild-image-trivy'
 
       - name: Generate vulnerability report
         uses: aquasecurity/trivy-action@master

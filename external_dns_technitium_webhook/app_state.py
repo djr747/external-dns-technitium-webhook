@@ -3,7 +3,6 @@
 import asyncio
 import logging
 from collections.abc import Callable, Coroutine
-from contextlib import suppress
 from typing import Any
 
 from . import middleware
@@ -82,8 +81,7 @@ class AppState:
         """Close the application state."""
         if self._token_task:
             self._token_task.cancel()
-            with suppress(asyncio.CancelledError):
-                await self._token_task
+            await asyncio.gather(self._token_task, return_exceptions=True)
         await self.client.close()
 
     async def set_active_endpoint(self, base_url: str) -> None:
