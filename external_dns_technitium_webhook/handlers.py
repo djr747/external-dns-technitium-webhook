@@ -351,7 +351,7 @@ def _get_record_data(record_type: str, target: str) -> dict[str, Any] | None:
         # Validate IPv4
         try:
             ipaddress.IPv4Address(target)
-        except (ipaddress.AddressValueError, ValueError):
+        except ipaddress.AddressValueError, ValueError:
             logger.warning(f"Invalid IPv4 address: {target}")
             return None
         return {"ipAddress": target}
@@ -359,7 +359,7 @@ def _get_record_data(record_type: str, target: str) -> dict[str, Any] | None:
         # Validate IPv6
         try:
             ipaddress.IPv6Address(target)
-        except (ipaddress.AddressValueError, ValueError):
+        except ipaddress.AddressValueError, ValueError:
             logger.warning(f"Invalid IPv6 address: {target}")
             return None
         return {"ipAddress": target}

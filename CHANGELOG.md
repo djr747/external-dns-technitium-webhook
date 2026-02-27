@@ -2,15 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
-## [v0.4.1] - 2025-12-24
+## [v0.4.2] - 2026-02-27
 
-See [release notes](https://github.com/djr747/external-dns-technitium-webhook/releases/tag/v0.4.1) for details.
+### Dependencies
 
-All notable changes to this project will be documented in this file.
+- **Updated Production Dependencies:**
+  - FastAPI: 0.128.0 → 0.131.0 (performance improvements with Pydantic JSON serialization in Rust, deprecated ORJSONResponse and UJSONResponse)
+  - Uvicorn[standard]: 0.40.0 → 0.41.0 (improved lifespan shutdown handling, reduced log level for request limit exceeded messages)
+  - Pydantic-settings: 2.12.0 → 2.13.1 (bug fixes for bool field regressions, CLI parsing, nested env vars, self-referential models)
+
+- **Updated Development Dependencies:**
+  - Kubernetes: 34.1.0 → 35.0.0 (Kubernetes API v1.35.0 support)
+  - Ruff: 0.14.14 → 0.15.2 (expanded default rule set, improved linting capabilities)
+  - Pyright: 1.1.407 → 1.1.408 (latest version)
 
 ## [v0.4.1] - 2025-12-23
 
 ### Fixed
+
 - **CodeQL Alert Fix:** Refactored token task cleanup to use `asyncio.gather(return_exceptions=True)` instead of `contextlib.suppress()` for better async pattern compliance and clearer static analysis
 - Removed unused `contextlib.suppress` import from app_state.py
 - **GitHub Advanced Security Warning:** Added explicit `category` to scheduled rebuild Trivy SARIF upload to prevent stale configuration warnings in code scanning
@@ -19,55 +28,20 @@ All notable changes to this project will be documented in this file.
 
 See [release notes](https://github.com/djr747/external-dns-technitium-webhook/releases/tag/v0.4.0) for details.
 
-All notable changes to this project will be documented in this file.
-
 ## [v0.3.1] - 2025-11-17
 
 See [release notes](https://github.com/djr747/external-dns-technitium-webhook/releases/tag/v0.3.1) for details.
-
-All notable changes to this project will be documented in this file.
 
 ## [v0.3.0] - 2025-11-10
 
 See [release notes](https://github.com/djr747/external-dns-technitium-webhook/releases/tag/v0.3.0) for details.
 
-All notable changes to this project will be documented in this file.
-
 ## [v0.2.9] - 2025-11-04
 
 See [release notes](https://github.com/djr747/external-dns-technitium-webhook/releases/tag/v0.2.9) for details.
 
-All notable changes to this project will be documented in this file.
-
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-
-## [Unreleased]
-
-## [v0.4.0] - 2025-12-23
-
-### ⚠️ Breaking Changes
-- **Python 3.13 Support Removed:** Minimum Python version is now 3.14+
-  - Updated `requires-python` constraint to `>=3.14,<3.15`
-  - Updated Python classifiers to remove 3.13 support
-  - This aligns with Chainguard Python base image latest tag
-
-### Dependencies
-- **Updated Production Dependencies:**
-  - FastAPI: 0.121.2 → 0.127.0 (improved Pydantic 2 compatibility)
-  - Uvicorn: 0.38.0 → 0.40.0 (bug fixes and performance improvements)
-  - Pydantic: 2.12.4 → 2.12.5 (patch fixes)
-  - All packages tested for full Python 3.14 compatibility
-
-- **Updated Development Dependencies:**
-  - pytest: 8.2+ → 9.0+ (new test runner features)
-  - ruff: 0.14.5 → 0.14.10 (improved linting)
-  - mypy: 1.18.2 → 1.19.1 (better type checking)
-
-### CI/CD
-- Updated GitHub Actions to latest stable versions
-- All workflows validated for Python 3.14 compatibility
-- Improved security scanning pipeline
 
 ## [v0.3.1] - 2025-11-17
 
