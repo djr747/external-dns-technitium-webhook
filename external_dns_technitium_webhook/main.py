@@ -663,7 +663,7 @@ async def exception_logging_middleware(request: Request, call_next: Callable) ->
     try:
         response = await call_next(request)
         return cast(Response, response)
-    except (KeyboardInterrupt, SystemExit):
+    except KeyboardInterrupt, SystemExit:
         # Re-raise system-critical signals immediately
         raise
     except Exception as e:  # catches Exception and ExceptionGroup in 3.11+
