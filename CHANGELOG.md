@@ -7,9 +7,9 @@ All notable changes to this project will be documented in this file.
 ### Dependencies
 
 - **Updated Production Dependencies:**
-  - FastAPI: 0.129.0 → 0.131.0 (performance improvements with Pydantic JSON serialization in Rust, deprecated ORJSONResponse and UJSONResponse)
+  - FastAPI: 0.128.0 → 0.131.0 (performance improvements with Pydantic JSON serialization in Rust, deprecated ORJSONResponse and UJSONResponse)
   - Uvicorn[standard]: 0.40.0 → 0.41.0 (improved lifespan shutdown handling, reduced log level for request limit exceeded messages)
-  - Pydantic-settings: 2.13.0 → 2.13.1 (bug fixes for bool field regressions, CLI parsing, nested env vars, self-referential models)
+  - Pydantic-settings: 2.12.0 → 2.13.1 (bug fixes for bool field regressions, CLI parsing, nested env vars, self-referential models)
 
 - **Updated Development Dependencies:**
   - Kubernetes: 34.1.0 → 35.0.0 (Kubernetes API v1.35.0 support)
