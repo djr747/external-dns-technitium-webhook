@@ -33,6 +33,7 @@ async def test_client_login_success(client: TechnitiumClient, mocker: MockerFixt
     mock_post = mocker.patch.object(
         client._client,
         "post",
+        new_callable=AsyncMock,
         return_value=mocker.Mock(
             status_code=200,
             json=mocker.Mock(return_value=mock_response),
@@ -58,6 +59,7 @@ async def test_client_login_error(client: TechnitiumClient, mocker: MockerFixtur
     mocker.patch.object(
         client._client,
         "post",
+        new_callable=AsyncMock,
         return_value=mocker.Mock(
             status_code=200,
             json=mocker.Mock(return_value=mock_response),
@@ -82,6 +84,7 @@ async def test_client_create_zone(client: TechnitiumClient, mocker: MockerFixtur
     mocker.patch.object(
         client._client,
         "post",
+        new_callable=AsyncMock,
         return_value=mocker.Mock(
             status_code=200,
             json=mocker.Mock(return_value=mock_response),
@@ -117,6 +120,7 @@ async def test_client_add_record(client: TechnitiumClient, mocker: MockerFixture
     mocker.patch.object(
         client._client,
         "post",
+        new_callable=AsyncMock,
         return_value=mocker.Mock(
             status_code=200,
             json=mocker.Mock(return_value=mock_response),
@@ -161,6 +165,7 @@ async def test_client_add_aname_record(client: TechnitiumClient, mocker: MockerF
     mocker.patch.object(
         client._client,
         "post",
+        new_callable=AsyncMock,
         return_value=mocker.Mock(
             status_code=200,
             json=mocker.Mock(return_value=mock_response),
@@ -209,6 +214,7 @@ async def test_client_add_caa_record(client: TechnitiumClient, mocker: MockerFix
     mocker.patch.object(
         client._client,
         "post",
+        new_callable=AsyncMock,
         return_value=mocker.Mock(
             status_code=200,
             json=mocker.Mock(return_value=mock_response),
@@ -242,6 +248,7 @@ async def test_post_json_parse_error(client: TechnitiumClient, mocker: MockerFix
     mocker.patch.object(
         client._client,
         "post",
+        new_callable=AsyncMock,
         return_value=mocker.Mock(
             status_code=200,
             json=mocker.Mock(side_effect=ValueError("Invalid JSON")),
@@ -262,6 +269,7 @@ async def test_post_http_status_error(client: TechnitiumClient, mocker: MockerFi
     mocker.patch.object(
         client._client,
         "post",
+        new_callable=AsyncMock,
         return_value=mocker.Mock(
             raise_for_status=mocker.Mock(
                 side_effect=httpx.HTTPStatusError(
@@ -308,6 +316,7 @@ async def test_list_zones_with_pagination(client: TechnitiumClient, mocker: Mock
     mock_post = mocker.patch.object(
         client._client,
         "post",
+        new_callable=AsyncMock,
         return_value=mocker.Mock(
             status_code=200,
             json=mocker.Mock(return_value=mock_response),
@@ -355,6 +364,7 @@ async def test_client_add_uri_record(client: TechnitiumClient, mocker: MockerFix
     mocker.patch.object(
         client._client,
         "post",
+        new_callable=AsyncMock,
         return_value=mocker.Mock(
             status_code=200,
             json=mocker.Mock(return_value=mock_response),
@@ -409,6 +419,7 @@ async def test_client_add_svcb_record(client: TechnitiumClient, mocker: MockerFi
     mocker.patch.object(
         client._client,
         "post",
+        new_callable=AsyncMock,
         return_value=mocker.Mock(
             status_code=200,
             json=mocker.Mock(return_value=mock_response),
@@ -443,6 +454,7 @@ async def test_post_invalid_token_status(client: TechnitiumClient, mocker: Mocke
     mocker.patch.object(
         client._client,
         "post",
+        new_callable=AsyncMock,
         return_value=mocker.Mock(
             status_code=200,
             json=mocker.Mock(return_value=mock_response),
@@ -467,6 +479,7 @@ async def test_create_zone_invalid_token_error(
     mocker.patch.object(
         client._client,
         "post",
+        new_callable=AsyncMock,
         return_value=mocker.Mock(
             status_code=200,
             json=mocker.Mock(return_value=mock_response),
@@ -498,6 +511,7 @@ async def test_get_records_with_optional_params(
     mock_post = mocker.patch.object(
         client._client,
         "post",
+        new_callable=AsyncMock,
         return_value=mocker.Mock(
             status_code=200,
             json=mocker.Mock(return_value=mock_response),
@@ -529,6 +543,7 @@ async def test_delete_record_with_zone(client: TechnitiumClient, mocker: MockerF
     mock_post = mocker.patch.object(
         client._client,
         "post",
+        new_callable=AsyncMock,
         return_value=mocker.Mock(
             status_code=200,
             json=mocker.Mock(return_value=mock_response),
@@ -560,6 +575,7 @@ async def test_post_raw_unexpected_response_format(
     mocker.patch.object(
         client._client,
         "post",
+        new_callable=AsyncMock,
         return_value=mocker.Mock(
             status_code=200,
             json=mocker.Mock(return_value=[]),
@@ -578,6 +594,7 @@ async def test_post_raw_unexpected_status(client: TechnitiumClient, mocker: Mock
     mocker.patch.object(
         client._client,
         "post",
+        new_callable=AsyncMock,
         return_value=mocker.Mock(
             status_code=200,
             json=mocker.Mock(return_value={"status": "weird"}),
@@ -675,6 +692,7 @@ async def test_list_catalog_zones(client: TechnitiumClient, mocker: MockerFixtur
     mocker.patch.object(
         client._client,
         "post",
+        new_callable=AsyncMock,
         return_value=mocker.Mock(
             status_code=200,
             json=mocker.Mock(return_value=mock_response),
@@ -707,6 +725,7 @@ async def test_get_zone_options_with_catalog_names(
     mock_post = mocker.patch.object(
         client._client,
         "post",
+        new_callable=AsyncMock,
         return_value=mocker.Mock(
             status_code=200,
             json=mocker.Mock(return_value=mock_response),
@@ -868,6 +887,7 @@ async def test_request_compression_enabled(client: TechnitiumClient, mocker: Moc
     mock_post = mocker.patch.object(
         client._client,
         "post",
+        new_callable=AsyncMock,
         return_value=mocker.Mock(
             status_code=200,
             json=mocker.Mock(return_value=mock_response),
@@ -897,6 +917,7 @@ async def test_request_compression_disabled(
     mock_post = mocker.patch.object(
         client._client,
         "post",
+        new_callable=AsyncMock,
         return_value=mocker.Mock(
             status_code=200,
             json=mocker.Mock(return_value=mock_response),
@@ -1001,6 +1022,7 @@ async def test_add_record_with_optional_parameters(
     mock_post = mocker.patch.object(
         client._client,
         "post",
+        new_callable=AsyncMock,
         return_value=mocker.Mock(
             status_code=200,
             json=mocker.Mock(return_value=mock_response),

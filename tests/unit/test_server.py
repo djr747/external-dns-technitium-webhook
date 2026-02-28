@@ -27,7 +27,7 @@ def test_run_servers_starts_both_servers(mocker, config):
     app = FastAPI()
     health_app = FastAPI()
     mock_server = mocker.patch("external_dns_technitium_webhook.server.Server")
-    mock_server.return_value.serve = mocker.AsyncMock()
+    mock_server.return_value.serve = mocker.Mock()
     mocker.patch("external_dns_technitium_webhook.server.UvicornConfig")
     mock_thread = mocker.patch("external_dns_technitium_webhook.server.threading.Thread")
     mock_asyncio_run = mocker.patch("external_dns_technitium_webhook.server.asyncio.run")
@@ -86,7 +86,7 @@ def test_run_servers_health_thread_exception(mocker, config):
         instance = mocker.Mock()
         if len(server_instances) == 0:
             # First call is main server
-            instance.serve = mocker.AsyncMock()
+            instance.serve = mocker.Mock()
         else:
             # Second call is health server
             instance.serve = mock_health_serve
@@ -189,6 +189,7 @@ def test_run_health_server_exception_in_serve(mocker, config):
     mock_server.return_value.serve = mocker.Mock()
     mocker.patch("external_dns_technitium_webhook.server.UvicornConfig")
     mock_loop = mocker.Mock()
+    # Simulate serve() raising an exception when run in the loop
     mock_loop.run_until_complete = mocker.Mock(side_effect=Exception("Serve failed"))
     mock_loop.close = mocker.Mock()
     mocker.patch(
@@ -231,6 +232,7 @@ def test_run_health_server_system_exit_in_serve(mocker, config):
     mock_server.return_value.serve = mocker.Mock()
     mocker.patch("external_dns_technitium_webhook.server.UvicornConfig")
     mock_loop = mocker.Mock()
+    # SystemExit is now caught separately and logged at INFO level
     # SystemExit is now caught separately and logged at INFO level
     mock_loop.run_until_complete = mocker.Mock(side_effect=SystemExit(1))
     mock_loop.close = mocker.Mock()
