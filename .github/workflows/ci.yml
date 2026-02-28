@@ -9,6 +9,8 @@ on:
       - pyproject.toml
       - '**/*.py'
       - 'Dockerfile'
+      - '.github/workflows/ci.yml'
+      - 'tests/**'
   pull_request:
     branches: [ main, develop ]
   workflow_dispatch:
