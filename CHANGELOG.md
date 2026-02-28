@@ -2,11 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
-## [v0.4.2] - 2026-02-27
+## [v0.4.3] - 2026-02-28
 
-See [release notes](https://github.com/djr747/external-dns-technitium-webhook/releases/tag/v0.4.2) for details.
+### Changed
 
-All notable changes to this project will be documented in this file.
+- Updated documentation across the repository for clarity and accuracy.
+- Adjusted CI/CD workflows (`ci.yml`, `release.yml`, `security.yml`) with recent improvements.
+- Minor code updates in `main.py`, `health.py`, and `technitium_client.py`.
+- Bumped package version and `__version__` constants.
+
+### Removed
+
+- Deleted outdated issue templates under `issues/` directory.
 
 ## [v0.4.2] - 2026-02-27
 

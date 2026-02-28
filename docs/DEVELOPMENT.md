@@ -18,7 +18,7 @@ make all
 
 ## Prerequisites
 
-- Python 3.13+ (3.14 supported for local development, production uses Chainguard Python 3.13)
+- Python 3.14+ (production uses Chainguard Python 3.14, 3.14 also recommended for local development)
 - pip and virtualenv
 - Git
 - (Optional) kind, kubectl, helm - For local integration testing
@@ -71,6 +71,9 @@ make test-cov
 
 ```bash
 # Start webhook server (port 8888 for main API, port 8080 for health)
+*These ports are hard‑coded in the container and in ExternalDNS; you cannot
+change them when running alongside ExternalDNS. The CLI options above simply
+mirror the defaults and are useful for local development only.*
 python -m uvicorn external_dns_technitium_webhook.main:app \
   --host 0.0.0.0 \
   --port 8888 \

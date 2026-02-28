@@ -111,6 +111,12 @@ volumes:
           path: ca.pem
 ```
 
+### TLS Cipher Security
+
+**Note:** Disabling certificate verification (`TECHNITIUM_VERIFY_SSL=false`) in development environments does **NOT** downgrade cipher strength. Cipher strength remains at SECLEVEL=2 for all connections, ensuring secure communication even when verifying self-signed certificates.
+
+For production deployments, always use `TECHNITIUM_VERIFY_SSL=true` with properly trusted CA certificates.
+
 ## Standalone Deployment
 
 If you prefer not to use Helm, you can deploy the webhook as a standalone service:
@@ -131,6 +137,7 @@ spec:
       labels:
         app: external-dns-technitium-webhook
     spec:
+      automountServiceAccountToken: false  # Webhook does not need K8s API access
       containers:
       - name: webhook
         image: ghcr.io/djr747/external-dns-technitium-webhook:v1.0.0
@@ -194,7 +201,7 @@ spec:
 ### Environment Variables
 
 | Variable | Required | Default | Purpose |
-|----------|----------|---------|---------|
+| ---------- | ---------- | --------- | --------- |
 | `TECHNITIUM_URL` | Yes | None | Technitium DNS Server API endpoint |
 | `TECHNITIUM_USERNAME` | Yes | None | Username for authentication |
 | `TECHNITIUM_PASSWORD` | Yes | None | Password for authentication |
@@ -217,19 +224,24 @@ provider:
       limits:
         cpu: 500m
         memory: 256Mi
+        ephemeral-storage: 2Gi  # Prevent pod from consuming all node disk space
 ```
+
+**Note:** Always include `ephemeral-storage` limits to prevent a pod from exhausting node disk space when writing temporary files or logs.
 
 ## Troubleshooting
 
 ### Webhook Connection Issues
 
 1. Verify the webhook is running:
+
    ```bash
    kubectl get pods -n external-dns
    kubectl logs -n external-dns deployment/external-dns
    ```
 
 2. Check webhook health:
+
    ```bash
    kubectl port-forward -n external-dns svc/external-dns-technitium-webhook 8080:8080
    curl http://localhost:8080/health
@@ -238,12 +250,14 @@ provider:
 ### Authentication Failures
 
 1. Verify credentials in Kubernetes Secret:
+
    ```bash
    kubectl get secret technitium-credentials -n external-dns \
      -o jsonpath='{.data.username}' | base64 -d
    ```
 
 2. Test credentials manually:
+
    ```bash
    curl -X POST "http://technitium:5380/api/user/login" \
      -d "username=external-dns-webhook&password=YOUR_PASSWORD"
@@ -252,12 +266,14 @@ provider:
 ### TLS Certificate Verification Failed
 
 1. Verify CA ConfigMap is properly mounted:
+
    ```bash
    kubectl exec -n external-dns deploy/external-dns -c webhook -- \
      ls -la /etc/technitium-ssl/
    ```
 
 2. Verify certificate content:
+
    ```bash
    kubectl get configmap technitium-ca-bundle -n external-dns \
      -o jsonpath='{.data.ca\.pem}' | openssl x509 -text -noout
@@ -273,11 +289,26 @@ If running ExternalDNS with multiple replicas:
 
 ## Security Best Practices
 
+### Pod Security
+
+- Disable service account token auto-mount: `automountServiceAccountToken: false` (webhook doesn't need K8s API)
+- Set resource limits including `ephemeral-storage` to prevent node exhaustion
+- Use non-root user (webhook container runs as non-root by default)
+- Enable read-only root filesystem where possible
+
+### Network Security
+
 - Use RBAC to limit ExternalDNS permissions
 - Store credentials in Kubernetes Secrets (never in ConfigMaps)
-- Enable TLS verification when possible
+- Enable TLS verification when possible (`TECHNITIUM_VERIFY_SSL=true`)
 - Use private CA certificates for internal Technitium deployments
+- Webhook enforces strong TLS ciphers (SECLEVEL=2) on all connections
+
+### Credential Management
+
 - Regularly rotate Technitium credentials
+- Use tight expiration TTLs for temporary credentials
+- Never log passwords or tokens (automatically redacted in logs)
 
 ## Additional Resources
 
@@ -286,4 +317,3 @@ If running ExternalDNS with multiple replicas:
 - [Technitium DNS Documentation](https://technitium.com/dns/)
 - [Credentials Setup](../CREDENTIALS_SETUP.md)
 - [Security Guide](../SECURITY.md)
-

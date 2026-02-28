@@ -41,15 +41,18 @@ graph TB
 ## Component Breakdown
 
 ### 1. ExternalDNS (External Component)
+
 **Purpose:** Kubernetes controller that synchronizes DNS records with DNS providers
 
 **Responsibilities:**
+
 - Watch Kubernetes resources (Services, Ingresses)
 - Detect DNS annotation changes
 - Call webhook provider endpoints
 - Reconcile DNS state
 
 **Configuration:**
+
 ```yaml
 args:
   - --source=service
@@ -59,11 +62,13 @@ args:
 ```
 
 ### 2. Technitium Webhook (This Project)
+
 **Purpose:** Translate ExternalDNS webhook calls to Technitium DNS API calls
 
 **Components:**
 
 #### 2.1 FastAPI Application (`main.py`)
+
 - HTTP server on port 8888
 - 4 webhook endpoints
 - Health check endpoints
@@ -71,20 +76,25 @@ args:
 - Async request handling
 
 #### 2.2 Request Handlers (`handlers.py`)
+
 **Functions:**
+
 - `health_check()` - Health and readiness checks
 - `negotiate()` - Domain filter negotiation
 - `get_records()` - Retrieve DNS records
 - `adjust_endpoints()` - Apply DNS changes
 
 **Features:**
+
 - Domain filtering (include/exclude/regex)
 - Record type conversion (10 types)
 - Change detection (create/delete/update)
 - Error propagation
 
 #### 2.3 Technitium Client (`technitium_client.py`)
+
 **API Operations:**
+
 - `login()` - Authenticate and get token
 - `create_zone()` - Auto-create zones
 - `get_records()` - Fetch zone records
@@ -92,20 +102,24 @@ args:
 - `delete_record()` - Remove DNS records
 
 **Enhanced Features:**
+
 - Automatic token renewal
 - Structured error handling (TechnitiumError)
 - Stack trace capture
 - Advanced options support
 
 #### 2.4 Data Models (`models.py`)
+
 **Pydantic Models:**
 
 **ExternalDNS Format:**
+
 - `Endpoint` - DNS record in ExternalDNS format
 - `Changes` - Create/delete change sets
 - `DomainFilter` - Domain filtering rules
 
 **Technitium Format:**
+
 - `RecordAData` - A record (IPv4)
 - `RecordAAAAData` - AAAA record (IPv6)
 - `RecordCNAMEData` - CNAME record
@@ -117,23 +131,35 @@ args:
 - `RecordSVCBData` - SVCB/HTTPS record
 
 #### 2.5 Configuration (`config.py`)
+
 **Environment Variables:**
+
+> **Note:** ExternalDNS always communicates with the webhook on port **8888** and
+> probes the health server on port **8080**; these values are baked into the
+> sidecar and cannot be changed in production. `LISTEN_PORT` and
+> `HEALTH_PORT` are available only for local testing and are ignored by
+> ExternalDNS.
+
 - `TECHNITIUM_API_URL` - DNS server URL
 - `TECHNITIUM_API_TOKEN` - Authentication token
 - `DOMAIN_FILTER` - Domain filtering
-- `LISTEN_ADDRESS` - Bind address
+- `LISTEN_ADDRESS` - Bind address for FastAPI (port itself is fixed)
 - `LOG_LEVEL` - Logging verbosity
 
 #### 2.6 Application State (`app_state.py`)
+
 **Shared State:**
+
 - Technitium client instance
 - Configuration singleton
 - Ready state flag
 
 ### 3. Technitium DNS Server (External Component)
+
 **Purpose:** Authoritative DNS server with REST API
 
 **API Endpoints Used:**
+
 - `POST /api/user/login` - Authentication
 - `POST /api/zones/create` - Zone creation
 - `GET /api/zones/records/get` - Record retrieval
@@ -188,7 +214,7 @@ graph TB
         NonRoot["Non-root user<br/>UID 65532"]
         Work["Workdir: /app"]
         
-        subgraph Runtime["Python 3.13 Runtime"]
+        subgraph Runtime["Python 3.14 Runtime"]
             FastAPI["FastAPI application"]
             Uvicorn["Uvicorn ASGI server"]
             Deps["Python dependencies"]
@@ -287,7 +313,7 @@ graph TB
         subgraph Container["1. Container Security"]
             NonRoot["Non-root user<br/>UID 65532<br/>Chainguard default"]
             ReadOnly["Read-only filesystem<br/>recommended"]
-            Minimal["Chainguard base image<br/>Python 3.13<br/>Zero CVEs"]
+            Minimal["Chainguard base image<br/>Python 3.14<br/>Zero CVEs"]
             SLSA["SLSA Level 3<br/>Reproducible builds"]
         end
         
@@ -316,17 +342,20 @@ graph TB
 ## Scalability Considerations
 
 ### Deployment Model
+
 - ⚠️ **Single Instance Only:** ExternalDNS controller doesn't support HA deployments
 - ✅ **Stateless Design:** Webhook is stateless and could theoretically scale if ExternalDNS supported it
 - ✅ **Health Checks:** Liveness and readiness probes for pod restart on failure
 
 ### Performance Optimization
+
 - ✅ **Async I/O:** Non-blocking operations
 - ✅ **Connection pooling:** Reuse HTTP connections to Technitium
 - ✅ **Graceful shutdown:** Drains in-flight requests on pod termination
 - ✅ **Fast startup:** < 1 second initialization
 
 ### Resource Efficiency
+
 - ✅ **Low memory:** ~64Mi base footprint
 - ✅ **Low CPU:** 100m-500m per pod
 - ✅ **Small image:** ~200MB container image
@@ -335,12 +364,13 @@ graph TB
 ## Monitoring and Observability
 
 ### Current Implementation
-```
+
+```text
 ┌────────────────────────────────────────────────────┐
 │     Application Logging                            │
 │                                                    │
-│  - Structured logs (External-DNS format)          │
-│    time="..." level=... module=... msg="..."      │
+│  - Structured logs (External-DNS format)           │
+│    time="..." level=... module=... msg="..."       │
 │  - Log levels (DEBUG through ERROR)                │
 │  - Request/response logging                        │
 │  - Error stack traces                              │
@@ -350,35 +380,38 @@ graph TB
 ### Health Checks
 
 **Main API Server (port 8888):**
+
 - `GET /` → Negotiates domain filters (returns ExternalDNS webhook response)
 - `GET /records` → Fetches current DNS records
 - HTTP 200 OK if app is ready, HTTP 503 if not ready or Technitium unreachable
 
 **Health Check Server (port 8080):**
+
 - `GET /health` → Returns `{"status": "ok"}` on 200, or 503 with error on failure
 - `GET /healthz` → Kubernetes-style readiness probe, returns `{"status": "ok"}` on 200, or 503 with error
 - Checks if main server socket is responding (liveness/readiness validation)
 - Runs on separate thread to isolate from main API load
 
 ### Future Enhancements
-```
+
+```text
 ┌────────────────────────────────────┐
 │    Prometheus Metrics (Future)     │
 │                                    │
-│  - Request count                  │
-│  - Request duration               │
-│  - Error rate                     │
-│  - Technitium API latency         │
-│  - Record operations              │
+│  - Request count                   │
+│  - Request duration                │
+│  - Error rate                      │
+│  - Technitium API latency          │
+│  - Record operations               │
 └────────────────────────────────────┘
 
 ┌────────────────────────────────────┐
 │  OpenTelemetry Tracing (Future)    │
 │                                    │
-│  - Request tracing                │
-│  - Span creation                  │
-│  - Distributed tracing            │
-│  - Performance analysis           │
+│  - Request tracing                 │
+│  - Span creation                   │
+│  - Distributed tracing             │
+│  - Performance analysis            │
 └────────────────────────────────────┘
 ```
 
@@ -396,6 +429,7 @@ This architecture provides:
 8. ✅ **Production Ready** - All best practices followed
 
 For detailed implementation guides, see:
+
 - [API Reference](../API.md)
 - [Development Guide](../DEVELOPMENT.md)
 - [Kubernetes Deployment](../deployment/kubernetes.md)

@@ -8,7 +8,7 @@ This document outlines current and planned monitoring capabilities for the Exter
 
 The webhook uses structured logging in External-DNS format with key-value pairs:
 
-```
+```logs
 time="2025-11-02T20:33:18Z" level=info module=external_dns_technitium_webhook.handlers msg="Successfully created DNS record"
 time="2025-11-02T20:33:19Z" level=error module=external_dns_technitium_webhook.technitium_client msg="Failed to authenticate: Invalid credentials"
 ```
@@ -18,12 +18,14 @@ time="2025-11-02T20:33:19Z" level=error module=external_dns_technitium_webhook.t
 **Configuration**: Set `LOG_LEVEL` environment variable (DEBUG, INFO, WARNING, ERROR)
 
 **Log Levels in Use**:
+
 - `DEBUG` - Detailed API call traces and internal operations
 - `INFO` - Normal successful operations
 - `WARNING` - Retry attempts, degraded conditions, token renewals
 - `ERROR` - Failures and exceptions
 
 **Best Practices**:
+
 - Enable DEBUG in development to troubleshoot API interactions
 - Use INFO in production for normal operation tracking
 - Monitor WARNING logs for retry patterns indicating issues
@@ -32,16 +34,23 @@ time="2025-11-02T20:33:19Z" level=error module=external_dns_technitium_webhook.t
 ### Health Checks
 
 **Endpoints** (on separate health server thread, port 8080):
+
+> Ports 8888 (main API) and 8080 (health) are hard-coded by the ExternalDNS
+> controller; users cannot change them in production. They appear here for
+> completeness and to guide probe configuration.
+
 - `GET /health` - Liveness probe
 - `GET /healthz` - Readiness probe (Kubernetes-style)
 
 **Behavior**:
+
 - Returns `200 OK` with `{"status": "ok"}` when service is ready
 - Returns `503 Service Unavailable` when not ready
 - Checks main API server connectivity (port 8888)
 - Runs on separate thread to isolate from main API load
 
 **Kubernetes Integration**:
+
 ```yaml
 livenessProbe:
   httpGet:
@@ -77,7 +86,8 @@ docker run -e LOG_LEVEL=DEBUG ...
 ```
 
 Debug logs include operation details that help identify performance issues:
-```
+
+```logs
 time="2025-11-02T20:33:18Z" level=debug module=technitium_client msg="Fetching records from zone example.com"
 time="2025-11-02T20:33:18Z" level=info module=handlers msg="Found 42 endpoints"
 ```
@@ -108,6 +118,7 @@ webhook_dns_records_managed{zone}
 **Endpoint**: `GET /metrics` (Prometheus format)
 
 **Implementation Plan**:
+
 1. Add `prometheus_client` dependency
 2. Create metrics module (`external_dns_technitium_webhook/metrics.py`)
 3. Add middleware to track request metrics
@@ -117,11 +128,13 @@ webhook_dns_records_managed{zone}
 ### 2. OpenTelemetry Tracing (Future)
 
 **Planned Features**:
+
 - Distributed tracing across webhook → Technitium DNS
 - Span tracking for DNS operations
 - Correlation IDs for request tracking
 
 **Implementation Plan**:
+
 1. Add `opentelemetry-api` and `opentelemetry-sdk` dependencies
 2. Add OTLP exporter for backend integration
 3. Instrument FastAPI with auto-instrumentation
@@ -129,7 +142,8 @@ webhook_dns_records_managed{zone}
 5. Configure sampling strategy
 
 **Example Trace**:
-```
+
+```text
 ExternalDNS Request
 └── POST /records (webhook)
     ├── Authenticate (Technitium)
@@ -141,6 +155,7 @@ ExternalDNS Request
 ### 3. Custom Dashboard (Future)
 
 **Grafana Dashboard** showing:
+
 - Request rate and latency
 - DNS record creation/deletion rate
 - Technitium API health
@@ -163,7 +178,8 @@ docker logs -f <container-id>
 ### Common Log Patterns
 
 **Successful DNS operations**:
-```
+
+```logs
 time="2025-11-02T20:33:18Z" level=info module=external_dns_technitium_webhook.handlers msg="  CREATE: test.example.com (A) -> ['192.0.2.1']"
 time="2025-11-02T20:33:19Z" level=info module=external_dns_technitium_webhook.handlers msg="Adding record test.example.com with data {'ipAddress': '192.0.2.1'}"
 time="2025-11-02T20:33:20Z" level=info module=external_dns_technitium_webhook.handlers msg="  DELETE: old.example.com (A) -> ['192.0.2.2']"
@@ -171,18 +187,21 @@ time="2025-11-02T20:33:21Z" level=info module=external_dns_technitium_webhook.ha
 ```
 
 **Authentication renewal**:
-```
+
+```logs
 time="2025-11-02T20:33:15Z" level=warning module=external_dns_technitium_webhook.technitium_client msg="Token expired, renewing authentication"
 time="2025-11-02T20:33:16Z" level=info module=external_dns_technitium_webhook.technitium_client msg="Successfully renewed authentication token"
 ```
 
 **Rate limiting**:
-```
+
+```logs
 time="2025-11-02T20:33:20Z" level=warning module=external_dns_technitium_webhook.middleware msg="Rate limit exceeded for client 10.0.0.1. Tokens: 0.50"
 ```
 
 **Connection issues**:
-```
+
+```logs
 time="2025-11-02T20:33:10Z" level=error module=external_dns_technitium_webhook.technitium_client msg="Failed to connect to Technitium: Connection refused"
 time="2025-11-02T20:33:15Z" level=info module=external_dns_technitium_webhook.technitium_client msg="Retrying connection after 5 seconds..."
 ```
@@ -202,6 +221,7 @@ response = await self._client.post(url, data=data)
 ```
 
 This approach:
+
 - Eliminates TCP handshake overhead for each request
 - Reuses connections through HTTP keep-alive
 - Reduces latency for repeated API calls
@@ -225,6 +245,7 @@ Each API call to Technitium is awaited, allowing the FastAPI event loop to handl
 ### Rate Limiting
 
 Middleware prevents abuse:
+
 - Default: 1000 requests/minute per client (configurable via `REQUESTS_PER_MINUTE`)
 - Burst capacity: 10 requests
 - Configurable via `RateLimiter` class
@@ -253,6 +274,7 @@ When deploying to production, ensure:
 ## Contributing
 
 If implementing metrics or tracing:
+
 1. Follow the implementation plans above
 2. Ensure backward compatibility (metrics optional)
 3. Add configuration documentation

@@ -986,7 +986,8 @@ def test_create_health_app() -> None:
     assert isinstance(app, FastAPI)
     assert app.title == "ExternalDNS Technitium Webhook - Health"
     assert app.description == "Health check endpoint for ExternalDNS Technitium webhook"
-    assert app.version == "0.1.0"
+    from external_dns_technitium_webhook import __version__
+    assert app.version == __version__
     assert app.docs_url is None
     assert app.redoc_url is None
     assert app.openapi_url is None

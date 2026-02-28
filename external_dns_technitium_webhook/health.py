@@ -7,6 +7,8 @@ from fastapi import FastAPI, HTTPException, status
 
 from .config import Config as AppConfig
 
+from . import __version__
+
 
 def is_main_server_ready() -> bool:
     """Check if main server is ready by attempting socket connection."""
@@ -26,7 +28,7 @@ def create_health_app() -> FastAPI:
     app = FastAPI(
         title="ExternalDNS Technitium Webhook - Health",
         description="Health check endpoint for ExternalDNS Technitium webhook",
-        version="0.1.0",
+        version=__version__,
         docs_url=None,
         redoc_url=None,
         openapi_url=None,

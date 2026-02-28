@@ -98,13 +98,15 @@ make test-cov          # Run unit tests with coverage report
 ## Commit Messages
 
 Use clear, descriptive commit messages:
+
 - Use present tense ("Add feature" not "Added feature")
 - Use imperative mood ("Move cursor to..." not "Moves cursor to...")
 - Limit first line to 72 characters
 - Reference issues and PRs where appropriate
 
 Examples:
-```
+
+```text
 Add support for SRV records
 
 Fix issue with token renewal (#123)
@@ -128,11 +130,13 @@ Releases are automatically created when the version in `pyproject.toml` changes 
 ### Creating a Release:
 
 1. **Update `pyproject.toml`** - Bump the version field:
+
    ```toml
    version = "0.2.1"  # Update this
    ```
 
 2. **Update `CHANGELOG.md`** - Add entry for the new version:
+
    ```markdown
    ## [0.2.1] - 2025-11-02
    

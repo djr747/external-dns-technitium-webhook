@@ -16,6 +16,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from . import handlers
 from .app_state import AppState
 from .config import Config as AppConfig
+
+# package version is defined in __init__.py
+from . import __version__
 from .middleware import (
     RequestSizeLimitMiddleware,
     configure_rate_limiter,
@@ -513,7 +516,7 @@ def create_app() -> FastAPI:
             "(Ingress, Service) to Technitium DNS. Supports A, AAAA, CNAME, TXT, ANAME, CAA, URI, "
             "SSHFP, SVCB, and HTTPS record types."
         ),
-        version="0.1.0",
+        version=__version__,
         lifespan=lifespan,
         docs_url="/docs",
         redoc_url="/redoc",
