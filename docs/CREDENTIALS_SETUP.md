@@ -110,9 +110,8 @@ volumes:
 > cannot be changed in production; the `LISTEN_PORT`/`HEALTH_PORT` settings are
 > only used for local testing.
 
-
 | Variable | Required | Default | Purpose |
-|----------|----------|---------|---------|
+| ---------- | ---------- | --------- | --------- |
 | `TECHNITIUM_URL` | Yes | None | Technitium DNS API endpoint (port 5380 for HTTP, 53443 for HTTPS) |
 | `TECHNITIUM_USERNAME` | Yes | None | Username for authentication |
 | `TECHNITIUM_PASSWORD` | Yes | None | Password for authentication |
@@ -135,6 +134,7 @@ volumes:
 ### Authentication Failures
 
 1. Verify credentials in Kubernetes Secret:
+
    ```bash
    kubectl get secret technitium-credentials -n external-dns \
      -o jsonpath='{.data.username}' | base64 -d

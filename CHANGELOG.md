@@ -55,7 +55,7 @@ See [release notes](https://github.com/djr747/external-dns-technitium-webhook/re
 **Code Quality:**
 
 - Improved code clarity in exception handling paths
-- Better adherence 
+- Better adherence
 - to Python best practices for exception handling
 - Reduced CodeQL security findings from 11 open to 1 (container-level CVE only)
 
@@ -164,7 +164,7 @@ See [release notes](https://github.com/djr747/external-dns-technitium-webhook/re
 
 ## [0.2.0] - 2025-11-02
 
-### Added
+**Added:**
 
 - **Private Certificate Authority Support:** HTTPS connectivity with private/self-signed certificates via `TECHNITIUM_VERIFY_SSL=false` and `TECHNITIUM_CA_BUNDLE_FILE` environment variables
 - **Documentation Excellence:** Comprehensive documentation audit and accuracy verification across 6 core docs (ARCHITECTURE.md, API.md, PERFORMANCE.md, MONITORING.md, DEVELOPMENT.md, CICD_SECURITY.md)
@@ -180,7 +180,7 @@ See [release notes](https://github.com/djr747/external-dns-technitium-webhook/re
 - **Nightly Chainguard Workflow:** Daily Python version check with automatic PR generation for base image updates
 - **Build Provenance:** SLSA Level 3 reproducible builds with SBOM and attestation generation
 
-### Changed
+**Changed:**
 
 - **Port Configuration:** Clarified main API runs on port 8888, health checks on port 8080 (separate thread)
 - **Chainguard Python:** Updated to Chainguard Python latest (3.13) with zero-CVE base image
@@ -191,7 +191,7 @@ See [release notes](https://github.com/djr747/external-dns-technitium-webhook/re
 - **Docker Ports:** Updated `make docker-run` from port 3000 to 8888/8080
 - **Dependabot Configuration:** Updated from Bandit to Semgrep for security scans
 
-### Fixed
+**Fixed:**
 
 - **Logging Implementation:** Applied StructuredFormatter to uvicorn, httpx, and application loggers for consistent External-DNS format across all sources
 - **Nightly Chainguard Workflow:** Fixed `/usr/bin/python: can't open file '//python'` error caused by Chainguard entrypoint doubling
@@ -201,7 +201,7 @@ See [release notes](https://github.com/djr747/external-dns-technitium-webhook/re
 - **Health Check Documentation:** Corrected endpoint paths and port numbers in Kubernetes probe examples
 - **Server Thread Exception Handling:** Changed from Exception to BaseException to properly handle SystemExit
 
-### Security
+**Security:**
 
 - **Private CA Support:** Seamless HTTPS deployment with private certificate authorities (self-signed, internal PKI)
 - **Semgrep Integration:** Multi-pattern security scanning for Python vulnerabilities
@@ -211,7 +211,7 @@ See [release notes](https://github.com/djr747/external-dns-technitium-webhook/re
 - **Request Size Limits:** 1MB default payload size limit with HTTP 413 response on excess
 - **Container Security:** Chainguard non-root user (UID 65532), read-only filesystem capable, multi-arch support (AMD64, ARM64)
 
-### Documentation
+**Documentation:**
 
 - ✅ ARCHITECTURE.md - Mermaid diagrams, port/endpoint accuracy, logging format
 - ✅ API.md - Complete endpoint reference, response formats, error handling
@@ -240,12 +240,8 @@ See [release notes](https://github.com/djr747/external-dns-technitium-webhook/re
 
 ## [0.1.0] - 2025-01-XX
 
-### Added
+**Added:**
 
 - Initial release
 - Basic ExternalDNS webhook functionality
 - Technitium DNS integration
-
-[Unreleased]: https://github.com/djr747/external-dns-technitium-webhook/compare/v0.2.0...HEAD
-[0.2.0]: https://github.com/djr747/external-dns-technitium-webhook/compare/v0.1.0...v0.2.0
-[0.1.0]: https://github.com/djr747/external-dns-technitium-webhook/releases/tag/v0.1.0

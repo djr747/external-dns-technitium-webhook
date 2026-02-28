@@ -206,8 +206,6 @@ graph TD
 
 ### Docker Container
 
-### Docker Container
-
 ```mermaid
 graph TB
     subgraph Container["Container: technitium-webhook<br/>Chainguard Python latest"]

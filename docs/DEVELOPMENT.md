@@ -115,7 +115,7 @@ See [docs/LOCAL_TESTING.md](LOCAL_TESTING.md) for detailed guidance on local int
 
 ## Project Structure
 
-```
+```text
 external-dns-technitium-webhook/
 ├── external_dns_technitium_webhook/
 │   ├── main.py                # FastAPI app entry point
@@ -166,48 +166,57 @@ external-dns-technitium-webhook/
 ## Key Modules
 
 ### `main.py`
+
 - FastAPI app initialization
 - Lifespan management (startup/shutdown)
 - Signal handlers for graceful shutdown
 
 ### `config.py`
+
 - Environment variable parsing
 - Validation for paths, URLs, credentials
 - Fail-fast on misconfiguration
 
 ### `app_state.py`
+
 - Global state management
 - Async initialization on startup
 - TechnitiumClient instances
 
 ### `handlers.py`
+
 - `negotiate_domain_filter()` - `GET /` - Domain filter negotiation (port 8888)
 - `get_records()` - `GET /records` - Retrieve DNS records from Technitium (port 8888)
 - `adjust_endpoints()` - `POST /adjustendpoints` - Validate/transform endpoints (port 8888)
 - `apply_record()` - `POST /records` - Apply DNS record changes (create/delete) (port 8888)
 
 ### `server.py`
+
 - Health server thread management (port 8080)
 - Graceful shutdown coordination
 - Thread exception handling
 
 ### `health.py`
+
 - Health check endpoint logic (`GET /health`, `GET /healthz`)
 - Main API server readiness validation (socket connectivity check)
 - Runs on separate thread isolated from main API load
 
 ### `technitium_client.py`
+
 - Async HTTP client using httpx
 - Auto-authentication with token refresh
 - All 10 DNS record types supported
 - TLS certificate verification support
 
 ### `models.py`
+
 - Pydantic models for ExternalDNS protocol
 - Technitium API responses
 - DNS record types
 
 ### `middleware.py`
+
 - Rate limiting (1000 req/min, burst of 10)
 - Request size validation (1MB default)
 - Security headers
@@ -301,6 +310,7 @@ Create `.vscode/launch.json`:
 ```
 
 Then test with:
+
 ```bash
 # Main API (port 8888)
 curl http://127.0.0.1:8888/
@@ -349,6 +359,7 @@ git push origin v1.2.3
 ```
 
 Release workflow will:
+
 - Build multi-platform images
 - Sign with Cosign
 - Generate SBOM
