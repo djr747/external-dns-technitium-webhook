@@ -200,12 +200,8 @@ class TestHandlerMetricsIntegration:
         mock_response = GetRecordsResponse(
             zone=ZoneInfo(name="example.com", type="Primary"),
             records=[
-                RecordInfo(
-                    name="a.example.com", type="A", ttl=300, rData={"ipAddress": "1.2.3.4"}
-                ),
-                RecordInfo(
-                    name="b.example.com", type="A", ttl=300, rData={"ipAddress": "5.6.7.8"}
-                ),
+                RecordInfo(name="a.example.com", type="A", ttl=300, rData={"ipAddress": "1.2.3.4"}),
+                RecordInfo(name="b.example.com", type="A", ttl=300, rData={"ipAddress": "5.6.7.8"}),
             ],
         )
         state.client.get_records = AsyncMock(return_value=mock_response)
