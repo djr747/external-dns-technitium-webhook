@@ -95,7 +95,16 @@ jobs:
           echo "--- pytest-report.xml ---"
           test -f pytest-report.xml && ls -l pytest-report.xml || echo "pytest-report.xml not found"
 
+      - name: Upload coverage to Codecov (branch coverage)
+        uses: codecov/codecov-action@v4
+        with:
+          files: coverage.xml
+          verbose: true
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
       - name: SonarCloud Scan
+        if: ${{ github.ref == 'refs/heads/main' }}
         uses: sonarsource/sonarcloud-github-action@v2
         with:
           projectBaseDir: .
