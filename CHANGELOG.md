@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 
 - Updated documentation across the repository for clarity and accuracy.
 - Adjusted CI/CD workflows (`ci.yml`, `release.yml`, `security.yml`) with recent improvements.
+- Hardened Helm example values with security defaults (`automountServiceAccountToken=false`, ephemeral-storage limit) and aligned integration test values; clarified catalog env var name.
 - Minor code updates in `main.py`, `health.py`, and `technitium_client.py`.
 - Bumped package version and `__version__` constants.
 
