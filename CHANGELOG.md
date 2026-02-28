@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [v0.4.3] - 2026-02-28
 
+See [release notes](https://github.com/djr747/external-dns-technitium-webhook/releases/tag/v0.4.3) for details.
+
+All notable changes to this project will be documented in this file.
+
+## [v0.4.3] - 2026-02-28
+
 **Changed:**
 
 - Updated documentation across the repository for clarity and accuracy.

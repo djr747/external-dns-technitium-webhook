@@ -97,7 +97,7 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
       - name: Upload coverage report
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-report
           path: htmlcov/
@@ -139,7 +139,7 @@ jobs:
           provenance: false
 
       - name: Upload image artifact (for integration tests)
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: webhook-image-amd64
           path: /tmp/webhook-image-amd64.tar
@@ -178,7 +178,7 @@ jobs:
           cache-to: type=gha,mode=max
           provenance: false
       - name: Upload image artifact (for integration tests)
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: webhook-image-arm64
           path: /tmp/webhook-image-arm64.tar
@@ -196,7 +196,7 @@ jobs:
           fetch-depth: 0
 
       - name: Download webhook image
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: webhook-image-amd64
           path: /tmp
@@ -458,12 +458,12 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download amd64 image artifact
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: webhook-image-amd64
           path: /tmp/amd64-image
       - name: Download arm64 image artifact
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: webhook-image-arm64
           path: /tmp/arm64-image
