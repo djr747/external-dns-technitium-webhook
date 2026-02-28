@@ -8,6 +8,7 @@ from typing import Any
 from . import middleware
 from .config import Config
 from .middleware import RateLimiter
+from .resilience import CircuitBreaker
 from .technitium_client import TechnitiumClient
 
 logger = logging.getLogger(__name__)
@@ -31,6 +32,10 @@ class AppState:
         """
         self.config = config
         self.is_ready = False
+        self.circuit_breaker = CircuitBreaker(
+            failure_threshold=config.circuit_breaker_failure_threshold,
+            timeout=config.circuit_breaker_timeout,
+        )
         self.client = TechnitiumClient(
             base_url=config.technitium_url,
             timeout=config.technitium_timeout,
@@ -38,6 +43,7 @@ class AppState:
             ca_bundle=config.technitium_ca_bundle_file,
             enable_request_compression=config.technitium_enable_request_compression,
             compression_threshold_bytes=config.technitium_compression_threshold_bytes,
+            circuit_breaker=self.circuit_breaker,
         )
         # Use provided helper to replace the module-level rate limiter.
         # This avoids a direct module-level assignment which some static
@@ -100,6 +106,7 @@ class AppState:
             ca_bundle=self.config.technitium_ca_bundle_file,
             enable_request_compression=self.config.technitium_enable_request_compression,
             compression_threshold_bytes=self.config.technitium_compression_threshold_bytes,
+            circuit_breaker=self.circuit_breaker,
         )
         self.active_endpoint = normalized
         await old_client.close()

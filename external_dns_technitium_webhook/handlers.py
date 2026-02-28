@@ -15,6 +15,7 @@ from .app_state import AppState
 from .logging_utils import safe_log_payload
 from .metrics import api_errors_total, dns_records_processed_total, dns_records_total, webhook_ready
 from .models import Changes, DomainFilter, Endpoint
+from .resilience import CircuitState
 from .responses import ExternalDNSResponse
 
 logger = logging.getLogger(__name__)
@@ -71,13 +72,17 @@ async def health_check(state: AppState) -> Response:
         state: Application state
 
     Returns:
-        200 OK if ready, 503 if not ready
+        200 OK if ready, 503 if not ready or circuit breaker is open
     """
-    if not state.is_ready:
+    cb = getattr(state, "circuit_breaker", None)
+    circuit_open = cb is not None and cb.state == CircuitState.OPEN
+
+    if not state.is_ready or circuit_open:
         webhook_ready.set(0)
-        return ExternalDNSResponse(
-            content={"status": "unhealthy"}, status_code=status.HTTP_503_SERVICE_UNAVAILABLE
-        )
+        detail: dict[str, str] = {"status": "unhealthy"}
+        if circuit_open:
+            detail["circuit_breaker"] = "open"
+        return ExternalDNSResponse(content=detail, status_code=status.HTTP_503_SERVICE_UNAVAILABLE)
     webhook_ready.set(1)
     return ExternalDNSResponse(content={"status": "ok"}, status_code=status.HTTP_200_OK)
 
@@ -362,7 +367,7 @@ def _get_record_data(record_type: str, target: str) -> dict[str, Any] | None:
         # Validate IPv4
         try:
             ipaddress.IPv4Address(target)
-        except ipaddress.AddressValueError, ValueError:
+        except ValueError:
             logger.warning(f"Invalid IPv4 address: {target}")
             return None
         return {"ipAddress": target}
@@ -370,7 +375,7 @@ def _get_record_data(record_type: str, target: str) -> dict[str, Any] | None:
         # Validate IPv6
         try:
             ipaddress.IPv6Address(target)
-        except ipaddress.AddressValueError, ValueError:
+        except ValueError:
             logger.warning(f"Invalid IPv6 address: {target}")
             return None
         return {"ipAddress": target}
