@@ -239,6 +239,15 @@ Supported properties: `comment`, `expiryTtl`, `disabled`, `createPtrZone` (see h
 - **Type checking**: Ensure ruff, mypy, and pyright pass without errors before merging and do not introduce new type errors or warnings. Ignoring type errors is not allowed in source code.
 
 ### Documentation & Maintenance
+
+- **Update README**: Document new features, configuration options, and usage examples
+- **Docstrings**: Add docstrings to new functions and classes following the existing style
+- **Type hints**: Ensure all new code has complete type annotations
+- **Examples**: Add examples in documentation for complex features (e.g., provider-specific properties)
+- **CHANGELOG.md**: Add entries for new releases following semantic versioning
+- **Inline comments**: Document complex logic, especially around DNS record transformations and error handling
+- **Markdown formatting**: Proper markdown style for consistency in docs including tables, code block types defined, required line feeds, headings
+- **Markdown linting**: Ensure documentation files pass markdownlint checks (e.g., no trailing spaces, proper header levels)
 - **Update docs**: Document new features in README.md and relevant docs/ files
 - **CHANGELOG.md**: Add entries for each release following semantic versioning
 - **Inline comments**: Document complex logic, especially DNS record transformations
