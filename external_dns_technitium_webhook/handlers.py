@@ -13,6 +13,7 @@ from fastapi.responses import Response, StreamingResponse
 
 from .app_state import AppState
 from .logging_utils import safe_log_payload
+from .metrics import api_errors_total, dns_records_processed_total, dns_records_total, webhook_ready
 from .models import Changes, DomainFilter, Endpoint
 from .responses import ExternalDNSResponse
 
@@ -73,9 +74,11 @@ async def health_check(state: AppState) -> Response:
         200 OK if ready, 503 if not ready
     """
     if not state.is_ready:
+        webhook_ready.set(0)
         return ExternalDNSResponse(
             content={"status": "unhealthy"}, status_code=status.HTTP_503_SERVICE_UNAVAILABLE
         )
+    webhook_ready.set(1)
     return ExternalDNSResponse(content={"status": "ok"}, status_code=status.HTTP_200_OK)
 
 
@@ -124,6 +127,10 @@ async def get_records(state: AppState) -> Response:
     # Increment the in-memory counter on AppState (lightweight metric hook)
     with suppress(Exception):
         state.record_fetch_count += 1
+
+    # Update Prometheus gauge with current record count
+    with suppress(Exception):
+        dns_records_total.set(len(response.records))
 
     # Emit a single INFO-level summary so operators know retrieval succeeded
     logger.info(
@@ -300,9 +307,11 @@ async def apply_record(state: AppState, changes: Changes) -> Response:
                     record_type=ep.record_type,
                     record_data=record_data,
                 )
+                dns_records_processed_total.labels(operation="delete").inc()
             except Exception as e:
                 safe_message = sanitize_error_message(e)
                 logger.error(f"Failed to delete record {ep.dns_name}: {e}")
+                api_errors_total.labels(error_type="connection_error").inc()
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     detail=f"Failed to delete record: {safe_message}",
@@ -326,9 +335,11 @@ async def apply_record(state: AppState, changes: Changes) -> Response:
                     record_data=record_data,
                     ttl=ep.record_ttl,
                 )
+                dns_records_processed_total.labels(operation="create").inc()
             except Exception as e:
                 safe_message = sanitize_error_message(e)
                 logger.error(f"Failed to add record {ep.dns_name}: {e}")
+                api_errors_total.labels(error_type="connection_error").inc()
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     detail=f"Failed to add record: {safe_message}",

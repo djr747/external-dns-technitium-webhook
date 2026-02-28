@@ -3,12 +3,15 @@
 import gzip
 import logging
 import ssl
+from collections.abc import Generator
+from contextlib import contextmanager
 from typing import Any, TypeVar, cast
 from urllib.parse import urlencode
 
 import httpx
 from pydantic import BaseModel
 
+from .metrics import api_errors_total, technitium_latency_seconds
 from .models import (
     AddRecordResponse,
     CreateZoneResponse,
@@ -23,6 +26,17 @@ from .models import (
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T", bound=BaseModel)
+
+
+@contextmanager
+def _track_latency(operation: str) -> Generator[None]:
+    """Context manager to track latency of an operation.
+
+    Args:
+        operation: Operation name label for the metric
+    """
+    with technitium_latency_seconds.labels(operation=operation).time():
+        yield
 
 
 class TechnitiumError(Exception):
@@ -198,11 +212,15 @@ class TechnitiumClient:
                 response = await self._client.post(url, data=data, headers=headers)
 
             response.raise_for_status()
+        except httpx.TimeoutException as e:
+            api_errors_total.labels(error_type="timeout").inc()
+            raise TechnitiumError(f"Request error: {e}") from e
         except httpx.HTTPStatusError as e:
             raise TechnitiumError(
                 f"Server responded with status code {e.response.status_code}"
             ) from e
         except httpx.RequestError as e:
+            api_errors_total.labels(error_type="connection_error").inc()
             raise TechnitiumError(f"Request error: {e}") from e
 
         try:
@@ -227,6 +245,7 @@ class TechnitiumClient:
                 inner_error=inner_error,
             )
         elif status == "invalid-token":
+            api_errors_total.labels(error_type="invalid_token").inc()
             raise InvalidTokenError("Invalid or expired token")
         elif status != "ok":
             raise TechnitiumError(f"Unexpected response status: {status}")
@@ -266,7 +285,8 @@ class TechnitiumClient:
             Login response with token
         """
         data = {"user": username, "pass": password}
-        result = await self._post_raw(self.ENDPOINT_LOGIN, data)
+        with _track_latency("login"):
+            result = await self._post_raw(self.ENDPOINT_LOGIN, data)
         return LoginResponse.model_validate(result)
 
     async def create_zone(
@@ -396,7 +416,8 @@ class TechnitiumClient:
         if update_svcb_hints:
             payload["updateSvcbHints"] = str(update_svcb_hints).lower()
 
-        return await self._post(self.ENDPOINT_ADD_RECORD, payload, AddRecordResponse)
+        with _track_latency("add_record"):
+            return await self._post(self.ENDPOINT_ADD_RECORD, payload, AddRecordResponse)
 
     async def get_records(
         self,
@@ -420,7 +441,8 @@ class TechnitiumClient:
         if list_zone is not None:
             payload["listZone"] = str(list_zone).lower()
 
-        return await self._post(self.ENDPOINT_GET_RECORDS, payload, GetRecordsResponse)
+        with _track_latency("get_records"):
+            return await self._post(self.ENDPOINT_GET_RECORDS, payload, GetRecordsResponse)
 
     async def delete_record(
         self,
@@ -448,7 +470,8 @@ class TechnitiumClient:
         if zone:
             payload["zone"] = zone
 
-        return await self._post(self.ENDPOINT_DELETE_RECORD, payload, DeleteRecordResponse)
+        with _track_latency("delete_record"):
+            return await self._post(self.ENDPOINT_DELETE_RECORD, payload, DeleteRecordResponse)
 
     async def list_catalog_zones(self) -> ListCatalogZonesResponse:
         """List available catalog zones on the server."""
