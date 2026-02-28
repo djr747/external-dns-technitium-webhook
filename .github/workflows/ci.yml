@@ -186,7 +186,7 @@ jobs:
           fetch-depth: 0
 
       - name: Download webhook image
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: webhook-image-amd64
           path: /tmp
@@ -448,12 +448,12 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download amd64 image artifact
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: webhook-image-amd64
           path: /tmp/amd64-image
       - name: Download arm64 image artifact
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: webhook-image-arm64
           path: /tmp/arm64-image
