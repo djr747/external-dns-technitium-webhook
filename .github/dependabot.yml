@@ -1,12 +1,11 @@
 version: 2
 updates:
-  # Production Python dependencies (weekly) - target develop for version management
+  # Python dependencies (daily) - target develop for version management and testing before merging to main
   - package-ecosystem: "pip"
     directory: "/"
     target-branch: "develop"
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: "daily" 
       time: "09:00"
     open-pull-requests-limit: 5
     labels:
@@ -16,7 +15,7 @@ updates:
       prefix: "deps"
       include: "scope"
     groups:
-      production-dependencies:
+      app-dependencies:
         patterns:
           - "fastapi"
           - "uvicorn"
@@ -25,30 +24,15 @@ updates:
         update-types:
           - "minor"
           - "patch"
-
-  # Development Python dependencies (weekly) - target main, no version bump needed
-  - package-ecosystem: "pip"
-    directory: "/"
-    target-branch: "main"
-    schedule:
-      interval: "weekly"
-      day: "tuesday"
-      time: "09:00"
-    open-pull-requests-limit: 5
-    labels:
-      - "dependencies"
-      - "python"
-    commit-message:
-      prefix: "deps"
-      include: "scope"
-    groups:
       dev-dependencies:
         patterns:
           - "pytest*"
           - "ruff"
           - "mypy"
           - "semgrep"
+          - "kubernetes"
         update-types:
+          - "major"
           - "minor"
           - "patch"
 

@@ -7,8 +7,11 @@ on:
   pull_request:
     branches: [ main ]
   push:
-    branches: [ main , develop ]
-
+    branches-ignore: [ main ]
+    paths:
+      - pyproject.toml
+      - '**/*.py'
+      - 'Dockerfile'
 
 permissions:
   contents: read

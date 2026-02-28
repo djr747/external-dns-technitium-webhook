@@ -5,6 +5,10 @@ on:
     branches:
       - '**'
       - '!main'
+    paths:
+      - pyproject.toml
+      - '**/*.py'
+      - 'Dockerfile'
   pull_request:
     branches: [ main, develop ]
   workflow_dispatch:
