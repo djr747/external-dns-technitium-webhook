@@ -18,11 +18,21 @@ jobs:
       - name: Check if main is ahead of develop
         id: check-ahead
         run: |
-          # Fetch all branches
+          # fail fast and enable pipefail to catch errors
+          set -euo pipefail
+
+          # Fetch the remote branches (full history)
           git fetch origin main develop
-          
-          # Check if main has commits not in develop
-          if git rev-list --count develop..main > 0; then
+
+          # Make sure develop exists remotely
+          if ! git show-ref --verify --quiet refs/remotes/origin/develop; then
+            echo "no develop branch exists on remote, nothing to do"
+            echo "ahead=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Compare remote refs directly to avoid ambiguous local names
+          if git rev-list --count origin/develop..origin/main > 0; then
             echo "main is ahead of develop"
             echo "ahead=true" >> $GITHUB_OUTPUT
           else
