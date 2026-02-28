@@ -29,7 +29,7 @@ dependencies = [
     # Bumped to releases that declare support for modern Python (>=3.8) and
     # are known to be compatible with CPython 3.14 when no upper bound
     # is present in their metadata.
-    "fastapi==0.131.0",
+    "fastapi==0.134.0",
     "uvicorn[standard]==0.41.0",
     "httpx==0.28.1",
     "pydantic==2.12.5",
@@ -45,7 +45,7 @@ dev = [
     "pytest-mock==3.15.1",
     "httpx==0.28.1",
     "kubernetes==35.0.0",
-    "ruff==0.15.2",
+    "ruff==0.15.4",
     "mypy==1.19.1",
     "pyright==1.1.408",
     "semgrep",
