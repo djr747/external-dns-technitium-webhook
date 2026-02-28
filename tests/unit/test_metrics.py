@@ -227,10 +227,7 @@ class TestHandlerMetricsIntegration:
         mock_set = mocker.patch.object(dns_records_total, "set")
 
         response = await get_records(state)
-        # consume the streaming response
-        if hasattr(response, "body_iterator"):
-            async for _ in response.body_iterator:
-                pass
+        _ = response  # response is a StreamingResponse; the metric is set before streaming begins
 
         mock_set.assert_called_once_with(2)
 

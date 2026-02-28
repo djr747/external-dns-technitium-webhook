@@ -53,7 +53,7 @@ def create_health_app() -> FastAPI:
                 detail="Main application not responding",
             )
 
-    async def metrics() -> Response:
+    def metrics() -> Response:
         """Prometheus metrics endpoint."""
         data = generate_latest()
         return Response(content=data, media_type=CONTENT_TYPE_LATEST)
