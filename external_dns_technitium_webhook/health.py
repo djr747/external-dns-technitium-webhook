@@ -5,9 +5,8 @@ import socket
 
 from fastapi import FastAPI, HTTPException, status
 
-from .config import Config as AppConfig
-
 from . import __version__
+from .config import Config as AppConfig
 
 
 def is_main_server_ready() -> bool:

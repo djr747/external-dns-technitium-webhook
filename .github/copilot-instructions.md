@@ -18,6 +18,8 @@ Key components in `external_dns_technitium_webhook/`:
 - **`middleware.py`** - Rate limiting and request size validation middleware
 
 ## Development Workflow
+> **Note for Copilot:** always ensure the project's Python virtual environment is activated (`source .venv/bin/activate` or via auto‑activation) before running any `make` targets or Python commands. This prevents "command not found" errors for ruff, mypy, etc.
+
 ```bash
 # Setup (Python 3.13)
 make install-dev          # Install with dev dependencies

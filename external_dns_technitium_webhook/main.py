@@ -13,12 +13,10 @@ from typing import cast
 from fastapi import Depends, FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 
-from . import handlers
+# package version is defined in __init__.py
+from . import __version__, handlers
 from .app_state import AppState
 from .config import Config as AppConfig
-
-# package version is defined in __init__.py
-from . import __version__
 from .middleware import (
     RequestSizeLimitMiddleware,
     configure_rate_limiter,
