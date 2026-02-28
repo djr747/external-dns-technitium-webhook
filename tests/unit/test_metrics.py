@@ -7,6 +7,12 @@ import pytest
 from fastapi.testclient import TestClient
 from prometheus_client import REGISTRY
 
+from external_dns_technitium_webhook.technitium_client import (
+    InvalidTokenError,
+    TechnitiumClient,
+    TechnitiumError,
+)
+
 
 @pytest.fixture(autouse=True)
 def reset_prometheus_metrics():
@@ -198,10 +204,22 @@ class TestHandlerMetricsIntegration:
         state.config.zone = "example.com"
 
         mock_response = GetRecordsResponse(
-            zone=ZoneInfo(name="example.com", type="Primary"),
+            zone=ZoneInfo(name="example.com", type="Primary", disabled=False),
             records=[
-                RecordInfo(name="a.example.com", type="A", ttl=300, rData={"ipAddress": "1.2.3.4"}),
-                RecordInfo(name="b.example.com", type="A", ttl=300, rData={"ipAddress": "5.6.7.8"}),
+                RecordInfo(
+                    name="a.example.com",
+                    type="A",
+                    ttl=300,
+                    disabled=False,
+                    rData={"ipAddress": "192.0.2.1"},
+                ),
+                RecordInfo(
+                    name="b.example.com",
+                    type="A",
+                    ttl=300,
+                    disabled=False,
+                    rData={"ipAddress": "192.0.2.2"},
+                ),
             ],
         )
         state.client.get_records = AsyncMock(return_value=mock_response)
@@ -395,14 +413,17 @@ class TestTechnitiumClientMetrics:
     @pytest.mark.asyncio
     async def test_login_tracks_latency(self, mocker):
         """Test that login tracks latency via the histogram context manager."""
-        from external_dns_technitium_webhook.technitium_client import TechnitiumClient
-
         client = TechnitiumClient(base_url="http://localhost:5380")
 
         mock_post_raw = mocker.patch.object(
             client,
             "_post_raw",
-            return_value={"status": "ok", "token": "test-token", "username": "admin"},
+            return_value={
+                "status": "ok",
+                "token": "test-token",
+                "username": "admin",
+                "displayName": "Admin",
+            },
         )
         # Patch _track_latency at the module level to verify it is called with "login"
         mock_ctx = MagicMock()
@@ -421,11 +442,6 @@ class TestTechnitiumClientMetrics:
     @pytest.mark.asyncio
     async def test_invalid_token_increments_error_counter(self, mocker):
         """Test that invalid-token response increments api_errors_total."""
-        from external_dns_technitium_webhook.technitium_client import (
-            InvalidTokenError,
-            TechnitiumClient,
-        )
-
         client = TechnitiumClient(base_url="http://localhost:5380")
         client.token = "test-token"
 
@@ -457,11 +473,6 @@ class TestTechnitiumClientMetrics:
         """Test that timeout exception increments api_errors_total with timeout label."""
         import httpx
 
-        from external_dns_technitium_webhook.technitium_client import (
-            TechnitiumClient,
-            TechnitiumError,
-        )
-
         client = TechnitiumClient(base_url="http://localhost:5380")
         client.token = "test-token"
 
@@ -488,11 +499,6 @@ class TestTechnitiumClientMetrics:
     async def test_connection_error_increments_error_counter(self, mocker):
         """Test that connection error increments api_errors_total with connection_error label."""
         import httpx
-
-        from external_dns_technitium_webhook.technitium_client import (
-            TechnitiumClient,
-            TechnitiumError,
-        )
 
         client = TechnitiumClient(base_url="http://localhost:5380")
         client.token = "test-token"
