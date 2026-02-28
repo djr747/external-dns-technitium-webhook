@@ -3,10 +3,16 @@
 The Technitium webhook implements the [ExternalDNS webhook specification](https://github.com/kubernetes-sigs/external-dns/blob/master/docs/tutorials/webhook-provider.md). All responses use the media type `application/external.dns.webhook+json;version=1` unless stated otherwise.
 
 ## Base URLs
+
 - **Main API Server:** `http://0.0.0.0:8888` (default bind address and port)
 - **Health Check Server:** `http://0.0.0.0:8080` (separate thread)
 
+> **Note:** When deployed as an ExternalDNS webhook the ports above are fixed
+> by the controller and cannot be overridden.  `LISTEN_PORT`/`HEALTH_PORT` are
+> only configurable in local development/test environments.
+
 ## Supported Record Types
+
 `A`, `AAAA`, `CNAME`, `TXT`, `ANAME`, `CAA`, `URI`, `SSHFP`, `SVCB`, `HTTPS`
 
 Provider-specific options (e.g., comments, expiry TTL, PTR creation, SVCB hints) are passed through using the `providerSpecific` array on each endpoint.
@@ -34,13 +40,16 @@ Provider-specific options (e.g., comments, expiry TTL, PTR creation, SVCB hints)
 ## API Endpoints Reference
 
 ### `GET /` (Main API, port 8888)
+
 Domain filter negotiation with ExternalDNS at startup.
 
-**Returns:** 
+**Returns:**
+
 - `200 OK` with domain filter response when ready
 - `503 Service Unavailable` if Technitium is unreachable
 
 **Response body:**
+
 ```json
 {
   "filters": ["example.com"],
@@ -49,13 +58,16 @@ Domain filter negotiation with ExternalDNS at startup.
 ```
 
 ### `GET /records` (Main API, port 8888)
+
 Returns an array of ExternalDNS endpoints currently in Technitium for the configured zone.
 
 **Returns:**
+
 - `200 OK` with array of endpoints when ready
 - `503 Service Unavailable` if Technitium is unreachable
 
 **Response body:**
+
 ```json
 [
   {
@@ -69,9 +81,11 @@ Returns an array of ExternalDNS endpoints currently in Technitium for the config
 ```
 
 ### `POST /adjustendpoints` (Main API, port 8888)
+
 Accepts an array of desired endpoints and returns the same payload unchanged. Provided for ExternalDNS compatibility and validation only.
 
 **Request body:**
+
 ```json
 [
   {
@@ -86,9 +100,11 @@ Accepts an array of desired endpoints and returns the same payload unchanged. Pr
 **Returns:** `200 OK` with the same endpoint array
 
 ### `POST /records` (Main API, port 8888)
+
 Applies DNS record changes (create, update, delete operations). Accepts an object with `create`, `updateOld`, `updateNew`, and `delete` arrays. All fields are optional; missing keys default to empty lists.
 
 **Request body:**
+
 ```json
 {
   "create": [
@@ -110,12 +126,14 @@ Applies DNS record changes (create, update, delete operations). Accepts an objec
 ```
 
 **Returns:**
+
 - `204 No Content` on success
 - `400 Bad Request` for invalid input
 - `500 Internal Server Error` if Technitium API call fails
 - `503 Service Unavailable` if Technitium is unreachable
 
 **Error response:**
+
 ```json
 {
   "detail": "Failed to create record: Invalid zone name"
@@ -123,13 +141,16 @@ Applies DNS record changes (create, update, delete operations). Accepts an objec
 ```
 
 ### `GET /health` (Health Server, port 8080)
+
 Kubernetes liveness/readiness probe endpoint.
 
 **Returns:**
+
 - `200 OK` if main API server is ready and responding
 - `503 Service Unavailable` if not ready or Technitium is unreachable
 
 **Response body (success):**
+
 ```json
 {
   "status": "ok"
@@ -137,6 +158,7 @@ Kubernetes liveness/readiness probe endpoint.
 ```
 
 **Response body (failure):**
+
 ```json
 {
   "detail": "Main application not responding"
@@ -144,11 +166,13 @@ Kubernetes liveness/readiness probe endpoint.
 ```
 
 ### `GET /healthz` (Health Server, port 8080)
+
 Alternative health check endpoint (same as `/health`). Provided for Kubernetes probe flexibility.
 
 **Returns:** Same as `/health`
 
 ## Rate Limiting & Payload Limits
+
 - Requests are limited using a token bucket (`REQUESTS_PER_MINUTE` and `RATE_LIMIT_BURST`). Rate limiting is enabled by default and controlled via environment variables:
 
 - `REQUESTS_PER_MINUTE` (default: `1000`) — sustained tokens per minute per client
@@ -158,4 +182,5 @@ Alternative health check endpoint (same as `/health`). Provided for Kubernetes p
 - The request body size is capped (default 1 MB) and returns `413` when exceeded.
 
 ## Authentication
+
 The webhook does not expose endpoint-level authentication (relies on network isolation in Kubernetes). It authenticates to Technitium using the configured credentials (username/password) and automatically refreshes tokens as needed. Default bind address is `0.0.0.0` (all interfaces); it's typically deployed as a sidecar with ExternalDNS in the same pod.

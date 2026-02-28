@@ -56,6 +56,7 @@ When you **merge to main**, the release workflow automatically:
 6. **update-changelog**: Updates CHANGELOG.md with release info
 
 **Monitor the workflow:**
+
 ```bash
 # Watch release.yml execution
 gh run watch -R djr747/external-dns-technitium-webhook
@@ -97,6 +98,7 @@ This is the desired behavior - dev dependency changes don't trigger releases.
 ### Release didn't trigger after merge
 
 **Check:**
+
 1. Was `version =` line changed in pyproject.toml?
 2. Look at workflow run details in Actions tab
 3. Check `check-version-changed` job output
@@ -104,6 +106,7 @@ This is the desired behavior - dev dependency changes don't trigger releases.
 ### Container image not built
 
 **Check:**
+
 1. Is `build-and-publish-container` job running?
 2. Check Docker registry push logs
 3. Verify registry credentials are valid
@@ -111,6 +114,7 @@ This is the desired behavior - dev dependency changes don't trigger releases.
 ### SBOM upload failed
 
 **Solution:**
+
 - Release.yml uses `gh release upload` with permissions
 - If it fails, check `contents: write` permission is set in workflow
 
@@ -119,6 +123,7 @@ This is the desired behavior - dev dependency changes don't trigger releases.
 **Problem:** Merged changes but forgot to update `version =` in pyproject.toml
 
 **Solution:**
+
 1. Create a new commit on main bumping the version
 2. Push to main
 3. Release workflow will detect the version change and trigger
@@ -127,7 +132,7 @@ This is the desired behavior - dev dependency changes don't trigger releases.
 ## Important Files
 
 | File | Purpose |
-|------|---------|
+| ------ | --------- |
 | `pyproject.toml` | Version source of truth (`version = "X.Y.Z"`) |
 | `CHANGELOG.md` | Release notes and history |
 | `.github/workflows/release.yml` | Release automation pipeline |
@@ -200,6 +205,7 @@ The release workflow requires:
 ### SBOM upload failed
 
 **Solution:**
+
 - Release.yml uses `gh release upload` with permissions
 - If it fails, check `contents: write` permission is set in workflow
 
@@ -222,10 +228,11 @@ A: All Python dependencies (from pyproject.toml requirements). Useful for compli
 
 **Q: How long does the full release take?**
 A: Typically 5-10 minutes:
-  - 1 min: Version validation
-  - 3-5 min: Container build + scan
-  - 1 min: SBOM generation + upload
-  - 1 min: GitHub release creation
+
+- 1 min: Version validation
+- 3-5 min: Container build + scan
+- 1 min: SBOM generation + upload
+- 1 min: GitHub release creation
 
 ## See Also
 

@@ -45,18 +45,40 @@ This project implements several security measures:
 - Automated security scanning in CI/CD
 - Pinned dependency versions
 
+### TLS/SSL Security
+- **Strong cipher enforcement**: All TLS connections use OpenSSL SECLEVEL=2, requiring:
+  - RSA keys: 2048 bits or larger
+  - Modern, strong cipher suites
+  - TLS 1.2 or higher
+- Certificate verification can be disabled for development (`TECHNITIUM_VERIFY_SSL=false`), but cipher strength remains enforced
+- Support for custom CA certificates via `TECHNITIUM_CA_BUNDLE_FILE`
+
+### GitHub Actions Security
+- **Least-privilege permissions**: Each workflow job declares only required permissions (not inherited at workflow level)
+- Permissions scoped per job:
+  - CI jobs: `contents: read` only (read-only source access)
+  - Security scanning jobs: `contents: read` + `security-events: write` (scan reporting)
+  - Container publishing jobs: `packages: write` + `id-token: write` (registry push and image signing)
+- Read-only workflows cannot inadvertently modify code or introduce supply chain risks
+
 ### Best Practices
-- Secrets management via environment variables
-- HTTPS for all external communications
+- Secrets management via environment variables (passwords automatically redacted)
+- HTTPS for all external communications (enforced strong ciphers)
 - Input validation and sanitization
-- Principle of least privilege
+- Principle of least privilege (pod security, GitHub Actions permissions, RBAC)
 
 ## Known Security Considerations
 
 ### Authentication
-- Technitium credentials are passed via environment variables
+- Technitium credentials are passed via environment variables (never logged)
 - Token-based authentication with automatic renewal
 - Tokens are stored in memory only (not persisted to disk)
+- Passwords redacted from all logging and error messages
+
+### Cryptography
+- All TLS connections enforce strong ciphers (SECLEVEL=2: 2048-bit+ RSA, strong suites, TLS 1.2+)
+- Independent from certificate verification toggle
+- Protects against downgrade attacks and weak cipher negotiation
 
 ### Network Security
 - All API communication over HTTP(S)

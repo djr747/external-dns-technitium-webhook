@@ -8,10 +8,11 @@ This guide explains how to run integration tests locally against a Kubernetes cl
 - `kubectl` - Kubernetes CLI
 - `helm` - Kubernetes package manager
 - Docker - For running containers
-- Python 3.13+ - With venv
+- Python 3.14+ - With venv
 - `curl` - For health checks
 
 Install on macOS:
+
 ```bash
 brew install kind kubectl helm
 ```
@@ -25,6 +26,7 @@ bash local-ci-setup/setup.sh
 ```
 
 This script:
+
 - Creates a local kind cluster named `local-integration-test`
 - Builds the webhook Docker image from the current code
 - Loads images into kind
@@ -41,6 +43,7 @@ bash local-ci-setup/run-integration-tests.sh
 ```
 
 This script:
+
 - Sets up `kubectl port-forward` from `localhost:30380` to the Technitium service
 - Extracts credentials from the Kubernetes secret
 - Runs pytest with proper environment variables
@@ -80,6 +83,7 @@ kubectl logs -l app=technitium -f                                        # Techn
 ### Access Technitium Web UI
 
 In a separate terminal:
+
 ```bash
 kubectl port-forward svc/technitium 5380:30380 -n default
 ```
@@ -87,6 +91,7 @@ kubectl port-forward svc/technitium 5380:30380 -n default
 Then open `http://localhost:30380` in your browser.
 
 Default credentials:
+
 - Username: `admin`
 - Password: (generated randomly and stored in the Kubernetes secret)
 
@@ -124,16 +129,19 @@ kubectl config use-context <your-original-context>
 If you see "Could not reach Technitium at localhost:30380":
 
 1. Verify the Technitium pod is running:
+
    ```bash
    kubectl get pods -l app=technitium
    ```
 
 2. Check if something else is using port 30380:
+
    ```bash
    lsof -i :30380
    ```
 
 3. Kill any existing port-forward processes:
+
    ```bash
    pkill -f "kubectl port-forward.*30380"
    ```
@@ -154,16 +162,19 @@ The conftest.py in the integration tests directory handles venv path configurati
 If DNS records aren't appearing in Technitium:
 
 1. Check ExternalDNS logs:
+
    ```bash
    kubectl logs -l app.kubernetes.io/name=external-dns -c external-dns -f
    ```
 
 2. Check webhook logs:
+
    ```bash
    kubectl logs -l app.kubernetes.io/name=external-dns -c webhook -f
    ```
 
 3. Verify the webhook is receiving requests:
+
    ```bash
    # Look for endpoints logged in webhook
    kubectl logs -l app.kubernetes.io/name=external-dns -c webhook -f | grep -i "endpoint\|record"
@@ -172,16 +183,19 @@ If DNS records aren't appearing in Technitium:
 ### Kubernetes Context Issues
 
 To see your current context:
+
 ```bash
 kubectl config current-context
 ```
 
 To list all contexts:
+
 ```bash
 kubectl config get-contexts
 ```
 
 To switch contexts:
+
 ```bash
 kubectl config use-context <context-name>
 ```
@@ -190,7 +204,7 @@ kubectl config use-context <context-name>
 
 The local testing environment mirrors the CI setup:
 
-```
+```text
 Your Machine
     ↓
 kubectl port-forward (localhost:30380)
@@ -243,7 +257,7 @@ bash local-ci-setup/run-integration-tests.sh
 ## CI vs Local Testing
 
 | Aspect | CI (Linux) | Local (macOS) |
-|--------|-----------|---------------|
+| -------- | ----------- | --------------- |
 | Port Mapping | kind's extraPortMappings | kubectl port-forward |
 | Node Setup | Ubuntu 24.04 runner | Docker Desktop |
 | Python | Installed in CI job | Uses system Python + venv |

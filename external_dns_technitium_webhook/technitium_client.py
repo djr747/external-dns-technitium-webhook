@@ -120,11 +120,13 @@ class TechnitiumClient:
                 context.verify_mode = ssl.CERT_NONE
                 # Allow TLS 1.2+ for compatibility with self-signed certs
                 context.minimum_version = ssl.TLSVersion.TLSv1_2
-                # Don't restrict cipher suites - allows compatibility with various server configs
-                # Intentional: SECLEVEL=0 allows compatibility with self-signed/legacy servers
-                # Only used when TECHNITIUM_VERIFY_SSL=false, which should only be for dev/testing
-                # nosemgrep: python.lang.security.audit.insecure-transport.ssl.no-set-ciphers.no-set-ciphers
-                context.set_ciphers("DEFAULT:@SECLEVEL=0")
+                # The default SSLContext already uses the platform's sane cipher
+                # selection.  When certificate verification is disabled the primary
+                # goal is to drop hostname checks and allow TLSv1.2+, not to tweak
+                # the cipher list.  Calling ``set_ciphers()`` is rarely necessary
+                # and can inadvertently weaken the channel; the security audit
+                # flagged it as a potential risk.  We therefore avoid touching the
+                # ciphers here and rely on the system defaults instead.
                 verify = context
                 logger.debug("Created permissive SSL context for unverified connections")
             except Exception as e:

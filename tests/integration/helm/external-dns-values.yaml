@@ -29,7 +29,7 @@ provider:
       - name: ZONE
         value: "test.local"
       - name: CATALOG_ZONE
-        value: "catalog.invalid"
+        value: "catalog.invalid"  # helm integration uses CATALOG_ZONE (Config.catalog_zone)
       - name: DOMAIN_FILTERS
         value: "test.local"
       - name: LOG_LEVEL
@@ -43,16 +43,19 @@ provider:
       limits:
         cpu: 200m
         memory: 256Mi
+        ephemeral-storage: 2Gi
     
     # Service port configuration for the webhook
     service:
       port: 8080
     
-    # SecurityContext for pod
+    # Security hardening: disable SA token and add container constraints
+    automountServiceAccountToken: false
     securityContext:
       runAsNonRoot: true
       runAsUser: 65532
-      fsReadOnlyRootFilesystem: true
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
       capabilities:
         drop:
           - ALL

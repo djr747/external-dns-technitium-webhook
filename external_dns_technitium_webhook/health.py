@@ -5,6 +5,7 @@ import socket
 
 from fastapi import FastAPI, HTTPException, status
 
+from . import __version__
 from .config import Config as AppConfig
 
 
@@ -26,7 +27,7 @@ def create_health_app() -> FastAPI:
     app = FastAPI(
         title="ExternalDNS Technitium Webhook - Health",
         description="Health check endpoint for ExternalDNS Technitium webhook",
-        version="0.1.0",
+        version=__version__,
         docs_url=None,
         redoc_url=None,
         openapi_url=None,

@@ -1,0 +1,38 @@
+name: Merge main to develop
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  merge:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check if main is ahead of develop
+        id: check-ahead
+        run: |
+          # Fetch all branches
+          git fetch origin main develop
+          
+          # Check if main has commits not in develop
+          if git rev-list --count develop..main > 0; then
+            echo "main is ahead of develop"
+            echo "ahead=true" >> $GITHUB_OUTPUT
+          else
+            echo "develop is up-to-date or ahead"
+            echo "ahead=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Merge main into develop (only if ahead)
+        if: steps.check-ahead.outputs.ahead == 'true'
+        run: |
+          git checkout develop
+          git merge main --no-edit --ff-only  # Use fast-forward only to avoid merge commits
+          git push origin develop

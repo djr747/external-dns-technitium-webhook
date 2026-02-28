@@ -79,6 +79,7 @@ spec:
       labels:
         app: technitium
     spec:
+      automountServiceAccountToken: false
       initContainers:
       - name: setup
         image: technitium/dns-server:latest
@@ -144,6 +145,7 @@ spec:
           limits:
             cpu: 500m
             memory: 512Mi
+            ephemeral-storage: 2Gi
         volumeMounts:
         - name: shared-data
           mountPath: /shared

@@ -5,20 +5,22 @@ on:
     branches:
       - '**'
       - '!main'
+    paths:
+      - pyproject.toml
+      - '**/*.py'
+      - 'Dockerfile'
+      - '.github/workflows/ci.yml'
+      - 'tests/**'
   pull_request:
     branches: [ main, develop ]
   workflow_dispatch:
-
-permissions:
-  contents: read
-  security-events: write
-  packages: write
-  id-token: write
 
 jobs:
   lint:
     name: Lint and Format Check (Python)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v6
 
@@ -48,6 +50,8 @@ jobs:
   test:
     name: Unit Test (Python)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     needs: [lint]
     strategy:
       fail-fast: false
@@ -173,6 +177,8 @@ jobs:
   integration:
     name: Integration Tests (Kubernetes)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     needs: [build-amd64]
     steps:
       - uses: actions/checkout@v6
@@ -421,6 +427,10 @@ jobs:
   push:
     name: Push Multi-arch Docker Image to Registry
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
     needs: [build-amd64, integration, build-arm64]
     env:
       IMAGE_NAME: ghcr.io/${{ github.repository }}/external-dns-technitium-webhook

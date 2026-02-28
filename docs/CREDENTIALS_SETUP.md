@@ -29,6 +29,7 @@ The webhook requires membership in the **DNS admin group** to access the API. Af
 4. Save changes
 
 This grants the user the necessary API permissions to:
+
 - Authenticate via `/api/user/login`
 - List zones via `/api/zones/list`
 - Create zones via `/api/zones/create`
@@ -104,8 +105,13 @@ volumes:
 
 ## Environment Variables
 
+> **Port configuration:** ExternalDNS calls the webhook on port **8888** and
+> probes `/health` on **8080**. These ports are hard‑coded in the sidecar and
+> cannot be changed in production; the `LISTEN_PORT`/`HEALTH_PORT` settings are
+> only used for local testing.
+
 | Variable | Required | Default | Purpose |
-|----------|----------|---------|---------|
+| ---------- | ---------- | --------- | --------- |
 | `TECHNITIUM_URL` | Yes | None | Technitium DNS API endpoint (port 5380 for HTTP, 53443 for HTTPS) |
 | `TECHNITIUM_USERNAME` | Yes | None | Username for authentication |
 | `TECHNITIUM_PASSWORD` | Yes | None | Password for authentication |
@@ -128,12 +134,14 @@ volumes:
 ### Authentication Failures
 
 1. Verify credentials in Kubernetes Secret:
+
    ```bash
    kubectl get secret technitium-credentials -n external-dns \
      -o jsonpath='{.data.username}' | base64 -d
    ```
 
 2. Test credentials manually:
+
    ```bash
    curl -X POST "http://technitium:5380/api/user/login" \
      -d "username=external-dns-webhook&password=YOUR_PASSWORD"
@@ -142,12 +150,14 @@ volumes:
 ### TLS Certificate Verification Failed
 
 1. Verify CA ConfigMap is properly mounted:
+
    ```bash
    kubectl exec -n external-dns deploy/external-dns -c webhook -- \
      ls -la /etc/technitium-ssl/
    ```
 
 2. Verify certificate content:
+
    ```bash
    kubectl get configmap technitium-ca-bundle -n external-dns \
      -o jsonpath='{.data.ca\.pem}' | openssl x509 -text -noout

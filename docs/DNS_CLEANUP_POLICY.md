@@ -7,7 +7,7 @@ ExternalDNS supports three policies for managing DNS records. The **`sync` polic
 ## Policy Options
 
 | Policy | Create | Update | Delete | Use Case |
-|--------|--------|--------|--------|----------|
+| ------ | ------ | ------ | ------ | ---------- |
 | **`sync`** (default) | ✅ Yes | ✅ Yes | ✅ Yes | Full lifecycle management (RECOMMENDED) |
 | `upsert-only` | ✅ Yes | ✅ Yes | ❌ No | Prevent accidental deletions (legacy) |
 | `create-only` | ✅ Yes | ❌ No | ❌ No | Manual record management |
@@ -81,7 +81,7 @@ helm upgrade external-dns external-dns/external-dns \
 
 ### With `sync` Policy (Recommended)
 
-```
+```text
 1. Service created in Kubernetes
    ↓
 2. ExternalDNS detects service
@@ -103,7 +103,7 @@ helm upgrade external-dns external-dns/external-dns \
 
 ### With `upsert-only` Policy (Not Recommended)
 
-```
+```text
 1-3. Same as above
 4. Service deleted from Kubernetes
    ↓
@@ -168,7 +168,7 @@ The webhook correctly implements both operations:
 
 Example webhook log output:
 
-```
+```text
 INFO - Deleting record test-cleanup.example.com with data {'ipAddress': '192.0.2.100'}
 POST https://technitium-server:53443/api/zones/records/delete → 200 OK
 ```
@@ -210,17 +210,21 @@ curl -s -k -X POST https://technitium-server:53443/api/zones/records/get \
 ### Records Not Being Deleted
 
 1. **Check ExternalDNS policy**:
+
    ```bash
    kubectl get deployment external-dns -n external-dns -o yaml | grep policy
    ```
+
    Should show: `--policy=sync`
 
 2. **Check webhook logs for errors**:
+
    ```bash
    kubectl logs -n external-dns deployment/external-dns -c webhook | grep -i error
    ```
 
 3. **Verify Technitium API connectivity**:
+
    ```bash
    kubectl exec -it -n external-dns deployment/external-dns -c webhook -- \
      curl -k -X POST https://<technitium-server>:53443/api/user/login \
