@@ -13,6 +13,7 @@ from pytest_mock import MockerFixture
 from external_dns_technitium_webhook.app_state import AppState
 from external_dns_technitium_webhook.config import Config
 from external_dns_technitium_webhook.handlers import (
+    _execute_change,
     _get_record_data,
     adjust_endpoints,
     apply_record,
@@ -298,6 +299,88 @@ async def test_apply_record_create(app_state: AppState, mocker: MockerFixture) -
 
 
 @pytest.mark.asyncio
+async def test_apply_record_create_caa_record(app_state: AppState, mocker: MockerFixture) -> None:
+    """Test apply_record create with CAA record."""
+    mock_add = mocker.patch.object(
+        app_state.client,
+        "add_record",
+    )
+
+    changes = Changes(
+        create=[
+            Endpoint(
+                dnsName="caa.example.com",
+                targets=['0 issue "letsencrypt.org"'],  # Valid CAA format
+                recordType="CAA",
+                recordTTL=3600,
+                setIdentifier="",
+            )
+        ],
+        updateOld=[],
+        updateNew=[],
+    )
+
+    response = await apply_record(app_state, changes)
+    assert response.status_code == 204
+    mock_add.assert_called_once()
+
+
+# tests for the internal helper introduced during refactoring
+@pytest.mark.asyncio
+async def test_execute_change_success(app_state: AppState) -> None:
+    """The helper should invoke the correct client method and increment metrics."""
+    ep = Endpoint(
+        dnsName="foo.example.com",
+        targets=["1.2.3.4"],
+        recordType="A",
+        recordTTL=300,
+        setIdentifier="",
+    )
+    record_data = {"ipAddress": "1.2.3.4"}
+
+    await _execute_change(app_state, ep, record_data, "create")
+    app_state.client.add_record.assert_awaited_once_with(  # type: ignore[reportAttributeAccessIssue]
+        domain="foo.example.com",
+        record_type="A",
+        record_data=record_data,
+        ttl=300,
+    )
+
+    # deletion path
+    await _execute_change(app_state, ep, record_data, "delete")
+    app_state.client.delete_record.assert_awaited_once_with(  # type: ignore[reportAttributeAccessIssue]
+        domain="foo.example.com",
+        record_type="A",
+        record_data=record_data,
+    )
+
+
+@pytest.mark.asyncio
+async def test_execute_change_circuit_open(app_state: AppState) -> None:
+    """Circuit breaker errors should translate to 503 HTTPException."""
+    from external_dns_technitium_webhook.handlers import API_UNAVAILABLE
+
+    ep = Endpoint(
+        dnsName="bar.example.com",
+        targets=["1.2.3.5"],
+        recordType="A",
+        recordTTL=60,
+        setIdentifier="",
+    )
+    record_data = {"ipAddress": "1.2.3.5"}
+
+    # instantiate with dummy state value to satisfy constructor
+    app_state.client.add_record = AsyncMock(
+        side_effect=CircuitBreakerOpenError(CircuitState.OPEN, retry_after=5)
+    )
+    with pytest.raises(HTTPException) as excinfo:
+        await _execute_change(app_state, ep, record_data, "create")
+
+    assert excinfo.value.status_code == 503
+    assert API_UNAVAILABLE in str(excinfo.value.detail)
+
+
+@pytest.mark.asyncio
 async def test_apply_record_delete_circuit_open(mock_state, mocker):
     """Delete operation should surface circuit-open as 503 with Retry-After."""
     # Prepare a deletion change
@@ -404,7 +487,7 @@ async def test_apply_record_add_exception(mock_state, mocker):
         await apply_record(mock_state, changes)
 
     assert exc.value.status_code == 500
-    assert "Failed to add record" in str(exc.value.detail)
+    assert "Failed to create record" in str(exc.value.detail)
 
 
 # Additional tests merged from test_handlers_extra.py
@@ -974,7 +1057,7 @@ async def test_apply_record_create_exception(app_state: AppState, mocker: Mocker
         await apply_record(app_state, changes)
 
     assert exc_info.value.status_code == 500
-    assert "Failed to add record" in str(exc_info.value.detail)
+    assert "Failed to create record" in str(exc_info.value.detail)
     mock_add.assert_called_once()
 
 

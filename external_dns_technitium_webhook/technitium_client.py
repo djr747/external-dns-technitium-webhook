@@ -136,18 +136,22 @@ class TechnitiumClient:
             # and is permissive about TLS versions and ciphers
             logger.debug("SSL verification disabled - creating permissive unverified SSL context")
             try:
-                context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+                # Create a default context and relax verification for unverified mode.
+                # Using create_default_context provides platform-secure defaults
+                # while allowing us to explicitly disable hostname checks and
+                # verification when the user has explicitly requested it.
+                context = ssl.create_default_context()
                 context.check_hostname = False
                 context.verify_mode = ssl.CERT_NONE
-                # Allow TLS 1.2+ for compatibility with self-signed certs
-                context.minimum_version = ssl.TLSVersion.TLSv1_2
-                # The default SSLContext already uses the platform's sane cipher
-                # selection.  When certificate verification is disabled the primary
-                # goal is to drop hostname checks and allow TLSv1.2+, not to tweak
-                # the cipher list.  Calling ``set_ciphers()`` is rarely necessary
-                # and can inadvertently weaken the channel; the security audit
-                # flagged it as a potential risk.  We therefore avoid touching the
-                # ciphers here and rely on the system defaults instead.
+                # Allow TLS 1.2+; prefer stronger versions when available
+                # Although we currently support Python 3.14+, we still guard the
+                # assignment because some embedded platforms or extreme builds may
+                # not expose TLSVersion.  If it fails we log a warning so operators
+                # are aware, but continue with the context.
+                try:
+                    context.minimum_version = ssl.TLSVersion.TLSv1_2
+                except Exception as exc:  # pragma: no cover - extremely rare
+                    logger.warning("Could not set TLS minimum_version: %s", exc)
                 verify = context
                 logger.debug("Created permissive SSL context for unverified connections")
             except Exception as e:

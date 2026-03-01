@@ -106,6 +106,10 @@ _apply_structured_formatter_to_logger("httpx")
 
 logger.debug("main.py imported")
 
+# Reusable message constants to avoid duplicated literals
+SERVICE_NOT_READY_MSG = "Service not ready yet. Try again later."
+INTERNAL_SERVER_ERROR_MSG = "Internal server error"
+
 # Coverage hook for testing
 with suppress(ImportError):
     import coverage
@@ -301,6 +305,8 @@ async def setup_technitium_connection(state: AppState) -> None:
 
             return
         except Exception as exc:
+            # Note: asyncio.CancelledError and KeyboardInterrupt inherit from
+            # BaseException, so they are NOT caught here and propagate naturally.
             logger.error(
                 "Failed to initialize Technitium endpoint %s: %s",
                 endpoint,
@@ -495,7 +501,7 @@ async def auto_renew_technitium_token(state: AppState) -> None:
             await asyncio.sleep(sleep_for)
         except asyncio.CancelledError:
             logger.debug("Token renewal task cancelled")
-            break
+            raise
 
         try:
             login_response = await state.client.login(
@@ -553,13 +559,13 @@ def create_app() -> FastAPI:
     app.add_middleware(RequestSizeLimitMiddleware, max_size=1024 * 1024)
 
     # Add CORS middleware with restrictive policy
-    # TODO: Configure allow_origins with specific domains for production
+    # for production deployments, update allow_origins with your actual domains to tighten CORS policy
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[
             "http://localhost",
             "http://127.0.0.1",
-        ],  # TODO: Restrict to specific origins in production
+        ],  # restrict to specific origins in production
         allow_credentials=False,  # No cookies needed for webhook
         allow_methods=["GET", "POST"],  # Only methods we use
         allow_headers=["Content-Type"],
@@ -567,7 +573,7 @@ def create_app() -> FastAPI:
     )
 
     # Exception handlers for proper JSON responses
-    async def runtime_error_handler(_request: Request, exc: Exception) -> ExternalDNSResponse:
+    def runtime_error_handler(_request: Request, exc: Exception) -> ExternalDNSResponse:
         """Handle RuntimeError exceptions with JSON response."""
         try:
             # Prefer explicit readiness from application state when available
@@ -576,7 +582,7 @@ def create_app() -> FastAPI:
                 # Service not ready - return 503 with JSON
                 return ExternalDNSResponse(
                     status_code=503,
-                    content={"error": "Service not ready yet. Try again later."},
+                    content={"error": SERVICE_NOT_READY_MSG},
                 )
         except Exception:
             # If app state isn't available, fall back to text-based detection
@@ -588,28 +594,28 @@ def create_app() -> FastAPI:
             # Service not ready - return 503 with JSON
             return ExternalDNSResponse(
                 status_code=503,
-                content={"error": "Service not ready yet. Try again later."},
+                content={"error": SERVICE_NOT_READY_MSG},
             )
         # Other RuntimeError - return 500 with JSON
         return ExternalDNSResponse(
             status_code=500,
-            content={"error": "Internal server error"},
+            content={"error": INTERNAL_SERVER_ERROR_MSG},
         )
 
-    async def general_exception_handler(_request: Request, _exc: Exception) -> ExternalDNSResponse:
+    def general_exception_handler(_request: Request, _exc: Exception) -> ExternalDNSResponse:
         """Handle general exceptions with JSON response."""
         return ExternalDNSResponse(
             status_code=500,
-            content={"error": "Internal server error"},
+            content={"error": INTERNAL_SERVER_ERROR_MSG},
         )
 
     # ExceptionGroup is available in Python 3.11+
-    async def exception_group_handler(_request: Request, _exc: Exception) -> ExternalDNSResponse:
+    def exception_group_handler(_request: Request, _exc: Exception) -> ExternalDNSResponse:
         """Catch ExceptionGroup from TaskGroup failures and return 500 JSON."""
         logger.exception("Unhandled exception group: %s", _exc)
         return ExternalDNSResponse(
             status_code=500,
-            content={"error": "Internal server error"},
+            content={"error": INTERNAL_SERVER_ERROR_MSG},
         )
 
     # Register exception handlers
@@ -626,7 +632,10 @@ def create_app() -> FastAPI:
         """Negotiate domain filter."""
         try:
             return await handlers.negotiate_domain_filter(state)
-        except (Exception, KeyboardInterrupt, SystemExit) as exc:
+        except KeyboardInterrupt, SystemExit:
+            # dereference interrupts so they propagate to caller
+            raise
+        except Exception as exc:
             logger.exception("Unhandled exception in domain_filter: %s", exc)
             # Convert service-not-ready to 503, others to 500
             if "Service not ready yet" in str(exc):

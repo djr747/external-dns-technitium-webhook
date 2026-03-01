@@ -765,6 +765,35 @@ async def test_setup_connection_starts_unhealthy_after_failures(
     )
 
 
+@pytest.mark.asyncio
+async def test_setup_connection_reraises_cancelled_error(
+    mocker: MockerFixture,
+) -> None:
+    """CancelledError during endpoint init must be reraised, not swallowed."""
+
+    config = Config(
+        technitium_url="http://primary:5380",
+        technitium_username="admin",
+        technitium_password="password",
+        zone="example.com",
+    )
+    state = AppState(config=config)
+
+    mocker.patch.object(state, "set_active_endpoint", new_callable=AsyncMock)
+    mocker.patch.object(
+        state.client,
+        "login",
+        new_callable=AsyncMock,
+        side_effect=asyncio.CancelledError(),
+    )
+    mocker.patch.object(state, "update_status", new_callable=AsyncMock)
+
+    with pytest.raises(asyncio.CancelledError):
+        await setup_technitium_connection(state)
+
+    await state.close()
+
+
 def _build_config() -> Config:
     """Helper to create a minimal configuration for tests."""
 
@@ -854,7 +883,12 @@ async def test_auto_renew_token_success_sets_token(mocker: MockerFixture) -> Non
     )
     sleep_mock.side_effect = [None, asyncio.CancelledError()]
 
-    await auto_renew_technitium_token(cast(AppState, state))
+    # CancelledError is used by the side_effect to break out of the loop;
+    # we don't regard it as a failure in this test so suppress it.
+    from contextlib import suppress
+
+    with suppress(asyncio.CancelledError):  # pragma: no cover - test control flow
+        await auto_renew_technitium_token(cast(AppState, state))
 
     login_mock.assert_awaited_once_with(
         username=config.technitium_username,
@@ -882,7 +916,10 @@ async def test_auto_renew_token_failure_uses_failure_interval(mocker: MockerFixt
     )
     sleep_mock.side_effect = [None, None, asyncio.CancelledError()]
 
-    await auto_renew_technitium_token(cast(AppState, state))
+    from contextlib import suppress
+
+    with suppress(asyncio.CancelledError):  # pragma: no cover
+        await auto_renew_technitium_token(cast(AppState, state))
 
     assert sleep_mock.await_args_list[0].args[0] == 20 * 60
     assert sleep_mock.await_args_list[1].args[0] == 60
@@ -1707,6 +1744,37 @@ class TestExceptionHandlersAndMiddleware:
 
         assert response.status_code == 500
         assert response.json().get("error") == "Internal server error"
+
+    @pytest.mark.asyncio
+    async def test_domain_filter_keyboard_interrupt_propagates(self, mocker):
+        """KeyboardInterrupt inside domain_filter must re-raise, not be swallowed."""
+        app = create_app()
+        state = mocker.AsyncMock(spec=AppState)
+        state.ensure_ready = mocker.AsyncMock()
+        state.config = mocker.MagicMock()
+        state.config.zone = "example.com"
+        app.state.app_state = state
+
+        mocker.patch(
+            "external_dns_technitium_webhook.handlers.negotiate_domain_filter",
+            side_effect=KeyboardInterrupt(),
+        )
+
+        # Call the route handler directly without going through a WSGI thread so
+        # KeyboardInterrupt propagates synchronously.
+        from starlette.routing import Route
+
+        route = next(
+            (
+                r
+                for r in app.routes
+                if isinstance(r, Route) and r.path == "/" and r.methods and "GET" in r.methods
+            ),
+            None,
+        )
+        assert route is not None, "GET / route not found"
+        with pytest.raises(KeyboardInterrupt):
+            await route.endpoint(state=state)
 
 
 class TestMainMiddlewareFunctions:
