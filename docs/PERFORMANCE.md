@@ -119,7 +119,7 @@ The webhook uses a three-state circuit breaker (`resilience.py`) to protect agai
 failures when Technitium is unreachable:
 
 | State | Behaviour |
-|---|---|
+| --- | --- |
 | **CLOSED** | Normal operation — all requests pass through |
 | **OPEN** | Fast rejection — requests fail immediately (microseconds, not the full HTTP timeout) |
 | **HALF_OPEN** | One probe request allowed through; success closes the circuit, failure re-opens it |
@@ -127,7 +127,7 @@ failures when Technitium is unreachable:
 **Configuration**:
 
 | Variable | Default | Description |
-|---|---|---|
+| --- | --- | --- |
 | `CIRCUIT_BREAKER_FAILURE_THRESHOLD` | `5` | Consecutive failures before opening |
 | `CIRCUIT_BREAKER_TIMEOUT` | `60.0` | Seconds before attempting a probe in HALF_OPEN |
 

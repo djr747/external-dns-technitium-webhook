@@ -51,6 +51,7 @@ dev = [
     "pyright==1.1.408",
     "semgrep",
     "types-urllib3",
+    "prometheus-client==0.24.1",
 ]
 
 [project.urls]
@@ -119,7 +120,7 @@ exclude = [
 ]
 stubPath = ""
 venvPath = "."
-venv = "venv"
+venv = ".venv"
 pythonVersion = "3.14"
 pythonPlatform = "All"
 typeCheckingMode = "basic"

@@ -15,7 +15,7 @@ from .app_state import AppState
 from .logging_utils import safe_log_payload
 from .metrics import api_errors_total, dns_records_processed_total, dns_records_total, webhook_ready
 from .models import Changes, DomainFilter, Endpoint
-from .resilience import CircuitState
+from .resilience import CircuitState, CircuitBreakerOpenError
 from .responses import ExternalDNSResponse
 
 logger = logging.getLogger(__name__)
@@ -123,10 +123,24 @@ async def get_records(state: AppState) -> Response:
     logger.debug("Fetching DNS records")
     start = time.monotonic()
 
-    response = await state.client.get_records(
-        domain=state.config.zone,
-        list_zone=True,
-    )
+    try:
+        response = await state.client.get_records(
+            domain=state.config.zone,
+            list_zone=True,
+        )
+    except CircuitBreakerOpenError as cboe:
+        # Technitium API is currently unavailable according to the circuit
+        # breaker. Return 503 so ExternalDNS treats this as a transient
+        # server-side error and retries later. Include Retry-After when
+        # provided by the breaker.
+        retry_after = int(cboe.retry_after) if cboe.retry_after and cboe.retry_after > 0 else 0
+        headers = {"Retry-After": str(retry_after)} if retry_after > 0 else None
+        api_errors_total.labels(error_type="circuit_open").inc()
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Upstream Technitium API temporarily unavailable",
+            headers=headers,
+        ) from cboe
 
     duration_ms = (time.monotonic() - start) * 1000.0
     # Increment the in-memory counter on AppState (lightweight metric hook)
@@ -313,6 +327,15 @@ async def apply_record(state: AppState, changes: Changes) -> Response:
                     record_data=record_data,
                 )
                 dns_records_processed_total.labels(operation="delete").inc()
+            except CircuitBreakerOpenError as cboe:
+                retry_after = int(cboe.retry_after) if cboe.retry_after and cboe.retry_after > 0 else 0
+                headers = {"Retry-After": str(retry_after)} if retry_after > 0 else None
+                api_errors_total.labels(error_type="circuit_open").inc()
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="Upstream Technitium API temporarily unavailable",
+                    headers=headers,
+                ) from cboe
             except Exception as e:
                 safe_message = sanitize_error_message(e)
                 logger.error(f"Failed to delete record {ep.dns_name}: {e}")
@@ -341,6 +364,15 @@ async def apply_record(state: AppState, changes: Changes) -> Response:
                     ttl=ep.record_ttl,
                 )
                 dns_records_processed_total.labels(operation="create").inc()
+            except CircuitBreakerOpenError as cboe:
+                retry_after = int(cboe.retry_after) if cboe.retry_after and cboe.retry_after > 0 else 0
+                headers = {"Retry-After": str(retry_after)} if retry_after > 0 else None
+                api_errors_total.labels(error_type="circuit_open").inc()
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="Upstream Technitium API temporarily unavailable",
+                    headers=headers,
+                ) from cboe
             except Exception as e:
                 safe_message = sanitize_error_message(e)
                 logger.error(f"Failed to add record {ep.dns_name}: {e}")

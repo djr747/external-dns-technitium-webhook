@@ -63,6 +63,8 @@ class CircuitBreaker:
         self._failure_count = 0
         self._last_failure_time: float | None = None
         self._lock = asyncio.Lock()
+        # When in HALF_OPEN only a single test request may be in-flight.
+        self._half_open_inflight = False
 
     @property
     def state(self) -> CircuitState:
@@ -95,7 +97,17 @@ class CircuitBreaker:
                     raise CircuitBreakerOpenError(self._state, remaining)
                 # Timeout elapsed - move to HALF_OPEN
                 self._state = CircuitState.HALF_OPEN
+                # No test request is in-flight yet.
+                self._half_open_inflight = False
                 logger.info("Circuit breaker transitioning OPEN → HALF_OPEN after timeout")
+            # If we're in HALF_OPEN, only a single caller may proceed as the
+            # test request. Subsequent callers should be rejected until that
+            # test completes (either success or failure).
+            if self._state == CircuitState.HALF_OPEN:
+                if self._half_open_inflight:
+                    raise CircuitBreakerOpenError(self._state, 0.0)
+                # Mark that a test request is now in-flight and allow it through.
+                self._half_open_inflight = True
 
     async def _on_success(self) -> None:
         """Record a successful call; reset the breaker when in HALF_OPEN."""
@@ -104,12 +116,16 @@ class CircuitBreaker:
                 self._state = CircuitState.CLOSED
                 self._failure_count = 0
                 self._last_failure_time = None
+                # Clear the half-open in-flight marker when closing the circuit.
+                self._half_open_inflight = False
                 logger.info(
                     "Circuit breaker transitioning HALF_OPEN → CLOSED after successful request"
                 )
             elif self._state == CircuitState.CLOSED:
                 # Reset failure counter on success while closed
                 self._failure_count = 0
+                # Ensure the half-open marker is not left set.
+                self._half_open_inflight = False
 
     async def _on_failure(self) -> None:
         """Record a failed call; open the circuit if threshold is reached."""
@@ -120,6 +136,8 @@ class CircuitBreaker:
             if self._state == CircuitState.HALF_OPEN:
                 # Any failure in half-open immediately reopens the circuit
                 self._state = CircuitState.OPEN
+                # Clear the half-open in-flight marker when reopening.
+                self._half_open_inflight = False
                 logger.warning(
                     "Circuit breaker transitioning HALF_OPEN → OPEN after test request failure"
                 )

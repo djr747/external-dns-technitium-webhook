@@ -199,6 +199,36 @@ async def test_half_open_failure_reopens_circuit() -> None:
     assert cb.state == CircuitState.OPEN
 
 
+@pytest.mark.asyncio
+async def test_half_open_allows_only_single_test_request() -> None:
+    """When HALF_OPEN only a single test request may be in-flight."""
+    cb = CircuitBreaker(failure_threshold=1, timeout=0.01)
+    # Cause the circuit to open
+    with pytest.raises(RuntimeError):
+        await cb.call(_fail())
+
+    # Wait for timeout so the circuit moves to HALF_OPEN
+    await asyncio.sleep(0.02)
+
+    # Start two concurrent calls; one should proceed as the test request,
+    # the other should be rejected immediately with CircuitBreakerOpenError.
+    async def _slow_success(val: int) -> int:
+        await asyncio.sleep(0.02)
+        return val
+
+    t1 = asyncio.create_task(cb.call(_slow_success(1)))
+    t2 = asyncio.create_task(cb.call(_succeed(2)))
+
+    results = await asyncio.gather(t1, t2, return_exceptions=True)
+
+    # Exactly one succeeded and the other is a CircuitBreakerOpenError
+    assert any(isinstance(r, CircuitBreakerOpenError) for r in results)
+    assert any(r == 1 or r == 2 for r in results)
+
+    # After a successful half-open test the circuit should be closed
+    assert cb.state == CircuitState.CLOSED
+
+
 # ---------------------------------------------------------------------------
 # Integration with health check handler
 # ---------------------------------------------------------------------------
