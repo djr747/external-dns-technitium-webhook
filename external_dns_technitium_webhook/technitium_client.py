@@ -499,9 +499,9 @@ class TechnitiumClient:
         if zone:
             payload["zone"] = zone
 
+        self._invalidate_records_cache()
         with _track_latency("delete_record"):
             response = await self._post(self.ENDPOINT_DELETE_RECORD, payload, DeleteRecordResponse)
-        self._invalidate_records_cache()
         return response
 
     async def list_catalog_zones(self) -> ListCatalogZonesResponse:

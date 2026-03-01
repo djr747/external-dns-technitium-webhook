@@ -667,6 +667,38 @@ async def test_delete_record_invalidates_get_records_cache(
 
 
 @pytest.mark.asyncio
+async def test_delete_record_error_still_invalidates_get_records_cache(
+    client: TechnitiumClient, mocker: MockerFixture
+) -> None:
+    """delete_record should invalidate cache even when the delete operation fails."""
+
+    get_records_response = GetRecordsResponse.model_validate(
+        {"zone": {"name": "example.com", "type": "Primary", "disabled": False}, "records": []}
+    )
+    mock_post = mocker.patch.object(
+        client,
+        "_post",
+        new_callable=AsyncMock,
+        side_effect=[
+            get_records_response,
+            TechnitiumError("delete failed"),
+            get_records_response,
+        ],
+    )
+
+    await client.get_records(domain="test.example.com", zone="example.com", list_zone=True)
+    with pytest.raises(TechnitiumError, match="delete failed"):
+        await client.delete_record(
+            domain="test.example.com",
+            record_type="A",
+            record_data={"ipAddress": "1.2.3.4"},
+        )
+    await client.get_records(domain="test.example.com", zone="example.com", list_zone=True)
+
+    assert mock_post.await_count == 3
+
+
+@pytest.mark.asyncio
 async def test_delete_record_with_zone(client: TechnitiumClient, mocker: MockerFixture) -> None:
     """Test delete_record with optional zone parameter."""
     mock_response = {
