@@ -16,7 +16,7 @@ on:
 
 jobs:
   lint:
-    name: Lint and Format Check (Python)
+    name: Lint & Format Check (Python)
     if: ${{ !(github.event_name == 'push' && github.ref == 'refs/heads/main') }}
     runs-on: ubuntu-latest
     permissions:
@@ -52,7 +52,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    needs: [lint]
     strategy:
       fail-fast: false
       matrix:
