@@ -328,7 +328,9 @@ async def apply_record(state: AppState, changes: Changes) -> Response:
                 )
                 dns_records_processed_total.labels(operation="delete").inc()
             except CircuitBreakerOpenError as cboe:
-                retry_after = int(cboe.retry_after) if cboe.retry_after and cboe.retry_after > 0 else 0
+                retry_after = (
+                    int(cboe.retry_after) if cboe.retry_after and cboe.retry_after > 0 else 0
+                )
                 headers = {"Retry-After": str(retry_after)} if retry_after > 0 else None
                 api_errors_total.labels(error_type="circuit_open").inc()
                 raise HTTPException(
@@ -365,7 +367,9 @@ async def apply_record(state: AppState, changes: Changes) -> Response:
                 )
                 dns_records_processed_total.labels(operation="create").inc()
             except CircuitBreakerOpenError as cboe:
-                retry_after = int(cboe.retry_after) if cboe.retry_after and cboe.retry_after > 0 else 0
+                retry_after = (
+                    int(cboe.retry_after) if cboe.retry_after and cboe.retry_after > 0 else 0
+                )
                 headers = {"Retry-After": str(retry_after)} if retry_after > 0 else None
                 api_errors_total.labels(error_type="circuit_open").inc()
                 raise HTTPException(
