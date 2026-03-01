@@ -347,7 +347,7 @@ async def _execute_change(
                 domain=ep.dns_name,
                 record_type=ep.record_type,
                 record_data=record_data,
-                ttl=ep.record_ttl,  # type: ignore[reportCallIssue]
+                ttl=ep.record_ttl,
             )
         else:
             await client_method(
