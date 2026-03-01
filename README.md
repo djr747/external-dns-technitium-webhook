@@ -2,6 +2,8 @@
 
 [![CI](https://github.com/djr747/external-dns-technitium-webhook/actions/workflows/ci.yml/badge.svg)](https://github.com/djr747/external-dns-technitium-webhook/actions/workflows/ci.yml)
 [![Security](https://github.com/djr747/external-dns-technitium-webhook/actions/workflows/security.yml/badge.svg)](https://github.com/djr747/external-dns-technitium-webhook/actions/workflows/security.yml)
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=djr747_external-dns-technitium-webhook&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=djr747_external-dns-technitium-webhook)
+[![Code Smells](https://sonarcloud.io/api/project_badges/measure?project=djr747_external-dns-technitium-webhook&metric=code_smells)](https://sonarcloud.io/summary/new_code?id=djr747_external-dns-technitium-webhook)
 [![codecov](https://codecov.io/gh/djr747/external-dns-technitium-webhook/branch/main/graph/badge.svg)](https://codecov.io/gh/djr747/external-dns-technitium-webhook)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -63,7 +65,7 @@ Environment variables map directly to `external_dns_technitium_webhook.config.Co
 | `DOMAIN_FILTERS` | ❌ | — | Semicolon-separated allowlist for ExternalDNS |
 | `TECHNITIUM_FAILOVER_URLS` | ❌ | — | Semicolon-separated fallback endpoints |
 | `CATALOG_ZONE` | ❌ | — | Catalog zone joined when the endpoint is writable |
-| `TECHNITIUM_VERIFY_SSL` | ❌ | `true` | Verify TLS certificates; set to `false` for self-signed certs (cipher strength enforced regardless) |
+| `TECHNITIUM_VERIFY_SSL` | ❌ | `true` | Verify TLS certificates; set to `false` for self-signed certs **only in dev/tests**. Disabling this skips hostname validation and is insecure in production. |
 | `TECHNITIUM_CA_BUNDLE_FILE` | ❌ | — | Path to PEM file with CA cert(s) for private CAs; mounted via ConfigMap |
 | `LISTEN_ADDRESS` | ❌ | `0.0.0.0` | Bind address for the FastAPI server |
 | `LOG_LEVEL` | ❌ | `INFO` | Python logging level |

@@ -243,3 +243,37 @@ def test_ca_bundle_validation_unreadable_file() -> None:
         finally:
             # Restore permissions for cleanup
             os.chmod(ca_file, 0o600)
+
+
+def test_config_model_dump_password_redacted() -> None:
+    """Test that model_dump redacts the password field.
+
+    This covers the branch where technitium_password IS in the dumped data.
+    """
+    config = Config(
+        technitium_url="http://localhost:5380",
+        technitium_username="admin",
+        technitium_password="secret123",
+        zone="example.com",
+    )
+
+    dump = config.model_dump()
+    assert dump["technitium_password"] == "***REDACTED***"
+
+
+def test_config_model_dump_password_excluded() -> None:
+    """Test that model_dump without password field doesn't try to redact.
+
+    This covers the branch where technitium_password is NOT in the dumped data
+    (e.g., when exclude parameter is used).
+    """
+    config = Config(
+        technitium_url="http://localhost:5380",
+        technitium_username="admin",
+        technitium_password="secret123",
+        zone="example.com",
+    )
+
+    # Dump excluding the password field
+    dump = config.model_dump(exclude={"technitium_password"})
+    assert "technitium_password" not in dump

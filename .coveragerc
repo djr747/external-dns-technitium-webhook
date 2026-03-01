@@ -1,0 +1,10 @@
+[run]
+source = external_dns_technitium_webhook
+relative_files = True
+branch = True
+
+[xml]
+output = coverage.xml
+
+[report]
+skip_empty = True

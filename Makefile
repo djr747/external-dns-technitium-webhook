@@ -41,11 +41,18 @@ install: ## Install package
 install-dev: ## Install package with development dependencies
 	$(VENV_PIP) install -e ".[dev]"
 
-test: ## Run tests
-	$(VENV_PYTHON) -m pytest
 
-test-cov: ## Run tests with coverage
-	$(VENV_PYTHON) -m pytest --cov=external_dns_technitium_webhook --cov-report=html --cov-report=term
+# `test` and `test-cov` are identical because the tox.ini config exercises
+# coverage recording and report creation.  We keep a separate target for
+# backward compatibility/documentation.
+# tox env already installs dev deps and runs pytest; using it ensures
+# coverage.xml is generated correctly for downstream tools such as Sonar.
+test: ## Run tests (via tox)
+	$(VENV_PYTHON) -m tox -e py
+
+
+test-cov: ## Run tests with coverage (via tox)
+	$(VENV_PYTHON) -m tox -e py
 
 test-integration: ## Run integration tests with local kind cluster
 	bash local-ci-setup/run-integration-tests.sh

@@ -2,6 +2,37 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v1.0.2] - 2026-03-01
+
+**Fixed & Improved:**
+
+- Addressed the remaining SonarCloud high issues including
+  complexity warnings, redundant exception classes and regex cleanup.
+- Refactored `technitium_client._post_raw` and `handlers.get_records`
+  by extracting helpers (`_parse_response`, `_record_stream`,
+  `_extract_targets`) which reduced cognitive complexity.
+- Hardened TLS configuration: simplified `TECHNITIUM_VERIFY_SSL`
+  override logic and added comprehensive tests; removed nosonar
+  comment from SSL check.
+- Added `tox.ini` and updated `Makefile` to run tests via `tox` so that
+  coverage.xml is generated for SonarCloud.  Ensured coverage remains
+  ≥95% and removed remaining `# pragma: no cover` directives.
+- Enhanced `run_health_server` to explicitly catch and re‑raise
+  `SystemExit`/`KeyboardInterrupt` with proper logging and added tests
+  for these conditions.
+- Fixed multiple shell scripts (`local-ci-setup/*.sh`,
+  `tests/integration/fixtures/init-technitium.sh`) by using `[[`
+  conditionals and redirecting error messages to stderr; added missing
+  return statements and constants where appropriate.
+- Added new unit tests covering parser errors, SSL override, stream
+  logic, and health/server behaviors; removed unused test module and
+  consolidated coverage.
+- Updated documentation and README with warnings regarding insecure
+  configuration (`TECHNITIUM_VERIFY_SSL`) and clarified build/test
+  workflow.
+- Minor lint/type updates across repository; no new ruff/pyright
+  warnings remain.
+
 ## [v1.0.1] - 2026-03-01
 
 **Changed:**
