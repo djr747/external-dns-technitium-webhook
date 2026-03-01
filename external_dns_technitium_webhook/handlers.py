@@ -15,7 +15,7 @@ from .app_state import AppState
 from .logging_utils import safe_log_payload
 from .metrics import api_errors_total, dns_records_processed_total, dns_records_total, webhook_ready
 from .models import Changes, DomainFilter, Endpoint
-from .resilience import CircuitState, CircuitBreakerOpenError
+from .resilience import CircuitBreakerOpenError, CircuitState
 from .responses import ExternalDNSResponse
 
 logger = logging.getLogger(__name__)
