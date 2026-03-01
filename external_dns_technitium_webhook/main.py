@@ -632,7 +632,7 @@ def create_app() -> FastAPI:
         """Negotiate domain filter."""
         try:
             return await handlers.negotiate_domain_filter(state)
-        except (KeyboardInterrupt, SystemExit):
+        except KeyboardInterrupt, SystemExit:
             # dereference interrupts so they propagate to caller
             raise
         except Exception as exc:

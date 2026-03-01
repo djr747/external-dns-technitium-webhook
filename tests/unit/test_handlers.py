@@ -370,7 +370,9 @@ async def test_execute_change_circuit_open(app_state: AppState) -> None:
     record_data = {"ipAddress": "1.2.3.5"}
 
     # instantiate with dummy state value to satisfy constructor
-    app_state.client.add_record.side_effect = CircuitBreakerOpenError(CircuitState.OPEN, retry_after=5)  # type: ignore[reportAttributeAccessIssue]
+    app_state.client.add_record.side_effect = CircuitBreakerOpenError(
+        CircuitState.OPEN, retry_after=5
+    )  # type: ignore[reportAttributeAccessIssue]
     with pytest.raises(HTTPException) as excinfo:
         await _execute_change(app_state, ep, record_data, "create")
 

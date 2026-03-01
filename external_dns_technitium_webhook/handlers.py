@@ -42,7 +42,10 @@ def sanitize_error_message(error: Exception) -> str:
 
     # Remove sensitive patterns
     sensitive_patterns: list[tuple[str, str | Callable[[re.Match[str]], str]]] = [
-        (r"password[=:]\s*\S+", "password=***"),  # pragma: no sonar - regex pattern not a real secret
+        (
+            r"password[=:]\s*\S+",
+            "password=***",
+        ),  # pragma: no sonar - regex pattern not a real secret
         (r"token[=:]\s*\S+", "token=***"),
         (r"api[_-]?key[=:]\s*\S+", "api_key=***"),
         (r"secret[=:]\s*\S+", "secret=***"),
@@ -354,9 +357,7 @@ async def _execute_change(
             )
         dns_records_processed_total.labels(operation=operation).inc()
     except CircuitBreakerOpenError as cboe:
-        retry_after = (
-            int(cboe.retry_after) if cboe.retry_after and cboe.retry_after > 0 else 0
-        )
+        retry_after = int(cboe.retry_after) if cboe.retry_after and cboe.retry_after > 0 else 0
         headers = {"Retry-After": str(retry_after)} if retry_after > 0 else None
         api_errors_total.labels(error_type="circuit_open").inc()
         raise HTTPException(
@@ -372,6 +373,7 @@ async def _execute_change(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to {operation} record: {safe_message}",
         ) from e
+
 
 # pragma: no sonar - complexity of generic processor is acceptable
 async def _process_changes(
@@ -402,9 +404,7 @@ async def _process_changes(
                 )
                 continue
 
-            logger.info(
-                f"{operation.upper()} record {ep.dns_name} with data {record_data}"
-            )
+            logger.info(f"{operation.upper()} record {ep.dns_name} with data {record_data}")
             await _execute_change(state, ep, record_data, operation)
 
 
