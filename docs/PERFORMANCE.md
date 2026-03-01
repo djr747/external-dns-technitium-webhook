@@ -113,6 +113,33 @@ async def _post(self, endpoint: str, data: dict) -> dict:
 - Automatic recovery from auth failures
 - Transparent to callers
 
+### Circuit Breaker
+
+The webhook uses a three-state circuit breaker (`resilience.py`) to protect against cascading
+failures when Technitium is unreachable:
+
+| State | Behaviour |
+|---|---|
+| **CLOSED** | Normal operation — all requests pass through |
+| **OPEN** | Fast rejection — requests fail immediately (microseconds, not the full HTTP timeout) |
+| **HALF_OPEN** | One probe request allowed through; success closes the circuit, failure re-opens it |
+
+**Configuration**:
+
+| Variable | Default | Description |
+|---|---|---|
+| `CIRCUIT_BREAKER_FAILURE_THRESHOLD` | `5` | Consecutive failures before opening |
+| `CIRCUIT_BREAKER_TIMEOUT` | `60.0` | Seconds before attempting a probe in HALF_OPEN |
+
+**Impact**:
+
+- ExternalDNS backs off faster because `503` responses arrive immediately rather than after a 10-second
+  HTTP timeout.
+- Kubernetes liveness/readiness probes see an accurate picture: the health endpoint returns
+  `{"status": "unhealthy", "circuit_breaker": "open"}` while the circuit is open.
+- A `webhook_api_errors_total{error_type="circuit_open"}` Prometheus counter is incremented on every
+  fast rejection, making the open state visible in your metrics dashboard.
+
 ### Retry Logic Recommendations
 
 For production deployments, consider adding retry logic for transient failures:

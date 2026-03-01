@@ -37,6 +37,8 @@ class Config(BaseSettings):
     technitium_ca_bundle_file: str | None = None
     technitium_enable_request_compression: bool = False
     technitium_compression_threshold_bytes: int = 32768
+    circuit_breaker_failure_threshold: int = 5
+    circuit_breaker_timeout: float = 60.0
 
     def __init__(self, **values: Any) -> None:
         """Allow instantiation without explicit arguments for env loading."""

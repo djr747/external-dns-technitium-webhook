@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+**Added:**
+
+- **Circuit Breaker** (`resilience.py`): three-state (CLOSED → OPEN → HALF_OPEN) circuit breaker
+  protects all Technitium API calls from cascading failures.
+  - `CIRCUIT_BREAKER_FAILURE_THRESHOLD` (default `5`) — consecutive failures before the circuit opens.
+  - `CIRCUIT_BREAKER_TIMEOUT` (default `60` s) — seconds the circuit stays open before allowing a
+    single probe request.
+  - Fast rejection (microseconds instead of the full HTTP timeout) when Technitium is unreachable.
+  - `circuit_open` Prometheus error counter incremented on each fast rejection.
+  - Health check (`GET /`) returns `503` with `{"circuit_breaker": "open"}` while the circuit is open,
+    so Kubernetes probes immediately reflect connectivity failures.
+
+**Fixed:**
+
+- `handlers.py`: corrected Python-2-style `except AddressValueError, ValueError:` to
+  `except ValueError:` (`AddressValueError` is a `ValueError` subclass).
+- `main.py`: removed a redundant `except KeyboardInterrupt, SystemExit: raise` clause
+  (`KeyboardInterrupt` and `SystemExit` are `BaseException` subclasses that `except Exception` never
+  catches anyway).
+- `technitium_client.py`: eliminated a redundant double-encode of the request body when gzip
+  compression is enabled.
+
 ## [v0.4.3] - 2026-02-28
 
 See [release notes](https://github.com/djr747/external-dns-technitium-webhook/releases/tag/v0.4.3) for details.
