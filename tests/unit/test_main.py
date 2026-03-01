@@ -56,6 +56,21 @@ from external_dns_technitium_webhook.technitium_client import (
     TechnitiumError,
 )
 
+# --- test helpers -----------------------------------------------------------
+
+@pytest.fixture(autouse=True)
+def _stub_health_thread(mocker: MockerFixture) -> None:
+    """Prevent the background health server from actually starting.
+
+    Many of the unit tests create a ``TestClient(app)`` which triggers the
+    FastAPI lifespan manager; that code spins up a thread running
+    ``run_health_server`` from the ``server`` module.  Rather than allowing
+    the thread to bind a real port (which provokes a warning/error if the
+    port is already in use), we stub the function to a benign lambda.
+    """
+    # patch the actual implementation used by the lifespan context
+    mocker.patch("external_dns_technitium_webhook.server.run_health_server", lambda *args, **kwargs: None)
+
 
 def test_app_creation(mocker: MockerFixture) -> None:
     """Test application creation with mocked dependencies."""

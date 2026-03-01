@@ -120,7 +120,8 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: coverage-report
-          path: htmlcov/
+          # tox generates HTML into "coverage_html" directory (see tox.ini)
+          path: coverage_html/
           retention-days: 30
 
   build-amd64:

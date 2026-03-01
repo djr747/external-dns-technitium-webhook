@@ -139,20 +139,91 @@ def _log_fetch_metrics(state: AppState, response: GetRecordsResponse, duration_m
     )
 
 
-# pragma: no sonar - complexity is acceptable for this core handler
-async def get_records(state: AppState) -> Response:
-    """Get current DNS records.
 
-    Args:
-        state: Application state
 
-    Returns:
-        Streaming response with list of current endpoints
+def _extract_targets(record: Any) -> list[str]:
+    """Compute the target list for a given record.
+
+    Returns a list of strings suitable for the ``targets`` field of an
+    ExternalDNS endpoint.  This logic was extracted from the original
+    `get_records` handler to reduce its complexity.
     """
+    r_type = record.type
+    r_data = record.r_data
+
+    if r_type in ("A", "AAAA"):
+        return [r_data.get("ipAddress", "")]
+    if r_type == "CNAME":
+        return [r_data.get("cname", "")]
+    if r_type == "TXT":
+        return [r_data.get("text", "")]
+    if r_type == "ANAME":
+        return [r_data.get("aname", "")]
+    if r_type == "CAA":
+        flags = r_data.get("flags", 0)
+        tag = r_data.get("tag", "")
+        value = r_data.get("value", "")
+        return [f'{flags} {tag} "{value}"']
+    if r_type == "URI":
+        priority = r_data.get("priority", 0)
+        weight = r_data.get("weight", 0)
+        uri = r_data.get("uri", "")
+        return [f'{priority} {weight} "{uri}"']
+    if r_type == "SSHFP":
+        algorithm = r_data.get("algorithm", 0)
+        fp_type = r_data.get("fingerprintType", 0)
+        fingerprint = r_data.get("fingerprint", "")
+        return [f"{algorithm} {fp_type} {fingerprint}"]
+    if r_type in ("SVCB", "HTTPS"):
+        priority = r_data.get("svcPriority", 0)
+        target = r_data.get("svcTargetName", "")
+        params = r_data.get("svcParams", "")
+        return [f"{priority} {target} {params}".strip()]
+    # fallback: wrap raw data
+    return [r_data] if not isinstance(r_data, list) else r_data
+
+
+async def _record_stream(response: GetRecordsResponse) -> AsyncGenerator[str]:
+    """Yield JSON fragments for each valid record in the response."""
+    yield "["
+    first = True
+    for record in response.records:
+        if record.type not in (
+            "A",
+            "AAAA",
+            "CNAME",
+            "TXT",
+            "ANAME",
+            "CAA",
+            "URI",
+            "SSHFP",
+            "SVCB",
+            "HTTPS",
+        ):
+            continue
+
+        endpoint = Endpoint(
+            dnsName=record.name,
+            recordType=record.type,
+            recordTTL=record.ttl,
+            setIdentifier="",
+            targets=[],
+        )
+        endpoint.targets = _extract_targets(record)
+
+        if not first:
+            yield ","
+        first = False
+        yield json.dumps(endpoint.model_dump(by_alias=True))
+
+    yield "]"
+
+
+async def get_records(state: AppState) -> Response:
+    """Get current DNS records and stream them to the caller."""
     await state.ensure_ready()
 
     import time
-
     logger.debug("Fetching DNS records")
     start = time.monotonic()
 
@@ -167,81 +238,7 @@ async def get_records(state: AppState) -> Response:
     duration_ms = (time.monotonic() - start) * 1000.0
     _log_fetch_metrics(state, response, duration_ms)
 
-    # Stream the response as JSON array to avoid building large in-memory list
-    async def generate_endpoints() -> AsyncGenerator[str]:
-        yield "["
-        first = True
-        for record in response.records:
-            record_type = record.type
-            r_data = record.r_data
-
-            # Skip unsupported record types
-            if record_type not in (
-                "A",
-                "AAAA",
-                "CNAME",
-                "TXT",
-                "ANAME",
-                "CAA",
-                "URI",
-                "SSHFP",
-                "SVCB",
-                "HTTPS",
-            ):
-                continue
-
-            endpoint = Endpoint(
-                dnsName=record.name,
-                recordType=record_type,
-                recordTTL=record.ttl,
-                setIdentifier="",
-                targets=[],
-            )
-
-            # Extract target from record data
-            if record_type == "A" or record_type == "AAAA":
-                endpoint.targets = [r_data.get("ipAddress", "")]
-            elif record_type == "CNAME":
-                endpoint.targets = [r_data.get("cname", "")]
-            elif record_type == "TXT":
-                endpoint.targets = [r_data.get("text", "")]
-            elif record_type == "ANAME":
-                endpoint.targets = [r_data.get("aname", "")]
-            elif record_type == "CAA":
-                # Format: flags tag "value"
-                flags = r_data.get("flags", 0)
-                tag = r_data.get("tag", "")
-                value = r_data.get("value", "")
-                endpoint.targets = [f'{flags} {tag} "{value}"']
-            elif record_type == "URI":
-                # Format: priority weight "uri"
-                priority = r_data.get("priority", 0)
-                weight = r_data.get("weight", 0)
-                uri = r_data.get("uri", "")
-                endpoint.targets = [f'{priority} {weight} "{uri}"']
-            elif record_type == "SSHFP":
-                # Format: algorithm fptype fingerprint
-                algorithm = r_data.get("algorithm", 0)
-                fp_type = r_data.get("fingerprintType", 0)
-                fingerprint = r_data.get("fingerprint", "")
-                endpoint.targets = [f"{algorithm} {fp_type} {fingerprint}"]
-            elif record_type in ("SVCB", "HTTPS"):
-                # Format: priority target params
-                priority = r_data.get("svcPriority", 0)
-                target = r_data.get("svcTargetName", "")
-                params = r_data.get("svcParams", "")
-                endpoint.targets = [f"{priority} {target} {params}".strip()]
-
-            if not first:
-                yield ","
-            first = False
-            yield json.dumps(endpoint.model_dump(by_alias=True))
-        yield "]"
-
-    return StreamingResponse(
-        generate_endpoints(),
-        media_type="application/external.dns.webhook+json;version=1",
-    )
+    return StreamingResponse(_record_stream(response), media_type=ExternalDNSResponse.media_type)
 
 
 async def adjust_endpoints(state: AppState, endpoints: list[Endpoint]) -> ExternalDNSResponse:

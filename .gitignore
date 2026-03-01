@@ -49,6 +49,7 @@ coverage.json
 .hypothesis/
 .pytest_cache/
 cover/
+pytest-report.xml
 
 # Translations
 *.mo

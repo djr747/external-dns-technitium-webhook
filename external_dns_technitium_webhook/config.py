@@ -31,6 +31,13 @@ class Config(BaseSettings):
     technitium_failover_urls: str | None = None
     catalog_zone: str | None = None
     technitium_verify_ssl: bool = True
+    # When set to False we disable *all* TLS verification (certificates and
+    # hostname checks).  This is useful when talking to a local or self‑signed
+    # Technitium instance in development/testing, but it is **insecure** and
+    # should never be used in production environments.  There is also no way to
+    # selectively disable only hostname validation.  Refer to the README, docs,
+    # and unit tests for examples of how the client behaves when this flag is
+    # toggled.
     # Optional path to a PEM file containing one or more CA certificates.
     # Intended to be mounted via ConfigMap (like username/password secrets).
     # When verify_ssl is True and ca_bundle_file is set, the file must exist and be readable.

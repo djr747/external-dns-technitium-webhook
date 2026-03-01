@@ -22,7 +22,7 @@ echo "========================================"
 # Wait for Technitium API to be ready
 echo "Waiting for Technitium API to be ready..."
 RETRY_COUNT=0
-while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+while [[ $RETRY_COUNT -lt $MAX_RETRIES ]]; do
   if curl -s -f "$TECHNITIUM_URL/api/user/login" > /dev/null 2>&1; then
     echo "✓ Technitium API is ready!"
     break
@@ -32,7 +32,7 @@ while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
   sleep $RETRY_INTERVAL
 done
 
-if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
+if [[ $RETRY_COUNT -eq $MAX_RETRIES ]]; then
   echo "✗ ERROR: Technitium API did not become ready after ${MAX_RETRIES} attempts"
   exit 1
 fi
@@ -50,7 +50,7 @@ if echo "$LOGIN_RESPONSE" | grep -q '"status":"ok"'; then
   echo "✓ Successfully authenticated with provided password"
   TOKEN=$(echo "$LOGIN_RESPONSE" | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
 
-  if [ -z "$TOKEN" ]; then
+  if [[ -z "$TOKEN" ]]; then
     echo "✗ ERROR: Could not extract authentication token"
     exit 1
   fi
@@ -79,7 +79,7 @@ else
 fi
 
 # Create primary zone if specified
-if [ -n "$ZONE" ]; then
+if [[ -n "$ZONE" ]]; then
   echo ""
   echo "Creating primary zone: $ZONE"
   PRIMARY_ZONE_RESPONSE=$(curl -s -X POST "$TECHNITIUM_URL/api/zones/create" \

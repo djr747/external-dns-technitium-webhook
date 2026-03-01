@@ -227,23 +227,34 @@ def test_run_health_server_outer_exception(mocker, config):
 
 
 def test_run_health_server_system_exit_in_serve(mocker, config):
-    """Test that run_health_server handles SystemExit from serve()."""
+    """Test that run_health_server logs and propagates a SystemExit raised by
+    the server implementation.
+
+    We avoid letting the real ``uvicorn.Server`` try to bind a port by
+    configuring the patched ``Server`` class to raise the exception when
+    ``serve()`` is called.  The function is expected to log the shutdown
+    message at INFO level and then re-raise the error, so the test uses
+    ``pytest.raises`` to catch the propagated ``SystemExit``.
+    """
     health_app = FastAPI()
     mock_server = mocker.patch("external_dns_technitium_webhook.server.Server")
-    # Don't use AsyncMock when mocking run_until_complete - use Mock to avoid creating un-awaited coroutines
-    mock_server.return_value.serve = mocker.Mock()
+    # configure serve() to immediately raise; this prevents the real
+    # uvicorn logic from ever executing and binding to a port.
+    mock_server.return_value.serve = mocker.Mock(side_effect=SystemExit(1))
     mocker.patch("external_dns_technitium_webhook.server.UvicornConfig")
+
     mock_loop = mocker.Mock()
-    # SystemExit is now caught separately and logged at INFO level
-    mock_loop.run_until_complete = mocker.Mock(side_effect=SystemExit(1))
+    mock_loop.run_until_complete = mocker.Mock()
     mock_loop.close = mocker.Mock()
     mocker.patch(
-        "external_dns_technitium_webhook.server.asyncio.new_event_loop", return_value=mock_loop
+        "external_dns_technitium_webhook.server.asyncio.new_event_loop",
+        return_value=mock_loop,
     )
     mocker.patch("external_dns_technitium_webhook.server.asyncio.set_event_loop")
     mock_logging_info = mocker.patch("external_dns_technitium_webhook.server.logging.info")
 
-    server_mod.run_health_server(health_app, config)
+    with pytest.raises(SystemExit):
+        server_mod.run_health_server(health_app, config)
 
     # Verify SystemExit was handled and logged at INFO level
     assert any(
