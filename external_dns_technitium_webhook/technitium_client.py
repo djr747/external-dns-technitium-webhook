@@ -3,6 +3,7 @@
 import gzip
 import logging
 import ssl
+import time
 from collections.abc import Generator
 from contextlib import contextmanager
 from typing import Any, Self, TypeVar, cast
@@ -161,6 +162,10 @@ class TechnitiumClient:
 
         logger.debug(f"Creating httpx.AsyncClient with verify={verify}")
         self._client = httpx.AsyncClient(timeout=timeout, verify=verify)
+        self._records_cache_ttl_seconds = 30.0
+        self._records_cache: dict[
+            tuple[str, str | None, bool | None], tuple[float, GetRecordsResponse]
+        ] = {}
 
     async def close(self) -> None:
         """Close the HTTP client."""
@@ -425,7 +430,9 @@ class TechnitiumClient:
             payload["updateSvcbHints"] = str(update_svcb_hints).lower()
 
         with _track_latency("add_record"):
-            return await self._post(self.ENDPOINT_ADD_RECORD, payload, AddRecordResponse)
+            response = await self._post(self.ENDPOINT_ADD_RECORD, payload, AddRecordResponse)
+        self._records_cache.clear()
+        return response
 
     async def get_records(
         self,
@@ -449,8 +456,16 @@ class TechnitiumClient:
         if list_zone is not None:
             payload["listZone"] = str(list_zone).lower()
 
+        cache_key = (domain, zone, list_zone)
+        cached = self._records_cache.get(cache_key)
+        now = time.monotonic()
+        if cached and now - cached[0] < self._records_cache_ttl_seconds:
+            return cached[1]
+
         with _track_latency("get_records"):
-            return await self._post(self.ENDPOINT_GET_RECORDS, payload, GetRecordsResponse)
+            response = await self._post(self.ENDPOINT_GET_RECORDS, payload, GetRecordsResponse)
+        self._records_cache[cache_key] = (time.monotonic(), response)
+        return response
 
     async def delete_record(
         self,
@@ -479,7 +494,9 @@ class TechnitiumClient:
             payload["zone"] = zone
 
         with _track_latency("delete_record"):
-            return await self._post(self.ENDPOINT_DELETE_RECORD, payload, DeleteRecordResponse)
+            response = await self._post(self.ENDPOINT_DELETE_RECORD, payload, DeleteRecordResponse)
+        self._records_cache.clear()
+        return response
 
     async def list_catalog_zones(self) -> ListCatalogZonesResponse:
         """List available catalog zones on the server."""

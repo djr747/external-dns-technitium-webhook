@@ -1,12 +1,18 @@
 """Unit tests for Technitium client."""
 
+import asyncio
 from unittest.mock import AsyncMock
 
 import pytest
 from pydantic import BaseModel
 from pytest_mock import MockerFixture
 
-from external_dns_technitium_webhook.models import CreateZoneResponse
+from external_dns_technitium_webhook.models import (
+    AddRecordResponse,
+    CreateZoneResponse,
+    DeleteRecordResponse,
+    GetRecordsResponse,
+)
 from external_dns_technitium_webhook.technitium_client import (
     InvalidTokenError,
     TechnitiumClient,
@@ -530,6 +536,130 @@ async def test_get_records_with_optional_params(
     payload = call_args[1]["data"]
     assert payload["zone"] == "example.com"
     assert payload["listZone"] == "true"
+
+
+@pytest.mark.asyncio
+async def test_get_records_uses_cache_for_same_request(
+    client: TechnitiumClient, mocker: MockerFixture
+) -> None:
+    """get_records should return cached results for repeated identical requests."""
+
+    response = GetRecordsResponse.model_validate(
+        {"zone": {"name": "example.com", "type": "Primary", "disabled": False}, "records": []}
+    )
+    mock_post = mocker.patch.object(client, "_post", new_callable=AsyncMock, return_value=response)
+
+    first = await client.get_records(domain="test.example.com", zone="example.com", list_zone=True)
+    second = await client.get_records(domain="test.example.com", zone="example.com", list_zone=True)
+
+    assert first is second
+    mock_post.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_get_records_cache_miss_for_different_request(
+    client: TechnitiumClient, mocker: MockerFixture
+) -> None:
+    """get_records should call the API for different cache keys."""
+
+    response = GetRecordsResponse.model_validate(
+        {"zone": {"name": "example.com", "type": "Primary", "disabled": False}, "records": []}
+    )
+    mock_post = mocker.patch.object(client, "_post", new_callable=AsyncMock, return_value=response)
+
+    await client.get_records(domain="test.example.com", zone="example.com", list_zone=True)
+    await client.get_records(domain="test.example.com", zone="example.com", list_zone=False)
+
+    assert mock_post.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_get_records_cache_expires_after_ttl(
+    client: TechnitiumClient, mocker: MockerFixture
+) -> None:
+    """get_records should refresh cache when TTL expires."""
+
+    response = GetRecordsResponse.model_validate(
+        {"zone": {"name": "example.com", "type": "Primary", "disabled": False}, "records": []}
+    )
+    client._records_cache_ttl_seconds = 0.01
+    mock_post = mocker.patch.object(
+        client,
+        "_post",
+        new_callable=AsyncMock,
+        side_effect=[response, response],
+    )
+
+    await client.get_records(domain="test.example.com", zone="example.com", list_zone=True)
+    await asyncio.sleep(0.02)
+    await client.get_records(domain="test.example.com", zone="example.com", list_zone=True)
+
+    assert mock_post.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_add_record_invalidates_get_records_cache(
+    client: TechnitiumClient, mocker: MockerFixture
+) -> None:
+    """add_record should clear cached record responses."""
+
+    get_records_response = GetRecordsResponse.model_validate(
+        {"zone": {"name": "example.com", "type": "Primary", "disabled": False}, "records": []}
+    )
+    add_record_response = AddRecordResponse.model_validate(
+        {
+            "zone": {"name": "example.com", "type": "Primary", "disabled": False},
+            "addedRecord": {
+                "disabled": False,
+                "name": "test.example.com",
+                "type": "A",
+                "ttl": 60,
+                "rData": {"ipAddress": "1.2.3.4"},
+            },
+        }
+    )
+    mock_post = mocker.patch.object(
+        client,
+        "_post",
+        new_callable=AsyncMock,
+        side_effect=[get_records_response, add_record_response, get_records_response],
+    )
+
+    await client.get_records(domain="test.example.com", zone="example.com", list_zone=True)
+    await client.add_record(
+        domain="test.example.com", record_type="A", record_data={"ipAddress": "1.2.3.4"}
+    )
+    await client.get_records(domain="test.example.com", zone="example.com", list_zone=True)
+
+    assert mock_post.await_count == 3
+
+
+@pytest.mark.asyncio
+async def test_delete_record_invalidates_get_records_cache(
+    client: TechnitiumClient, mocker: MockerFixture
+) -> None:
+    """delete_record should clear cached record responses."""
+
+    get_records_response = GetRecordsResponse.model_validate(
+        {"zone": {"name": "example.com", "type": "Primary", "disabled": False}, "records": []}
+    )
+    delete_record_response = DeleteRecordResponse.model_validate({})
+    mock_post = mocker.patch.object(
+        client,
+        "_post",
+        new_callable=AsyncMock,
+        side_effect=[get_records_response, delete_record_response, get_records_response],
+    )
+
+    await client.get_records(domain="test.example.com", zone="example.com", list_zone=True)
+    await client.delete_record(
+        domain="test.example.com",
+        record_type="A",
+        record_data={"ipAddress": "1.2.3.4"},
+    )
+    await client.get_records(domain="test.example.com", zone="example.com", list_zone=True)
+
+    assert mock_post.await_count == 3
 
 
 @pytest.mark.asyncio

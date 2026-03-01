@@ -11,6 +11,7 @@ FastAPI webhook provider that lets [ExternalDNS](https://github.com/kubernetes-s
 
 - Async-first architecture with graceful startup/shutdown and token auto-renewal
 - Technitium client with failover rotation, zone auto-create, and catalog enrollment
+- 30-second in-memory cache for `get_records` responses with automatic invalidation on record changes
 - Circuit breaker (CLOSED/OPEN/HALF_OPEN) for fast-fail on Technitium connection failures
 - Rate limiting and request size middleware for defensive operation (enabled by default: REQUESTS_PER_MINUTE=1000, RATE_LIMIT_BURST=10)
 - Optional request compression (gzip) for large payloads sent to remote Technitium servers
