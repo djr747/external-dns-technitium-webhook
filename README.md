@@ -11,6 +11,7 @@ FastAPI webhook provider that lets [ExternalDNS](https://github.com/kubernetes-s
 
 - Async-first architecture with graceful startup/shutdown and token auto-renewal
 - Technitium client with failover rotation, zone auto-create, and catalog enrollment
+- Circuit breaker (CLOSED/OPEN/HALF_OPEN) for fast-fail on Technitium connection failures
 - Rate limiting and request size middleware for defensive operation (enabled by default: REQUESTS_PER_MINUTE=1000, RATE_LIMIT_BURST=10)
 - Optional request compression (gzip) for large payloads sent to remote Technitium servers
 - 10 DNS record types supported; provider-specific properties are preserved end-to-end
@@ -70,6 +71,8 @@ Environment variables map directly to `external_dns_technitium_webhook.config.Co
 | `RATE_LIMIT_BURST` | ❌ | `10` | Burst capacity for the rate limiter |
 | `TECHNITIUM_ENABLE_REQUEST_COMPRESSION` | ❌ | `false` | Enable gzip compression for large request bodies |
 | `TECHNITIUM_COMPRESSION_THRESHOLD_BYTES` | ❌ | `32768` | Minimum payload size (bytes) for compression |
+| `CIRCUIT_BREAKER_FAILURE_THRESHOLD` | ❌ | `5` | Consecutive failures before the circuit opens |
+| `CIRCUIT_BREAKER_TIMEOUT` | ❌ | `60.0` | Seconds the circuit stays open before allowing a probe request |
 | `LISTEN_PORT` | ❌ | `8888` | **Fixed** by ExternalDNS; not configurable in production (used only by local tests) |
 | `HEALTH_PORT` | ❌ | `8080` | **Fixed** by ExternalDNS; Kubernetes probes target this port |
 

@@ -123,6 +123,7 @@ external-dns-technitium-webhook/
 │   ├── app_state.py           # Application state management
 │   ├── handlers.py            # ExternalDNS webhook endpoints
 │   ├── technitium_client.py   # Async HTTP client for Technitium
+│   ├── resilience.py          # Circuit breaker (CLOSED/OPEN/HALF_OPEN)
 │   ├── models.py              # Pydantic request/response models
 │   ├── middleware.py          # Rate limiting, security middleware
 │   ├── server.py              # Health server thread management
@@ -134,6 +135,7 @@ external-dns-technitium-webhook/
 │   │   ├── test_config.py     # Configuration tests
 │   │   ├── test_handlers.py   # Webhook endpoint tests
 │   │   ├── test_technitium_client.py  # Client tests
+│   │   ├── test_resilience.py         # Circuit breaker tests
 │   │   ├── test_models.py     # Model validation tests
 │   │   ├── test_app_state.py  # Application state tests
 │   │   ├── test_middleware.py # Middleware tests
@@ -208,6 +210,14 @@ external-dns-technitium-webhook/
 - Auto-authentication with token refresh
 - All 10 DNS record types supported
 - TLS certificate verification support
+- Passes every API call through the circuit breaker (if configured)
+
+### `resilience.py`
+
+- `CircuitBreaker` — three-state async circuit breaker (CLOSED / OPEN / HALF_OPEN)
+- `CircuitBreakerOpenError` — raised on fast rejection; carries `state` and `retry_after`
+- `CircuitState` enum used by `health_check` to reflect connectivity failures in health responses
+- Controlled by `CIRCUIT_BREAKER_FAILURE_THRESHOLD` and `CIRCUIT_BREAKER_TIMEOUT`
 
 ### `models.py`
 

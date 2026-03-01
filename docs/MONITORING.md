@@ -44,8 +44,10 @@ time="2025-11-02T20:33:19Z" level=error module=external_dns_technitium_webhook.t
 
 **Behavior**:
 
-- Returns `200 OK` with `{"status": "ok"}` when service is ready
-- Returns `503 Service Unavailable` when not ready
+- Returns `200 OK` with `{"status": "ok"}` when service is ready and circuit breaker is closed
+- Returns `503 Service Unavailable` when not ready **or** when the circuit breaker is open
+  - When the circuit is open the body includes `"circuit_breaker": "open"` to distinguish this case
+    from a normal startup/readiness failure
 - Checks main API server connectivity (port 8888)
 - Runs on separate thread to isolate from main API load
 
@@ -197,6 +199,22 @@ time="2025-11-02T20:33:16Z" level=info module=external_dns_technitium_webhook.te
 
 ```logs
 time="2025-11-02T20:33:20Z" level=warning module=external_dns_technitium_webhook.middleware msg="Rate limit exceeded for client 10.0.0.1. Tokens: 0.50"
+```
+
+**Circuit breaker**:
+
+```logs
+# Circuit opens after consecutive failures
+time="2025-11-02T20:33:10Z" level=warning module=external_dns_technitium_webhook.resilience msg="Circuit breaker transitioning CLOSED → OPEN after 5 consecutive failures"
+
+# Fast rejection while open
+time="2025-11-02T20:33:11Z" level=warning module=external_dns_technitium_webhook.technitium_client msg="Circuit breaker is open; retry after 58.3s"
+
+# Probe request after timeout
+time="2025-11-02T20:34:12Z" level=info module=external_dns_technitium_webhook.resilience msg="Circuit breaker transitioning OPEN → HALF_OPEN after timeout"
+
+# Recovery
+time="2025-11-02T20:34:13Z" level=info module=external_dns_technitium_webhook.resilience msg="Circuit breaker transitioning HALF_OPEN → CLOSED after successful request"
 ```
 
 **Connection issues**:
