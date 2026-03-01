@@ -125,7 +125,7 @@ jobs:
     name: Build Docker Image (amd64)
     if: ${{ !(github.event_name == 'push' && github.ref == 'refs/heads/main') }}
     runs-on: ubuntu-24.04
-    needs: [test]
+    needs: [test, lint]
     outputs:
       image-tag: ${{ steps.image-tag.outputs.tag }}
     steps:
@@ -168,7 +168,7 @@ jobs:
     name: Build Docker Image (arm64)
     if: ${{ !(github.event_name == 'push' && github.ref == 'refs/heads/main') }}
     runs-on: ubuntu-24.04-arm
-    needs: [test]
+    needs: [test, lint]
     outputs:
       image-tag: ${{ steps.image-tag.outputs.tag }}
     steps:
