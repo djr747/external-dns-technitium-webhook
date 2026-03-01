@@ -15,8 +15,8 @@ from external_dns_technitium_webhook.config import Config
 from external_dns_technitium_webhook.handlers import (
     _execute_change,
     _get_record_data,
-    _record_stream,
     _process_changes,
+    _record_stream,
     adjust_endpoints,
     apply_record,
     get_records,
@@ -302,6 +302,7 @@ async def test_apply_record_create(app_state: AppState, mocker: MockerFixture) -
 
 # new tests for coverage gaps
 
+
 @pytest.mark.asyncio
 async def test_record_stream_skips_ignored_types_and_emits_commas() -> None:
     """Verify that the streaming generator emits JSON entries and commas.
@@ -310,16 +311,20 @@ async def test_record_stream_skips_ignored_types_and_emits_commas() -> None:
     non-skipped type.  The output should start with ``[`` and end with
     ``]`` and include a comma between the two serialized endpoints.
     """
-    from external_dns_technitium_webhook.models import RecordInfo, ZoneInfo, GetRecordsResponse
 
     # include one ignored type (MX) plus two valid ones to exercise both
     # the skipping logic and the comma insertion.
     records = [
         RecordInfo(disabled=False, name="foo.example", ttl=300, type="A", rData={"A": "1.2.3.4"}),
         RecordInfo(disabled=False, name="skip.example", ttl=300, type="MX", rData={"mx": "mail"}),
-        RecordInfo(disabled=False, name="bar.example", ttl=300, type="ANAME", rData={"aname": "alias"}),
+        RecordInfo(
+            disabled=False, name="bar.example", ttl=300, type="ANAME", rData={"aname": "alias"}
+        ),
     ]
-    resp = GetRecordsResponse(zone=ZoneInfo(name="example.com", type="primary", internal=False, disabled=False), records=records)
+    resp = GetRecordsResponse(
+        zone=ZoneInfo(name="example.com", type="primary", internal=False, disabled=False),
+        records=records,
+    )
 
     chunks: list[str] = []
     async for chunk in _record_stream(resp):
@@ -350,7 +355,8 @@ async def test_process_changes_skips_unsupported_type(app_state: AppState, caplo
     await _process_changes(app_state, [ep], "create")
 
     # client should never be invoked
-    app_state.client.add_record.assert_not_awaited()
+    # pyright can't infer AsyncMock on this attribute; cast explicitly
+    cast(AsyncMock, app_state.client.add_record).assert_not_awaited()
     assert "Skipping creation" in caplog.text
 
 
