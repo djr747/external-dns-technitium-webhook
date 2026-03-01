@@ -3,7 +3,7 @@
 import json
 import logging
 import re
-from typing import cast
+from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -358,6 +358,33 @@ async def test_process_changes_skips_unsupported_type(app_state: AppState, caplo
     # pyright can't infer AsyncMock on this attribute; cast explicitly
     cast(AsyncMock, app_state.client.add_record).assert_not_awaited()
     assert "Skipping creation" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_extract_targets_fallback_with_unknown_type() -> None:
+    """Test _extract_targets fallback for unknown/unsupported record types.
+
+    This covers the defensive fallback at handlers.py:181 which wraps raw
+    rData when the record type is not explicitly handled. This path is
+    exercised when Technitium returns a record type not in the supported set.
+    """
+    from external_dns_technitium_webhook.handlers import _extract_targets
+
+    # Create a minimal record-like object with an unknown type
+    class FakeRecord:
+        def __init__(self, record_type: str, r_data: Any):
+            self.type = record_type
+            self.r_data = r_data
+
+    # Test 1: Unknown type with non-list rData should wrap it
+    unknown_record = FakeRecord("UNKNOWN", {"someKey": "someValue"})
+    result = _extract_targets(unknown_record)
+    assert result == [{"someKey": "someValue"}]
+
+    # Test 2: Unknown type with list rData should return it as-is
+    unknown_record_list = FakeRecord("CUSTOM", ["val1", "val2"])
+    result = _extract_targets(unknown_record_list)
+    assert result == ["val1", "val2"]
 
 
 @pytest.mark.asyncio
