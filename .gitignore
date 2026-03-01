@@ -161,3 +161,6 @@ Thumbs.db
 .codeql-venv/
 # Trivy
 trivy-results.sarif
+
+# SonarQube
+.sonarlint/

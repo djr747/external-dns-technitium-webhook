@@ -2,6 +2,6 @@
 
 from .technitium_client import InvalidTokenError, TechnitiumClient, TechnitiumError
 
-__version__ = "0.4.3"
+__version__ = "1.0.1"
 
 __all__ = ["TechnitiumClient", "TechnitiumError", "InvalidTokenError", "__version__"]

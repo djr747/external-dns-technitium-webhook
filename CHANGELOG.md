@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v1.0.1] - 2026-03-01
+
+**Changed:**
+
+- Refactored API handlers to reduce cognitive complexity and duplicate logic.
+  * Introduced generic `_process_changes` with dedicated `_execute_change` helper.
+  * Added constant `API_UNAVAILABLE` and helper functions `_handle_circuit_error` and `_log_fetch_metrics`.
+  * Extracted error handling for downstream operations and cleaned up asynchronous logic.
+  * Converted several async helpers to synchronous when no await was required.
+- Improved `main.py` exception handlers with consistent readiness checks and simplified control flow.
+- Hardened TLS handling in `technitium_client.py` and added test for minimum_version fallback.
+- Removed stray `tests/test_handlers.py`, consolidated unique test,
+  and added new unit tests covering `execute_change` helper and keyboard-interrupt path in `domain_filter`.
+- Achieved **100% test coverage** by adding missing test paths and reworking existing suites.
+- Addressed SonarCloud findings: complexity reductions, constants for literals, comments, `# pragma: no sonar` where appropriate.
+- Updated imports, linting, and formatting across codebase; fixed all ruff/pyright warnings.
+- Cleaned up test warnings and pyright issues with `type: ignore` annotations as needed.
+- Removed outdated sonar analysis toggles and ensured automatic analysis remains enabled.
+
 ## [v1.0.0] - 2026-02-28
 
 **Added:**

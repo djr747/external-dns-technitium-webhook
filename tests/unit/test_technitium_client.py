@@ -2,6 +2,7 @@
 
 import asyncio
 import contextlib
+import ssl
 from typing import Any
 from unittest.mock import AsyncMock
 
@@ -997,6 +998,34 @@ def test_client_init_default_verify_ssl() -> None:
     )
     assert client.verify_ssl is True
     assert client.ca_bundle is None
+
+
+def test_client_init_verify_ssl_false_minimum_version_fallback(mocker: MockerFixture) -> None:
+    """Test that failing to set minimum_version logs a warning but succeeds."""
+    original_create = ssl.create_default_context
+
+    def patched_create(*args: Any, **kwargs: Any) -> ssl.SSLContext:
+        ctx = original_create(*args, **kwargs)
+        type(ctx).minimum_version = property(  # type: ignore[reportAttributeAccessIssue]
+            fget=lambda self: ssl.TLSVersion.TLSv1_2,
+            fset=lambda self, v: (_ for _ in ()).throw(AttributeError("not supported")),
+        )
+        return ctx
+
+    mocker.patch(
+        "external_dns_technitium_webhook.technitium_client.ssl.create_default_context",
+        side_effect=patched_create,
+    )
+
+    warn_patch = mocker.patch("external_dns_technitium_webhook.technitium_client.logger.warning")
+
+    client = TechnitiumClient(
+        base_url="http://localhost:5380",
+        token="test-token",
+        verify_ssl=False,
+    )
+    assert client.verify_ssl is False
+    assert warn_patch.called
 
 
 def test_client_init_verify_ssl_false_with_fallback(mocker: MockerFixture) -> None:
