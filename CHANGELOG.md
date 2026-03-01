@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [v1.0.0] - 2026-02-28
 
 **Added:**
 
@@ -16,6 +16,11 @@ All notable changes to this project will be documented in this file.
   - Health check (`GET /`) returns `503` with `{"circuit_breaker": "open"}` while the circuit is open,
     so Kubernetes probes immediately reflect connectivity failures.
 
+- **DNS record cache**: 30-second in-memory cache for `GET /records` to reduce Technitium API load
+  with invalidation on write/delete operations and accompanying unit tests.
+
+- **Metrics endpoint**: Prometheus metrics endpoint added at `/metrics` (served on port 8080).
+
 **Fixed:**
 
 - `handlers.py`: corrected Python-2-style `except AddressValueError, ValueError:` to
@@ -26,11 +31,20 @@ All notable changes to this project will be documented in this file.
 - `technitium_client.py`: eliminated a redundant double-encode of the request body when gzip
   compression is enabled.
 
-## [v0.4.3] - 2026-02-28
+- `handlers.py`: invalidate `get_records` cache when a delete is attempted to ensure cache
+  consistency after mutations.
 
-See [release notes](https://github.com/djr747/external-dns-technitium-webhook/releases/tag/v0.4.3) for details.
+**Changed:**
 
-All notable changes to this project will be documented in this file.
+- Cache TTL and invalidation behavior: expose configurable TTL and document cache invalidation
+  options (`CACHE_TTL_SECONDS`, notes in docs and help text).
+- CI: bumped several GitHub Action versions (`actions/checkout`, `actions/upload-artifact`,
+  `actions/download-artifact`) and other workflow maintenance updates.
+
+**Chore / Tests:**
+
+- Formatting and lint fixes (ruff/black) applied to handlers and tests; syntax fixes and test
+  hygiene improvements to address warnings and SonarQube findings.
 
 ## [v0.4.3] - 2026-02-28
 
