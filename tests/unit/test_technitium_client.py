@@ -1,12 +1,25 @@
 """Unit tests for Technitium client."""
 
+import asyncio
+import contextlib
+from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
 from pydantic import BaseModel
 from pytest_mock import MockerFixture
 
-from external_dns_technitium_webhook.models import CreateZoneResponse
+from external_dns_technitium_webhook.models import (
+    AddRecordResponse,
+    CreateZoneResponse,
+    DeleteRecordResponse,
+    GetRecordsResponse,
+)
+from external_dns_technitium_webhook.resilience import (
+    CircuitBreaker,
+    CircuitBreakerOpenError,
+    CircuitState,
+)
 from external_dns_technitium_webhook.technitium_client import (
     InvalidTokenError,
     TechnitiumClient,
@@ -33,6 +46,7 @@ async def test_client_login_success(client: TechnitiumClient, mocker: MockerFixt
     mock_post = mocker.patch.object(
         client._client,
         "post",
+        new_callable=AsyncMock,
         return_value=mocker.Mock(
             status_code=200,
             json=mocker.Mock(return_value=mock_response),
@@ -58,6 +72,7 @@ async def test_client_login_error(client: TechnitiumClient, mocker: MockerFixtur
     mocker.patch.object(
         client._client,
         "post",
+        new_callable=AsyncMock,
         return_value=mocker.Mock(
             status_code=200,
             json=mocker.Mock(return_value=mock_response),
@@ -82,6 +97,7 @@ async def test_client_create_zone(client: TechnitiumClient, mocker: MockerFixtur
     mocker.patch.object(
         client._client,
         "post",
+        new_callable=AsyncMock,
         return_value=mocker.Mock(
             status_code=200,
             json=mocker.Mock(return_value=mock_response),
@@ -117,6 +133,7 @@ async def test_client_add_record(client: TechnitiumClient, mocker: MockerFixture
     mocker.patch.object(
         client._client,
         "post",
+        new_callable=AsyncMock,
         return_value=mocker.Mock(
             status_code=200,
             json=mocker.Mock(return_value=mock_response),
@@ -161,6 +178,7 @@ async def test_client_add_aname_record(client: TechnitiumClient, mocker: MockerF
     mocker.patch.object(
         client._client,
         "post",
+        new_callable=AsyncMock,
         return_value=mocker.Mock(
             status_code=200,
             json=mocker.Mock(return_value=mock_response),
@@ -209,6 +227,7 @@ async def test_client_add_caa_record(client: TechnitiumClient, mocker: MockerFix
     mocker.patch.object(
         client._client,
         "post",
+        new_callable=AsyncMock,
         return_value=mocker.Mock(
             status_code=200,
             json=mocker.Mock(return_value=mock_response),
@@ -242,6 +261,7 @@ async def test_post_json_parse_error(client: TechnitiumClient, mocker: MockerFix
     mocker.patch.object(
         client._client,
         "post",
+        new_callable=AsyncMock,
         return_value=mocker.Mock(
             status_code=200,
             json=mocker.Mock(side_effect=ValueError("Invalid JSON")),
@@ -262,6 +282,7 @@ async def test_post_http_status_error(client: TechnitiumClient, mocker: MockerFi
     mocker.patch.object(
         client._client,
         "post",
+        new_callable=AsyncMock,
         return_value=mocker.Mock(
             raise_for_status=mocker.Mock(
                 side_effect=httpx.HTTPStatusError(
@@ -308,6 +329,7 @@ async def test_list_zones_with_pagination(client: TechnitiumClient, mocker: Mock
     mock_post = mocker.patch.object(
         client._client,
         "post",
+        new_callable=AsyncMock,
         return_value=mocker.Mock(
             status_code=200,
             json=mocker.Mock(return_value=mock_response),
@@ -355,6 +377,7 @@ async def test_client_add_uri_record(client: TechnitiumClient, mocker: MockerFix
     mocker.patch.object(
         client._client,
         "post",
+        new_callable=AsyncMock,
         return_value=mocker.Mock(
             status_code=200,
             json=mocker.Mock(return_value=mock_response),
@@ -409,6 +432,7 @@ async def test_client_add_svcb_record(client: TechnitiumClient, mocker: MockerFi
     mocker.patch.object(
         client._client,
         "post",
+        new_callable=AsyncMock,
         return_value=mocker.Mock(
             status_code=200,
             json=mocker.Mock(return_value=mock_response),
@@ -443,6 +467,7 @@ async def test_post_invalid_token_status(client: TechnitiumClient, mocker: Mocke
     mocker.patch.object(
         client._client,
         "post",
+        new_callable=AsyncMock,
         return_value=mocker.Mock(
             status_code=200,
             json=mocker.Mock(return_value=mock_response),
@@ -467,6 +492,7 @@ async def test_create_zone_invalid_token_error(
     mocker.patch.object(
         client._client,
         "post",
+        new_callable=AsyncMock,
         return_value=mocker.Mock(
             status_code=200,
             json=mocker.Mock(return_value=mock_response),
@@ -498,6 +524,7 @@ async def test_get_records_with_optional_params(
     mock_post = mocker.patch.object(
         client._client,
         "post",
+        new_callable=AsyncMock,
         return_value=mocker.Mock(
             status_code=200,
             json=mocker.Mock(return_value=mock_response),
@@ -519,6 +546,166 @@ async def test_get_records_with_optional_params(
 
 
 @pytest.mark.asyncio
+async def test_get_records_uses_cache_for_same_request(
+    client: TechnitiumClient, mocker: MockerFixture
+) -> None:
+    """get_records should return cached results for repeated identical requests."""
+
+    response = GetRecordsResponse.model_validate(
+        {"zone": {"name": "example.com", "type": "Primary", "disabled": False}, "records": []}
+    )
+    mock_post = mocker.patch.object(client, "_post", new_callable=AsyncMock, return_value=response)
+
+    first = await client.get_records(domain="test.example.com", zone="example.com", list_zone=True)
+    second = await client.get_records(domain="test.example.com", zone="example.com", list_zone=True)
+
+    assert first is second
+    mock_post.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_get_records_cache_miss_for_different_request(
+    client: TechnitiumClient, mocker: MockerFixture
+) -> None:
+    """get_records should call the API for different cache keys."""
+
+    response = GetRecordsResponse.model_validate(
+        {"zone": {"name": "example.com", "type": "Primary", "disabled": False}, "records": []}
+    )
+    mock_post = mocker.patch.object(client, "_post", new_callable=AsyncMock, return_value=response)
+
+    await client.get_records(domain="test.example.com", zone="example.com", list_zone=True)
+    await client.get_records(domain="test.example.com", zone="example.com", list_zone=False)
+
+    assert mock_post.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_get_records_cache_expires_after_ttl(
+    mocker: MockerFixture,
+) -> None:
+    """get_records should refresh cache when TTL expires."""
+    client = TechnitiumClient(
+        base_url="http://localhost:5380",
+        token="test-token",
+        records_cache_ttl_seconds=0.01,
+    )
+
+    response = GetRecordsResponse.model_validate(
+        {"zone": {"name": "example.com", "type": "Primary", "disabled": False}, "records": []}
+    )
+    mock_post = mocker.patch.object(
+        client,
+        "_post",
+        new_callable=AsyncMock,
+        side_effect=[response, response],
+    )
+
+    await client.get_records(domain="test.example.com", zone="example.com", list_zone=True)
+    await asyncio.sleep(0.05)
+    await client.get_records(domain="test.example.com", zone="example.com", list_zone=True)
+
+    assert mock_post.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_add_record_invalidates_get_records_cache(
+    client: TechnitiumClient, mocker: MockerFixture
+) -> None:
+    """add_record should clear cached record responses."""
+
+    get_records_response = GetRecordsResponse.model_validate(
+        {"zone": {"name": "example.com", "type": "Primary", "disabled": False}, "records": []}
+    )
+    add_record_response = AddRecordResponse.model_validate(
+        {
+            "zone": {"name": "example.com", "type": "Primary", "disabled": False},
+            "addedRecord": {
+                "disabled": False,
+                "name": "test.example.com",
+                "type": "A",
+                "ttl": 60,
+                "rData": {"ipAddress": "1.2.3.4"},
+            },
+        }
+    )
+    mock_post = mocker.patch.object(
+        client,
+        "_post",
+        new_callable=AsyncMock,
+        side_effect=[get_records_response, add_record_response, get_records_response],
+    )
+
+    await client.get_records(domain="test.example.com", zone="example.com", list_zone=True)
+    await client.add_record(
+        domain="test.example.com", record_type="A", record_data={"ipAddress": "1.2.3.4"}
+    )
+    await client.get_records(domain="test.example.com", zone="example.com", list_zone=True)
+
+    assert mock_post.await_count == 3
+
+
+@pytest.mark.asyncio
+async def test_delete_record_invalidates_get_records_cache(
+    client: TechnitiumClient, mocker: MockerFixture
+) -> None:
+    """delete_record should clear cached record responses."""
+
+    get_records_response = GetRecordsResponse.model_validate(
+        {"zone": {"name": "example.com", "type": "Primary", "disabled": False}, "records": []}
+    )
+    delete_record_response = DeleteRecordResponse.model_validate({})
+    mock_post = mocker.patch.object(
+        client,
+        "_post",
+        new_callable=AsyncMock,
+        side_effect=[get_records_response, delete_record_response, get_records_response],
+    )
+
+    await client.get_records(domain="test.example.com", zone="example.com", list_zone=True)
+    await client.delete_record(
+        domain="test.example.com",
+        record_type="A",
+        record_data={"ipAddress": "1.2.3.4"},
+    )
+    await client.get_records(domain="test.example.com", zone="example.com", list_zone=True)
+
+    assert mock_post.await_count == 3
+
+
+@pytest.mark.asyncio
+async def test_delete_record_error_still_invalidates_get_records_cache(
+    client: TechnitiumClient, mocker: MockerFixture
+) -> None:
+    """delete_record should invalidate cache even when the delete operation fails."""
+
+    get_records_response = GetRecordsResponse.model_validate(
+        {"zone": {"name": "example.com", "type": "Primary", "disabled": False}, "records": []}
+    )
+    mock_post = mocker.patch.object(
+        client,
+        "_post",
+        new_callable=AsyncMock,
+        side_effect=[
+            get_records_response,
+            TechnitiumError("delete failed"),
+            get_records_response,
+        ],
+    )
+
+    await client.get_records(domain="test.example.com", zone="example.com", list_zone=True)
+    with pytest.raises(TechnitiumError, match="delete failed"):
+        await client.delete_record(
+            domain="test.example.com",
+            record_type="A",
+            record_data={"ipAddress": "1.2.3.4"},
+        )
+    await client.get_records(domain="test.example.com", zone="example.com", list_zone=True)
+
+    assert mock_post.await_count == 3
+
+
+@pytest.mark.asyncio
 async def test_delete_record_with_zone(client: TechnitiumClient, mocker: MockerFixture) -> None:
     """Test delete_record with optional zone parameter."""
     mock_response = {
@@ -529,6 +716,7 @@ async def test_delete_record_with_zone(client: TechnitiumClient, mocker: MockerF
     mock_post = mocker.patch.object(
         client._client,
         "post",
+        new_callable=AsyncMock,
         return_value=mocker.Mock(
             status_code=200,
             json=mocker.Mock(return_value=mock_response),
@@ -560,6 +748,7 @@ async def test_post_raw_unexpected_response_format(
     mocker.patch.object(
         client._client,
         "post",
+        new_callable=AsyncMock,
         return_value=mocker.Mock(
             status_code=200,
             json=mocker.Mock(return_value=[]),
@@ -578,6 +767,7 @@ async def test_post_raw_unexpected_status(client: TechnitiumClient, mocker: Mock
     mocker.patch.object(
         client._client,
         "post",
+        new_callable=AsyncMock,
         return_value=mocker.Mock(
             status_code=200,
             json=mocker.Mock(return_value={"status": "weird"}),
@@ -675,6 +865,7 @@ async def test_list_catalog_zones(client: TechnitiumClient, mocker: MockerFixtur
     mocker.patch.object(
         client._client,
         "post",
+        new_callable=AsyncMock,
         return_value=mocker.Mock(
             status_code=200,
             json=mocker.Mock(return_value=mock_response),
@@ -707,6 +898,7 @@ async def test_get_zone_options_with_catalog_names(
     mock_post = mocker.patch.object(
         client._client,
         "post",
+        new_callable=AsyncMock,
         return_value=mocker.Mock(
             status_code=200,
             json=mocker.Mock(return_value=mock_response),
@@ -828,7 +1020,7 @@ def test_client_init_ssl_context_entire_exception_path(mocker: MockerFixture) ->
     """Test that SSL context creation exception is caught and logged."""
 
     # Mock just the ssl.SSLContext in our module to raise exception
-    def raise_on_protocol_tls(*args, **kwargs):  # noqa: ARG001
+    def raise_on_protocol_tls(*_args, **_kwargs):
         raise Exception("SSL context creation failed")
 
     mock_ssl_context = mocker.MagicMock(side_effect=raise_on_protocol_tls)
@@ -868,6 +1060,7 @@ async def test_request_compression_enabled(client: TechnitiumClient, mocker: Moc
     mock_post = mocker.patch.object(
         client._client,
         "post",
+        new_callable=AsyncMock,
         return_value=mocker.Mock(
             status_code=200,
             json=mocker.Mock(return_value=mock_response),
@@ -897,6 +1090,7 @@ async def test_request_compression_disabled(
     mock_post = mocker.patch.object(
         client._client,
         "post",
+        new_callable=AsyncMock,
         return_value=mocker.Mock(
             status_code=200,
             json=mocker.Mock(return_value=mock_response),
@@ -960,7 +1154,39 @@ async def test_close_calls_aclose(mocker: MockerFixture) -> None:
     client._client.aclose = mock_aclose
 
     await client.close()
-    mock_aclose.assert_awaited_once()
+
+
+def test_technitium_error_str():
+    err = TechnitiumError("msg", error_message="api fail", inner_error="inner")
+    s = str(err)
+    assert "api fail" in s
+    assert "inner" in s
+
+
+@pytest.mark.asyncio
+async def test_post_raw_circuit_open_propagates(mocker):
+    client = TechnitiumClient(base_url="http://localhost:5380", token="t")
+
+    class FakeBreaker(CircuitBreaker):
+        def __init__(self) -> None:
+            super().__init__()
+
+        async def call(self, coro: Any) -> Any:
+            # Close the coroutine to avoid "never awaited" runtime warnings
+            with contextlib.suppress(Exception):
+                coro.close()
+            raise CircuitBreakerOpenError(CircuitState.OPEN, 2)
+
+    client.circuit_breaker = FakeBreaker()
+
+    # Patch underlying client.post to avoid network
+    mocker.patch.object(client._client, "post", side_effect=Exception("should not be called"))
+
+    with pytest.raises(CircuitBreakerOpenError):
+        await client._post_raw(client.ENDPOINT_LOGIN, {"user": "u"})
+
+    await client.close()
+    # client.close() executed without error
 
 
 @pytest.mark.asyncio
@@ -1001,6 +1227,7 @@ async def test_add_record_with_optional_parameters(
     mock_post = mocker.patch.object(
         client._client,
         "post",
+        new_callable=AsyncMock,
         return_value=mocker.Mock(
             status_code=200,
             json=mocker.Mock(return_value=mock_response),

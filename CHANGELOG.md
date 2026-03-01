@@ -2,11 +2,49 @@
 
 All notable changes to this project will be documented in this file.
 
-## [v0.4.3] - 2026-02-28
+## [v1.0.0] - 2026-02-28
 
-See [release notes](https://github.com/djr747/external-dns-technitium-webhook/releases/tag/v0.4.3) for details.
+**Added:**
 
-All notable changes to this project will be documented in this file.
+- **Circuit Breaker** (`resilience.py`): three-state (CLOSED → OPEN → HALF_OPEN) circuit breaker
+  protects all Technitium API calls from cascading failures.
+  - `CIRCUIT_BREAKER_FAILURE_THRESHOLD` (default `5`) — consecutive failures before the circuit opens.
+  - `CIRCUIT_BREAKER_TIMEOUT` (default `60` s) — seconds the circuit stays open before allowing a
+    single probe request.
+  - Fast rejection (microseconds instead of the full HTTP timeout) when Technitium is unreachable.
+  - `circuit_open` Prometheus error counter incremented on each fast rejection.
+  - Health check (`GET /`) returns `503` with `{"circuit_breaker": "open"}` while the circuit is open,
+    so Kubernetes probes immediately reflect connectivity failures.
+
+- **DNS record cache**: 30-second in-memory cache for `GET /records` to reduce Technitium API load
+  with invalidation on write/delete operations and accompanying unit tests.
+
+- **Metrics endpoint**: Prometheus metrics endpoint added at `/metrics` (served on port 8080).
+
+**Fixed:**
+
+- `handlers.py`: corrected Python-2-style `except AddressValueError, ValueError:` to
+  `except ValueError:` (`AddressValueError` is a `ValueError` subclass).
+- `main.py`: removed a redundant `except KeyboardInterrupt, SystemExit: raise` clause
+  (`KeyboardInterrupt` and `SystemExit` are `BaseException` subclasses that `except Exception` never
+  catches anyway).
+- `technitium_client.py`: eliminated a redundant double-encode of the request body when gzip
+  compression is enabled.
+
+- `handlers.py`: invalidate `get_records` cache when a delete is attempted to ensure cache
+  consistency after mutations.
+
+**Changed:**
+
+- Cache TTL and invalidation behavior: expose configurable TTL and document cache invalidation
+  options (`CACHE_TTL_SECONDS`, notes in docs and help text).
+- CI: bumped several GitHub Action versions (`actions/checkout`, `actions/upload-artifact`,
+  `actions/download-artifact`) and other workflow maintenance updates.
+
+**Chore / Tests:**
+
+- Formatting and lint fixes (ruff/black) applied to handlers and tests; syntax fixes and test
+  hygiene improvements to address warnings and SonarQube findings.
 
 ## [v0.4.3] - 2026-02-28
 

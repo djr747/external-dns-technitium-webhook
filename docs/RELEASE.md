@@ -181,6 +181,7 @@ When a release is created:
 ### Permissions
 
 The release workflow requires:
+
 - `contents: write` - Create tags, releases, push changes
 - `packages: write` - Push Docker images
 - `security-events: write` - Upload security scans

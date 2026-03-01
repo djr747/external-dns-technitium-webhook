@@ -84,7 +84,35 @@ jobs:
 
       - name: Run tests with coverage
         run: |
-          pytest tests/unit/ --cov=external_dns_technitium_webhook --cov-report=xml --cov-report=html --cov-report=term-missing --cov-fail-under=95
+          pytest tests/unit/ --cov=external_dns_technitium_webhook --cov-report=xml --cov-report=html --cov-report=term-missing --cov-fail-under=95 --junitxml=pytest-report.xml
+
+      - name: Show coverage and test report files
+        run: |
+          echo "Listing repository root files for debugging"
+          ls -la
+          echo "--- coverage.xml ---"
+          test -f coverage.xml && ls -l coverage.xml || echo "coverage.xml not found"
+          echo "--- pytest-report.xml ---"
+          test -f pytest-report.xml && ls -l pytest-report.xml || echo "pytest-report.xml not found"
+
+      - name: Upload coverage to Codecov (branch coverage)
+        uses: codecov/codecov-action@v4
+        with:
+          files: coverage.xml
+          verbose: true
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: SonarCloud Scan
+        if: ${{ github.ref == 'refs/heads/main' }}
+        uses: sonarsource/sonarcloud-github-action@v2
+        with:
+          projectBaseDir: .
+          args: >
+            -Dsonar.python.coverage.reportPaths=coverage.xml
+            -Dsonar.python.xunit.reportPath=pytest-report.xml
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v7

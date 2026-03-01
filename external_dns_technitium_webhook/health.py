@@ -3,7 +3,8 @@
 import logging
 import socket
 
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, HTTPException, Response, status
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 from . import __version__
 from .config import Config as AppConfig
@@ -52,8 +53,14 @@ def create_health_app() -> FastAPI:
                 detail="Main application not responding",
             )
 
+    def metrics() -> Response:
+        """Prometheus metrics endpoint."""
+        data = generate_latest()
+        return Response(content=data, media_type=CONTENT_TYPE_LATEST)
+
     # Register routes explicitly
     app.add_api_route("/health", health, methods=["GET"])
     app.add_api_route("/healthz", healthz, methods=["GET"])
+    app.add_api_route("/metrics", metrics, methods=["GET"])
 
     return app

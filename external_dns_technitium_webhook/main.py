@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import cast
 
+import httpx
 from fastapi import Depends, FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -23,8 +24,12 @@ from .middleware import (
     rate_limit_middleware,
 )
 from .models import Changes, Endpoint, GetZoneOptionsResponse
+from .resilience import CircuitBreakerOpenError
 from .responses import ExternalDNSResponse
 from .technitium_client import TechnitiumError
+
+# ExceptionGroup is available in Python 3.11+. Assign to a variable for better tool visibility.
+_ExceptionGroup = ExceptionGroup
 
 
 class StructuredFormatter(logging.Formatter):
@@ -45,12 +50,16 @@ class StructuredFormatter(logging.Formatter):
         # Module name (logger name or function name)
         module = record.name if record.name != "root" else record.funcName or "app"
 
+        # Prepare message: escape double quotes and collapse newlines
+        raw_msg = record.getMessage()
+        safe_msg = str(raw_msg).replace('"', '\\"').replace("\n", "\\n")
+
         # Format: time="..." level=info module=handlers msg="..."
         log_parts = [
             f'time="{timestamp}"',
             f"level={level}",
             f"module={module}",
-            f'msg="{record.getMessage()}"',
+            f'msg="{safe_msg}"',
         ]
 
         return " ".join(log_parts)
@@ -496,8 +505,15 @@ async def auto_renew_technitium_token(state: AppState) -> None:
             state.client.token = login_response.token
             logger.debug("Successfully renewed Technitium DNS server access token")
             sleep_for = DURATION_SUCCESS
-        except Exception:  # noqa: BLE001 - log and retry with backoff
-            logger.error("Technitium DNS server renewal failed.")
+        except (
+            TechnitiumError,
+            httpx.HTTPError,
+            OSError,
+            CircuitBreakerOpenError,
+            ValueError,
+            RuntimeError,
+        ) as exc:
+            logger.error("Technitium DNS server renewal failed: %s", exc)
             sleep_for = DURATION_FAILURE
 
 
@@ -599,7 +615,7 @@ def create_app() -> FastAPI:
     # Register exception handlers
     app.add_exception_handler(RuntimeError, runtime_error_handler)
     app.add_exception_handler(Exception, general_exception_handler)
-    app.add_exception_handler(ExceptionGroup, exception_group_handler)
+    app.add_exception_handler(_ExceptionGroup, exception_group_handler)
 
     # Routes
     state_dependency = create_state_dependency(app)
@@ -664,13 +680,10 @@ async def exception_logging_middleware(request: Request, call_next: Callable) ->
     try:
         response = await call_next(request)
         return cast(Response, response)
-    except KeyboardInterrupt, SystemExit:
-        # Re-raise system-critical signals immediately
-        raise
     except Exception as e:  # catches Exception and ExceptionGroup in 3.11+
         # Check ExceptionGroup for modern Python versions
         try:
-            is_group = isinstance(e, ExceptionGroup)
+            is_group = isinstance(e, _ExceptionGroup)
         except Exception:
             is_group = False
 

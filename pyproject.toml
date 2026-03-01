@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "external-dns-technitium-webhook"
-version = "0.4.3"
+version = "1.0.0"
 description = "ExternalDNS webhook provider for Technitium DNS"
 readme = "README.md"
 requires-python = ">=3.14,<3.15"
@@ -34,6 +34,7 @@ dependencies = [
     "httpx==0.28.1",
     "pydantic==2.12.5",
     "pydantic-settings==2.13.1",
+    "prometheus-client==0.24.1",
 ]
 
 [project.optional-dependencies]
@@ -50,6 +51,7 @@ dev = [
     "pyright==1.1.408",
     "semgrep",
     "types-urllib3",
+    "prometheus-client==0.24.1",
 ]
 
 [project.urls]
@@ -118,7 +120,7 @@ exclude = [
 ]
 stubPath = ""
 venvPath = "."
-venv = "venv"
+venv = ".venv"
 pythonVersion = "3.14"
 pythonPlatform = "All"
 typeCheckingMode = "basic"

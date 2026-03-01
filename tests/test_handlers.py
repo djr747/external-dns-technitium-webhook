@@ -59,14 +59,14 @@ def config() -> Config:
 
 
 @pytest.fixture
-def app_state(config: Config) -> AppState:
+def app_state(config: Config, mocker: MockerFixture) -> AppState:
     """Create test application state."""
     state = AppState(config)
     state.is_ready = True
     state.is_writable = True
-    state.client.add_record = AsyncMock()  # type: ignore[method-assign]
-    state.client.delete_record = AsyncMock()  # type: ignore[method-assign]
-    state.client.get_records = AsyncMock()  # type: ignore[method-assign]
+    mocker.patch.object(state.client, "add_record", new=AsyncMock())
+    mocker.patch.object(state.client, "delete_record", new=AsyncMock())
+    mocker.patch.object(state.client, "get_records", new=AsyncMock())
     return state
 
 
