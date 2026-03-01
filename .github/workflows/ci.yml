@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - '**'
-      - '!main'
     paths:
       - pyproject.toml
       - '**/*.py'
@@ -18,6 +17,7 @@ on:
 jobs:
   lint:
     name: Lint and Format Check (Python)
+    if: ${{ !(github.event_name == 'push' && github.ref == 'refs/heads/main') }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -48,7 +48,7 @@ jobs:
         run: pyright
 
   test:
-    name: Unit Test (Python)
+    name: Unit Test & Coverage (Python)
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -62,6 +62,7 @@ jobs:
       - uses: actions/checkout@v6
 
       - name: Verify matrix Python matches Chainguard base
+        if: ${{ !(github.event_name == 'push' && github.ref == 'refs/heads/main') }}
         run: |
           chainguard_version=$(docker run --rm --entrypoint python cgr.dev/chainguard/python:latest -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
           matrix_version="${{ matrix.python-version }}"
@@ -123,6 +124,7 @@ jobs:
 
   build-amd64:
     name: Build Docker Image (amd64)
+    if: ${{ !(github.event_name == 'push' && github.ref == 'refs/heads/main') }}
     runs-on: ubuntu-24.04
     needs: [test]
     outputs:
@@ -165,6 +167,7 @@ jobs:
 
   build-arm64:
     name: Build Docker Image (arm64)
+    if: ${{ !(github.event_name == 'push' && github.ref == 'refs/heads/main') }}
     runs-on: ubuntu-24.04-arm
     needs: [test]
     outputs:
@@ -204,6 +207,7 @@ jobs:
 
   integration:
     name: Integration Tests (Kubernetes)
+    if: ${{ !(github.event_name == 'push' && github.ref == 'refs/heads/main') }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -387,6 +391,7 @@ jobs:
           pip install pytest pytest-asyncio httpx kubernetes
 
       - name: Run integration tests
+        if: ${{ !(github.event_name == 'push' && github.ref == 'refs/heads/main') }}
         env:
           TECHNITIUM_URL: http://localhost:30380
           TECHNITIUM_USERNAME: ${{ steps.init.outputs.technitium_username }}
@@ -463,7 +468,7 @@ jobs:
     env:
       IMAGE_NAME: ghcr.io/${{ github.repository }}/external-dns-technitium-webhook
       IMAGE_TAG: ${{ needs.build-amd64.outputs.image-tag }}
-    if: success()
+    if: ${{ success() &&!(github.event_name == 'push' && github.ref == 'refs/heads/main') }}
     steps:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
