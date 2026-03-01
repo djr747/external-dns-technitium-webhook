@@ -371,7 +371,6 @@ async def _execute_change(
         ) from e
 
 
-# pragma: no sonar - complexity of generic processor is acceptable
 async def _process_changes(
     state: AppState,
     endpoints: list[Endpoint],

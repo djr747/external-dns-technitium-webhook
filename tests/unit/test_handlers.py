@@ -15,6 +15,8 @@ from external_dns_technitium_webhook.config import Config
 from external_dns_technitium_webhook.handlers import (
     _execute_change,
     _get_record_data,
+    _record_stream,
+    _process_changes,
     adjust_endpoints,
     apply_record,
     get_records,
@@ -296,6 +298,60 @@ async def test_apply_record_create(app_state: AppState, mocker: MockerFixture) -
     response = await apply_record(app_state, changes)
     assert response.status_code == 204
     mock_add.assert_called_once()
+
+
+# new tests for coverage gaps
+
+@pytest.mark.asyncio
+async def test_record_stream_skips_ignored_types_and_emits_commas() -> None:
+    """Verify that the streaming generator emits JSON entries and commas.
+
+    We construct a simple GetRecordsResponse containing two records of a
+    non-skipped type.  The output should start with ``[`` and end with
+    ``]`` and include a comma between the two serialized endpoints.
+    """
+    from external_dns_technitium_webhook.models import RecordInfo, ZoneInfo, GetRecordsResponse
+
+    # include one ignored type (MX) plus two valid ones to exercise both
+    # the skipping logic and the comma insertion.
+    records = [
+        RecordInfo(disabled=False, name="foo.example", ttl=300, type="A", rData={"A": "1.2.3.4"}),
+        RecordInfo(disabled=False, name="skip.example", ttl=300, type="MX", rData={"mx": "mail"}),
+        RecordInfo(disabled=False, name="bar.example", ttl=300, type="ANAME", rData={"aname": "alias"}),
+    ]
+    resp = GetRecordsResponse(zone=ZoneInfo(name="example.com", type="primary", internal=False, disabled=False), records=records)
+
+    chunks: list[str] = []
+    async for chunk in _record_stream(resp):
+        chunks.append(chunk)
+
+    assert chunks[0] == "["
+    assert chunks[-1] == "]"
+    # ensure the ignored record never made it into the output
+    assert all("skip.example" not in chunk for chunk in chunks)
+    # since there are two valid endpoints, a comma must be inserted
+    assert "," in chunks
+
+
+@pytest.mark.asyncio
+async def test_process_changes_skips_unsupported_type(app_state: AppState, caplog):
+    """When _get_record_data returns ``None`` a warning is logged and no
+    client call is made.
+    """
+    ep = Endpoint(
+        dnsName="bad.example.com",
+        targets=["ignored"],
+        recordType="MX",  # unsupported type
+        recordTTL=60,
+        setIdentifier="",
+    )
+
+    caplog.set_level(logging.WARNING)
+    await _process_changes(app_state, [ep], "create")
+
+    # client should never be invoked
+    app_state.client.add_record.assert_not_awaited()
+    assert "Skipping creation" in caplog.text
 
 
 @pytest.mark.asyncio
