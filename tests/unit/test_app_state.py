@@ -41,7 +41,7 @@ async def test_set_active_endpoint_switches_client(config: Config, mocker: Mocke
     state = AppState(config)
     try:
         shutdown_mock = mocker.AsyncMock()
-        state.client.close = shutdown_mock  # type: ignore[assignment]
+        mocker.patch.object(state.client, "close", shutdown_mock)
 
         await state.set_active_endpoint("http://failover:5380")
 
@@ -125,7 +125,7 @@ async def test_close_cancels_token_task(config: Config, mocker: MockerFixture) -
 
     state = AppState(config)
     close_mock = mocker.AsyncMock()
-    state.client.close = close_mock  # type: ignore[assignment]
+    mocker.patch.object(state.client, "close", close_mock)
 
     async def sleeper() -> None:
         await asyncio.sleep(3600)

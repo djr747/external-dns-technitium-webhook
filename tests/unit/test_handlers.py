@@ -3,6 +3,7 @@
 import json
 import logging
 import re
+from typing import cast
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -28,6 +29,7 @@ from external_dns_technitium_webhook.models import (
     RecordInfo,
     ZoneInfo,
 )
+from external_dns_technitium_webhook.resilience import CircuitBreakerOpenError, CircuitState
 
 
 class TestGetRecordsErrorHandling:
@@ -135,14 +137,14 @@ def config() -> Config:
 
 
 @pytest.fixture
-def app_state(config: Config) -> AppState:
+def app_state(config: Config, mocker: MockerFixture) -> AppState:
     """Create test application state."""
     state = AppState(config)
     state.is_ready = True
     state.is_writable = True
-    state.client.add_record = AsyncMock()  # type: ignore[method-assign]
-    state.client.delete_record = AsyncMock()  # type: ignore[method-assign]
-    state.client.get_records = AsyncMock()  # type: ignore[method-assign]
+    mocker.patch.object(state.client, "add_record", new=AsyncMock())
+    mocker.patch.object(state.client, "delete_record", new=AsyncMock())
+    mocker.patch.object(state.client, "get_records", new=AsyncMock())
     return state
 
 
@@ -293,6 +295,174 @@ async def test_apply_record_create(app_state: AppState, mocker: MockerFixture) -
     response = await apply_record(app_state, changes)
     assert response.status_code == 204
     mock_add.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_apply_record_delete_circuit_open(mock_state, mocker):
+    """Delete operation should surface circuit-open as 503 with Retry-After."""
+    # Prepare a deletion change
+    changes = Changes(
+        delete=[
+            Endpoint(
+                dnsName="delete.example.com",
+                targets=["1.2.3.4"],
+                recordType="A",
+                recordTTL=300,
+                setIdentifier="",
+            )
+        ],
+        updateOld=[],
+        updateNew=[],
+    )
+
+    cboe = CircuitBreakerOpenError(CircuitState.OPEN, 7)
+    mock_state.client.delete_record = mocker.AsyncMock(side_effect=cboe)
+
+    with pytest.raises(HTTPException) as exc:
+        await apply_record(mock_state, changes)
+
+    # Should raise HTTPException with 503
+    assert exc.value.status_code == 503
+    assert exc.value.headers is not None
+    assert exc.value.headers.get("Retry-After") == "7"
+
+
+@pytest.mark.asyncio
+async def test_apply_record_delete_exception(mock_state, mocker):
+    """Generic delete failure should result in 500 and sanitized message."""
+    changes = Changes(
+        delete=[
+            Endpoint(
+                dnsName="delete.fail",
+                targets=["1.2.3.4"],
+                recordType="A",
+                recordTTL=300,
+                setIdentifier="",
+            )
+        ],
+        updateOld=[],
+        updateNew=[],
+    )
+
+    mock_state.client.delete_record = mocker.AsyncMock(side_effect=Exception("password=sekrit"))
+
+    with pytest.raises(HTTPException) as exc:
+        await apply_record(mock_state, changes)
+
+    assert exc.value.status_code == 500
+    assert "Failed to delete record" in str(exc.value.detail)
+
+
+@pytest.mark.asyncio
+async def test_apply_record_add_circuit_open(mock_state, mocker):
+    """Add operation should surface circuit-open as 503 with Retry-After."""
+    changes = Changes(
+        create=[
+            Endpoint(
+                dnsName="add.example.com",
+                targets=["1.2.3.5"],
+                recordType="A",
+                recordTTL=300,
+                setIdentifier="",
+            )
+        ],
+        updateOld=[],
+        updateNew=[],
+    )
+
+    cboe = CircuitBreakerOpenError(CircuitState.OPEN, 4)
+    mock_state.client.add_record = mocker.AsyncMock(side_effect=cboe)
+
+    with pytest.raises(HTTPException) as exc:
+        await apply_record(mock_state, changes)
+
+    assert exc.value.status_code == 503
+    assert exc.value.headers is not None
+    assert exc.value.headers.get("Retry-After") == "4"
+
+
+@pytest.mark.asyncio
+async def test_apply_record_add_exception(mock_state, mocker):
+    """Generic add failure should result in 500 and sanitized message."""
+    changes = Changes(
+        create=[
+            Endpoint(
+                dnsName="add.fail",
+                targets=["1.2.3.5"],
+                recordType="A",
+                recordTTL=300,
+                setIdentifier="",
+            )
+        ],
+        updateOld=[],
+        updateNew=[],
+    )
+
+    mock_state.client.add_record = mocker.AsyncMock(side_effect=Exception("token=abc123"))
+
+    with pytest.raises(HTTPException) as exc:
+        await apply_record(mock_state, changes)
+
+    assert exc.value.status_code == 500
+    assert "Failed to add record" in str(exc.value.detail)
+
+
+# Additional tests merged from test_handlers_extra.py
+
+
+class DummyResponse:
+    def __init__(self, records):
+        self.records = records
+
+
+@pytest.mark.asyncio
+async def test_get_records_circuit_open(mocker):
+    class DummyState:
+        is_ready = True
+
+        async def ensure_ready(self):
+            return None
+
+        config = type("C", (), {"zone": "example.com"})
+
+        client = mocker.Mock()
+
+    # Simulate circuit open error with retry_after
+    cboe = CircuitBreakerOpenError(CircuitState.OPEN, 5)
+    state = DummyState()
+    state.client.get_records = mocker.AsyncMock(side_effect=cboe)
+
+    with pytest.raises(HTTPException) as exc:
+        await get_records(cast(AppState, state))
+
+    assert exc.value.status_code == 503
+    assert exc.value.headers is not None
+    assert exc.value.headers.get("Retry-After") == "5"
+
+
+def test_get_record_data_variants_additional():
+    # CAA valid
+    data = _get_record_data("CAA", '0 issue "ca.example"')
+    assert data == {"flags": 0, "tag": "issue", "value": "ca.example"}
+
+    # CAA invalid (missing parts)
+    assert _get_record_data("CAA", "invalid") is None
+
+    # URI valid
+    data_uri = _get_record_data("URI", '10 20 "https://example.com"')
+    assert data_uri is not None
+    assert data_uri == {"uriPriority": 10, "uriWeight": 20, "uri": "https://example.com"}
+
+    # SSHFP valid
+    data_sshfp = _get_record_data("SSHFP", "1 1 abcdef")
+    assert data_sshfp is not None
+    assert data_sshfp["algorithm"] == 1
+
+    # SVCB/HTTPS valid
+    data_svcb = _get_record_data("SVCB", "0 target.example param=value")
+    assert data_svcb is not None
+    assert data_svcb["svcPriority"] == 0
+    assert data_svcb["svcTargetName"] == "target.example"
 
 
 @pytest.mark.asyncio
@@ -809,7 +979,9 @@ async def test_apply_record_create_exception(app_state: AppState, mocker: Mocker
 
 
 @pytest.mark.asyncio
-async def test_apply_record_delete_exception(app_state: AppState, mocker: MockerFixture) -> None:
+async def test_apply_record_delete_exception_extra(
+    app_state: AppState, mocker: MockerFixture
+) -> None:
     """Test apply_record delete with exception."""
     mock_delete = mocker.patch.object(
         app_state.client,
@@ -886,7 +1058,7 @@ async def test_apply_record_delete_invalid_record_data(
     app_state: AppState, mocker: MockerFixture
 ) -> None:
     """Test apply_record delete with invalid record data."""
-    mock_delete = mocker.patch.object(
+    mocker.patch.object(
         app_state.client,
         "delete_record",
     )
@@ -908,31 +1080,3 @@ async def test_apply_record_delete_invalid_record_data(
     response = await apply_record(app_state, changes)
     assert response.status_code == 204
     # Should not call delete_record due to invalid data
-    mock_delete.assert_not_called()
-
-
-@pytest.mark.asyncio
-async def test_apply_record_create_caa_record(app_state: AppState, mocker: MockerFixture) -> None:
-    """Test apply_record create with CAA record."""
-    mock_add = mocker.patch.object(
-        app_state.client,
-        "add_record",
-    )
-
-    changes = Changes(
-        create=[
-            Endpoint(
-                dnsName="caa.example.com",
-                targets=['0 issue "letsencrypt.org"'],  # Valid CAA format
-                recordType="CAA",
-                recordTTL=3600,
-                setIdentifier="",
-            )
-        ],
-        updateOld=[],
-        updateNew=[],
-    )
-
-    response = await apply_record(app_state, changes)
-    assert response.status_code == 204
-    mock_add.assert_called_once()

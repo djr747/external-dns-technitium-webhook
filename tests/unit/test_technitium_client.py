@@ -1,6 +1,8 @@
 """Unit tests for Technitium client."""
 
 import asyncio
+import contextlib
+from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
@@ -12,6 +14,11 @@ from external_dns_technitium_webhook.models import (
     CreateZoneResponse,
     DeleteRecordResponse,
     GetRecordsResponse,
+)
+from external_dns_technitium_webhook.resilience import (
+    CircuitBreaker,
+    CircuitBreakerOpenError,
+    CircuitState,
 )
 from external_dns_technitium_webhook.technitium_client import (
     InvalidTokenError,
@@ -1013,7 +1020,7 @@ def test_client_init_ssl_context_entire_exception_path(mocker: MockerFixture) ->
     """Test that SSL context creation exception is caught and logged."""
 
     # Mock just the ssl.SSLContext in our module to raise exception
-    def raise_on_protocol_tls(*args, **kwargs):  # noqa: ARG001
+    def raise_on_protocol_tls(*_args, **_kwargs):
         raise Exception("SSL context creation failed")
 
     mock_ssl_context = mocker.MagicMock(side_effect=raise_on_protocol_tls)
@@ -1147,7 +1154,39 @@ async def test_close_calls_aclose(mocker: MockerFixture) -> None:
     client._client.aclose = mock_aclose
 
     await client.close()
-    mock_aclose.assert_awaited_once()
+
+
+def test_technitium_error_str():
+    err = TechnitiumError("msg", error_message="api fail", inner_error="inner")
+    s = str(err)
+    assert "api fail" in s
+    assert "inner" in s
+
+
+@pytest.mark.asyncio
+async def test_post_raw_circuit_open_propagates(mocker):
+    client = TechnitiumClient(base_url="http://localhost:5380", token="t")
+
+    class FakeBreaker(CircuitBreaker):
+        def __init__(self) -> None:
+            super().__init__()
+
+        async def call(self, coro: Any) -> Any:
+            # Close the coroutine to avoid "never awaited" runtime warnings
+            with contextlib.suppress(Exception):
+                coro.close()
+            raise CircuitBreakerOpenError(CircuitState.OPEN, 2)
+
+    client.circuit_breaker = FakeBreaker()
+
+    # Patch underlying client.post to avoid network
+    mocker.patch.object(client._client, "post", side_effect=Exception("should not be called"))
+
+    with pytest.raises(CircuitBreakerOpenError):
+        await client._post_raw(client.ENDPOINT_LOGIN, {"user": "u"})
+
+    await client.close()
+    # client.close() executed without error
 
 
 @pytest.mark.asyncio

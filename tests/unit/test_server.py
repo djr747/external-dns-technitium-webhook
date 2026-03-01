@@ -1,6 +1,8 @@
 """Tests for server logic (run_servers, threading, entrypoint)."""
 
 import signal
+import sys
+import types
 from unittest.mock import MagicMock
 
 import pytest
@@ -233,7 +235,6 @@ def test_run_health_server_system_exit_in_serve(mocker, config):
     mocker.patch("external_dns_technitium_webhook.server.UvicornConfig")
     mock_loop = mocker.Mock()
     # SystemExit is now caught separately and logged at INFO level
-    # SystemExit is now caught separately and logged at INFO level
     mock_loop.run_until_complete = mocker.Mock(side_effect=SystemExit(1))
     mock_loop.close = mocker.Mock()
     mocker.patch(
@@ -450,3 +451,158 @@ def test_run_servers_signals_handled(mocker, config):
     mock_event.set.assert_called()
     assert mock_health_server.should_exit is True
     assert mock_main_server.should_exit is True
+
+
+def test_run_servers_with_uvicorn_stub(mocker, config, monkeypatch):
+    """Test run_servers when the real `uvicorn` module is importable but patched to a stub."""
+    app = FastAPI()
+    health_app = FastAPI()
+
+    # Create a dummy uvicorn module with Config and Server classes
+    class DummyConfig:
+        def __init__(self, *args, **kwargs):
+            self.args = args
+            self.kwargs = kwargs
+
+    class DummyServer:
+        def __init__(self, cfg):
+            self.cfg = cfg
+            self.should_exit = False
+
+        def serve(self):
+            # Provide a synchronous serve() to avoid creating an awaitable
+            return None
+
+    dummy_uvicorn = types.SimpleNamespace(Config=DummyConfig, Server=DummyServer)
+    monkeypatch.setitem(sys.modules, "uvicorn", dummy_uvicorn)
+
+    # Ensure module-level Server is None so the function imports UvicornServer
+    server_mod.Server = None
+
+    # Patch thread and events to avoid starting real threads
+    mock_thread = MagicMock()
+    mock_thread.start = MagicMock()
+    mock_thread.join = MagicMock()
+    mocker.patch(
+        "external_dns_technitium_webhook.server.threading.Thread", return_value=mock_thread
+    )
+
+    mock_event = MagicMock()
+    mock_event.wait.return_value = False
+    mocker.patch("external_dns_technitium_webhook.server.threading.Event", return_value=mock_event)
+
+    mock_asyncio_run = mocker.patch("external_dns_technitium_webhook.server.asyncio.run")
+    mocker.patch("external_dns_technitium_webhook.server.signal.signal")
+
+    # Call run_servers which should import our dummy uvicorn and proceed
+    server_mod.run_servers(app, health_app, config)
+
+    mock_thread.start.assert_called_once()
+    mock_asyncio_run.assert_called_once()
+    mock_thread.join.assert_called_once()
+
+
+def test_run_servers_real_thread_health_start_and_main_run(mocker, config, monkeypatch):
+    """Use a real thread and dummy async serve() methods to exercise inline health server path."""
+    import warnings
+
+    warnings.filterwarnings(
+        "ignore", message="coroutine '.*' was never awaited", category=RuntimeWarning
+    )
+    app = FastAPI()
+    health_app = FastAPI()
+
+    # Dummy server with async serve that returns quickly
+    class DummyServer:
+        def __init__(self, cfg):
+            self.cfg = cfg
+            self.should_exit = False
+
+        async def serve(self):
+            return None
+
+    # Patch uvicorn.Server to our DummyServer
+    monkeypatch.setitem(
+        sys.modules,
+        "uvicorn",
+        types.SimpleNamespace(Config=lambda *a, **k: None, Server=DummyServer),
+    )
+    # Ensure module-level Server is None so run_servers uses the imported class
+    server_mod.Server = None
+
+    # Patch signal handlers to no-op
+    mocker.patch("external_dns_technitium_webhook.server.signal.signal")
+
+    # Call run_servers — this will start a real thread and run the dummy servers
+    server_mod.run_servers(app, health_app, config)
+
+
+def test_run_servers_health_serve_raises_logs_error(mocker, config, monkeypatch):
+    """When health server serve() raises, the error should be logged but not crash main."""
+    import warnings
+
+    warnings.filterwarnings(
+        "ignore", message="coroutine '.*' was never awaited", category=RuntimeWarning
+    )
+    app = FastAPI()
+    health_app = FastAPI()
+
+    class DummyServerError:
+        def __init__(self, cfg):
+            self.cfg = cfg
+            self.should_exit = False
+
+        async def serve(self):
+            raise RuntimeError("serve failed")
+
+    monkeypatch.setitem(
+        sys.modules,
+        "uvicorn",
+        types.SimpleNamespace(Config=lambda *a, **k: None, Server=DummyServerError),
+    )
+    server_mod.Server = None
+
+    mocker.patch("external_dns_technitium_webhook.server.signal.signal")
+    mock_err = mocker.patch("external_dns_technitium_webhook.server.logging.error")
+
+    server_mod.run_servers(app, health_app, config)
+
+    # Should have logged an error about health server serve failure or related startup error
+    assert any("Health server" in str(c) for c in mock_err.call_args_list)
+
+
+def test_run_servers_health_loop_creation_fails(mocker, config, monkeypatch):
+    """When asyncio.new_event_loop raises inside the health thread, run_servers should log the error."""
+    app = FastAPI()
+    health_app = FastAPI()
+
+    # Dummy uvicorn stub
+    class DummyServer:
+        def __init__(self, cfg):
+            self.cfg = cfg
+            self.should_exit = False
+
+        def serve(self):
+            return None
+
+    monkeypatch.setitem(
+        sys.modules,
+        "uvicorn",
+        types.SimpleNamespace(Config=lambda *a, **k: None, Server=DummyServer),
+    )
+    server_mod.Server = None
+
+    # Make new_event_loop raise to hit the health_server_error branch
+    mocker.patch(
+        "external_dns_technitium_webhook.server.asyncio.new_event_loop",
+        side_effect=Exception("loop fail"),
+    )
+    mocker.patch("external_dns_technitium_webhook.server.signal.signal")
+    mock_err = mocker.patch("external_dns_technitium_webhook.server.logging.error")
+
+    server_mod.run_servers(app, health_app, config)
+
+    assert any(
+        "Health server error" in str(c) or "encountered error during startup" in str(c)
+        for c in mock_err.call_args_list
+    )

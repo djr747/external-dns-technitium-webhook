@@ -37,7 +37,7 @@ def app_with_middleware() -> FastAPI:
 
     # Add middleware
     app.middleware("http")(rate_limit_middleware)
-    app.add_middleware(RequestSizeLimitMiddleware, max_size=1024)  # type: ignore[arg-type]
+    app.add_middleware(RequestSizeLimitMiddleware, max_size=1024)
 
     return app
 
@@ -163,7 +163,7 @@ def test_request_size_limit_allows_small_requests() -> None:
         return {"received": data.get("message", "")}
 
     # Add only size limit middleware
-    app.add_middleware(RequestSizeLimitMiddleware, max_size=1024)  # type: ignore[arg-type]
+    app.add_middleware(RequestSizeLimitMiddleware, max_size=1024)
 
     client = TestClient(app)
 
@@ -183,7 +183,7 @@ def test_request_size_limit_blocks_large_requests() -> None:
         return {"received": data.get("message", "")}
 
     # Add only size limit middleware with small limit
-    app.add_middleware(RequestSizeLimitMiddleware, max_size=10)  # type: ignore[arg-type]
+    app.add_middleware(RequestSizeLimitMiddleware, max_size=10)
 
     client = TestClient(app)
 
@@ -205,7 +205,7 @@ def test_request_size_limit_no_content_length() -> None:
     async def test_endpoint() -> dict[str, str]:
         return {"status": "ok"}
 
-    app.add_middleware(RequestSizeLimitMiddleware, max_size=1024)  # type: ignore[arg-type]
+    app.add_middleware(RequestSizeLimitMiddleware, max_size=1024)
     client = TestClient(app)
 
     # Request without Content-Length should still work
@@ -477,7 +477,7 @@ def test_request_size_limit_exact_boundary() -> None:
         return {"received": data.get("message", "")}
 
     max_size = 50
-    app.add_middleware(RequestSizeLimitMiddleware, max_size=max_size)  # type: ignore[arg-type]
+    app.add_middleware(RequestSizeLimitMiddleware, max_size=max_size)
     client = TestClient(app)
 
     payload = "x" * max_size

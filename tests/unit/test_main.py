@@ -1433,6 +1433,64 @@ def test_import_main() -> None:
     assert "external_dns_technitium_webhook.main" in sys.modules
 
 
+@pytest.mark.asyncio
+async def test_lifespan_handles_rate_limiter_exception(mocker: MockerFixture) -> None:
+    """If configure_rate_limiter raises during startup, lifespan should continue and log the exception."""
+    from external_dns_technitium_webhook import main as main_mod
+
+    app = FastAPI()
+    config = _build_config()
+    mocker.patch("external_dns_technitium_webhook.main.AppConfig", return_value=config)
+
+    # Make configure_rate_limiter raise
+    mocker.patch(
+        "external_dns_technitium_webhook.main.configure_rate_limiter",
+        side_effect=Exception("rl fail"),
+    )
+
+    # Patch AppState and setup_technitium_connection to avoid network calls
+    state = MagicMock(spec=AppState)
+    state.close = AsyncMock()
+    mocker.patch("external_dns_technitium_webhook.main.AppState", return_value=state)
+    mocker.patch(
+        "external_dns_technitium_webhook.main.setup_technitium_connection",
+        new_callable=AsyncMock,
+    )
+
+    # Patch logger.exception
+    exc_mock = mocker.patch.object(main_mod.logger, "exception")
+
+    async with main_mod.lifespan(app):
+        assert app.state.app_state is state
+
+    exc_mock.assert_called()
+
+
+def test_exception_group_handler_logs_and_returns_500(mocker: MockerFixture) -> None:
+    """Ensure exception_group_handler logs the exception group and returns 500."""
+    from external_dns_technitium_webhook import main as main_mod
+
+    # Build the app via create_app so the ExceptionGroup handler is registered
+    mocker.patch("external_dns_technitium_webhook.main.AppConfig", return_value=_build_config())
+    app = main_mod.create_app()
+
+    # Patch logger.exception
+    log_exc = mocker.patch.object(main_mod.logger, "exception")
+
+    try:
+
+        @app.get("/eg")
+        async def _eg():
+            raise ExceptionGroup("group", [ValueError("a")])
+
+        client = TestClient(app)
+        response = client.get("/eg")
+        assert response.status_code == 500
+        assert log_exc.called
+    except NameError:
+        pytest.skip("ExceptionGroup not available")
+
+
 def test_force_import_main() -> None:
     """Force import of main.py to ensure coverage."""
     import sys
@@ -1539,6 +1597,25 @@ class TestStructuredFormatterApplication:
         _apply_structured_formatter_to_logger(logger_name)
 
         assert logger.propagate is True
+
+    def test_structured_formatter_escapes_quotes_and_newlines(self):
+        formatter = StructuredFormatter()
+        # Create a LogRecord with quotes and newlines in the message
+        record = logging.LogRecord(
+            name="test_logger",
+            level=logging.INFO,
+            pathname=__file__,
+            lineno=123,
+            msg='first line\nsecond line "quoted"',
+            args=(),
+            exc_info=None,
+        )
+
+        formatted = formatter.format(record)
+
+        # Message should have newlines escaped and internal quotes escaped
+        assert "\\n" in formatted
+        assert '\\"' in formatted
 
 
 class TestNormalizeZoneName:
@@ -1684,12 +1761,8 @@ class TestMainMiddlewareFunctions:
     @pytest.mark.asyncio
     async def test_exception_logging_middleware_exception_group(self):
         """Test middleware handles ExceptionGroup exceptions."""
-        # Only test if ExceptionGroup is available (Python 3.11+)
-        try:
-            _ = ExceptionGroup  # noqa: F821
-        except NameError:
-            pytest.skip("ExceptionGroup not available in this Python version")
 
+        # Only test if ExceptionGroup is available (Python 3.11+)
         async def call_next_error(_request):
             try:
                 raise ExceptionGroup(
@@ -1785,8 +1858,133 @@ async def trigger_exception_group():
         # Should still detect "not ready yet" from message and return 503
         assert response.status_code == 503
 
+    def test_runtime_error_handler_state_unready_early_branch(self, mocker):
+        """When app state reports ready=False, runtime_error_handler should return 503 immediately."""
+        from external_dns_technitium_webhook import main as main_mod
+
+        app = main_mod.create_app()
+        state = mocker.AsyncMock(spec=AppState)
+        state.ensure_ready = mocker.AsyncMock()
+        state.ready = False
+        state.config = mocker.MagicMock()
+        state.config.zone = "example.com"
+        state.client = mocker.AsyncMock()
+        state.client.get_records = mocker.AsyncMock(
+            return_value=GetRecordsResponse(
+                zone=ZoneInfo(name="example.com", type="Primary", disabled=False), records=[]
+            )
+        )
+        app.state.app_state = state
+
+        @app.get("/raise-runtime")
+        async def _raise():
+            raise RuntimeError("boom")
+
+        client = TestClient(app)
+        response = client.get("/raise-runtime")
+
+        assert response.status_code == 503
+
     @pytest.mark.asyncio
-    async def test_coverage_import_skipped_gracefully(self, mocker):  # noqa: ARG002
+    async def test_exception_logging_middleware_handles_exception_group(self, mocker):
+        """Middleware should log ExceptionGroup via logger.exception and return 500."""
+
+        async def call_next_error(_request):
+            raise ExceptionGroup("multiple", [ValueError("one")])
+
+        request = MagicMock(spec=Request)
+
+        from external_dns_technitium_webhook import main as main_mod
+
+        log_exc = mocker.patch.object(main_mod.logger, "exception")
+
+        response = await main_mod.exception_logging_middleware(request, call_next_error)
+
+        assert response.status_code == 500
+        assert log_exc.called
+
+    def test_general_exception_handler_is_used(self, mocker):
+        """An unhandled Exception should be processed by general_exception_handler."""
+        from external_dns_technitium_webhook import main as main_mod
+
+        mocker.patch("external_dns_technitium_webhook.main.AppConfig", return_value=_build_config())
+        app = main_mod.create_app()
+
+        @app.get("/raise-exc")
+        async def _raise():
+            raise Exception("boom")
+
+        client = TestClient(app, raise_server_exceptions=False)
+        response = client.get("/raise-exc")
+        assert response.status_code == 500
+        assert response.json().get("error") == "Internal server error"
+
+    @pytest.mark.asyncio
+    async def test_exception_logging_middleware_success_path(self, mocker):
+        """When call_next returns normally, middleware should return that response."""
+        from external_dns_technitium_webhook import main as main_mod
+
+        class DummyResponse:
+            status_code = 204
+
+        async def call_next(_request):
+            return DummyResponse()
+
+        request = MagicMock(spec=Request)
+        resp = await main_mod.exception_logging_middleware(request, call_next)
+        assert resp.status_code == 204
+
+    @pytest.mark.asyncio
+    async def test_exception_logging_middleware_instancecheck_error(self, mocker):
+        """If isinstance(e, ExceptionGroup) raises, middleware should handle it and return 500."""
+        from external_dns_technitium_webhook import main as main_mod
+
+        # Temporarily set _ExceptionGroup to an invalid value to cause isinstance() to raise
+        mocker.patch.object(main_mod, "_ExceptionGroup", new=123)
+
+        async def call_next_error(_request):
+            raise ValueError("boom")
+
+        request = MagicMock(spec=Request)
+        log_err = mocker.patch.object(main_mod.logger, "error")
+
+        resp = await main_mod.exception_logging_middleware(request, call_next_error)
+
+        assert resp.status_code == 500
+        assert log_err.called
+
+    def test_main_guard_executes_main(self, monkeypatch, mocker):
+        """Execute module as __main__ and ensure main() is invoked (patched)."""
+        import runpy
+        import sys
+
+        # Set environment variables so AppConfig can be constructed
+        monkeypatch.setenv("TECHNITIUM_URL", "http://localhost:5380")
+        monkeypatch.setenv("TECHNITIUM_USERNAME", "admin")
+        monkeypatch.setenv("TECHNITIUM_PASSWORD", "admin")
+        monkeypatch.setenv("ZONE", "example.com")
+
+        # Patch create_health_app and run_servers to prevent real servers
+        mock_health = mocker.patch(
+            "external_dns_technitium_webhook.health.create_health_app", return_value=MagicMock()
+        )
+        mock_run = mocker.patch("external_dns_technitium_webhook.server.run_servers")
+
+        # Remove from sys.modules to avoid RuntimeWarning about the module
+        # already being imported before execution via runpy
+        saved = sys.modules.pop("external_dns_technitium_webhook.main", None)
+        try:
+            runpy.run_module("external_dns_technitium_webhook.main", run_name="__main__")
+        finally:
+            # Restore the original module so other tests are unaffected
+            if saved is not None:
+                sys.modules["external_dns_technitium_webhook.main"] = saved
+
+        mock_health.assert_called_once()
+        mock_run.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_coverage_import_skipped_gracefully(self):
         """Test coverage import failure is handled gracefully."""
         # This is tested implicitly during module import
         # If coverage import fails, the except block handles it
