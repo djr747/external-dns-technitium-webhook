@@ -575,14 +575,18 @@ async def test_get_records_cache_miss_for_different_request(
 
 @pytest.mark.asyncio
 async def test_get_records_cache_expires_after_ttl(
-    client: TechnitiumClient, mocker: MockerFixture
+    mocker: MockerFixture,
 ) -> None:
     """get_records should refresh cache when TTL expires."""
+    client = TechnitiumClient(
+        base_url="http://localhost:5380",
+        token="test-token",
+        records_cache_ttl_seconds=0.01,
+    )
 
     response = GetRecordsResponse.model_validate(
         {"zone": {"name": "example.com", "type": "Primary", "disabled": False}, "records": []}
     )
-    client._records_cache_ttl_seconds = 0.01
     mock_post = mocker.patch.object(
         client,
         "_post",
@@ -591,7 +595,7 @@ async def test_get_records_cache_expires_after_ttl(
     )
 
     await client.get_records(domain="test.example.com", zone="example.com", list_zone=True)
-    await asyncio.sleep(0.02)
+    await asyncio.sleep(0.05)
     await client.get_records(domain="test.example.com", zone="example.com", list_zone=True)
 
     assert mock_post.await_count == 2

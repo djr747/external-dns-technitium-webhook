@@ -105,6 +105,7 @@ class TechnitiumClient:
         enable_request_compression: bool = False,
         compression_threshold_bytes: int = 32768,
         circuit_breaker: CircuitBreaker | None = None,
+        records_cache_ttl_seconds: float = 30.0,
     ) -> None:
         """Initialize the Technitium client.
 
@@ -117,6 +118,7 @@ class TechnitiumClient:
             enable_request_compression: Enable gzip compression for large request bodies
             compression_threshold_bytes: Minimum size for request compression
             circuit_breaker: Optional circuit breaker for protecting API calls
+            records_cache_ttl_seconds: TTL for get_records cache entries
         """
         self.base_url = base_url.rstrip("/")
         self.token = token
@@ -162,7 +164,7 @@ class TechnitiumClient:
 
         logger.debug(f"Creating httpx.AsyncClient with verify={verify}")
         self._client = httpx.AsyncClient(timeout=timeout, verify=verify)
-        self._records_cache_ttl_seconds = 30.0
+        self._records_cache_ttl_seconds = records_cache_ttl_seconds
         self._records_cache: dict[
             tuple[str, str | None, bool | None], tuple[float, GetRecordsResponse]
         ] = {}
@@ -178,6 +180,10 @@ class TechnitiumClient:
     async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         """Async context manager exit."""
         await self.close()
+
+    def _invalidate_records_cache(self) -> None:
+        """Invalidate cached get_records responses."""
+        self._records_cache.clear()
 
     async def _post_raw(self, endpoint: str, data: dict[str, Any]) -> dict[str, Any]:
         """Make a POST request to the API.
@@ -431,7 +437,7 @@ class TechnitiumClient:
 
         with _track_latency("add_record"):
             response = await self._post(self.ENDPOINT_ADD_RECORD, payload, AddRecordResponse)
-        self._records_cache.clear()
+        self._invalidate_records_cache()
         return response
 
     async def get_records(
@@ -464,7 +470,7 @@ class TechnitiumClient:
 
         with _track_latency("get_records"):
             response = await self._post(self.ENDPOINT_GET_RECORDS, payload, GetRecordsResponse)
-        self._records_cache[cache_key] = (time.monotonic(), response)
+        self._records_cache[cache_key] = (now, response)
         return response
 
     async def delete_record(
@@ -495,7 +501,7 @@ class TechnitiumClient:
 
         with _track_latency("delete_record"):
             response = await self._post(self.ENDPOINT_DELETE_RECORD, payload, DeleteRecordResponse)
-        self._records_cache.clear()
+        self._invalidate_records_cache()
         return response
 
     async def list_catalog_zones(self) -> ListCatalogZonesResponse:
