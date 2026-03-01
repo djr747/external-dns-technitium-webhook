@@ -973,7 +973,9 @@ def test_client_verify_ssl_false_skips_ssl_context(mocker: MockerFixture) -> Non
     SSLContext creation when the override is used we keep the insecure path
     entirely opaque to static analysis and eliminate the warning.
     """
-    create_patch = mocker.patch("external_dns_technitium_webhook.technitium_client.ssl.create_default_context")
+    create_patch = mocker.patch(
+        "external_dns_technitium_webhook.technitium_client.ssl.create_default_context"
+    )
     client = TechnitiumClient(
         base_url="http://localhost:5380",
         token="test-token",
@@ -1031,9 +1033,6 @@ def test_client_init_default_verify_ssl() -> None:
     assert client.ca_bundle is None
     # verify preserved, it may be a bool or a context object
     assert client._verify is True or isinstance(client._verify, ssl.SSLContext)
-
-
-
 
 
 @pytest.mark.asyncio

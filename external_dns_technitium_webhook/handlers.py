@@ -139,8 +139,6 @@ def _log_fetch_metrics(state: AppState, response: GetRecordsResponse, duration_m
     )
 
 
-
-
 def _extract_targets(record: Any) -> list[str]:
     """Compute the target list for a given record.
 
@@ -224,6 +222,7 @@ async def get_records(state: AppState) -> Response:
     await state.ensure_ready()
 
     import time
+
     logger.debug("Fetching DNS records")
     start = time.monotonic()
 

@@ -58,6 +58,7 @@ from external_dns_technitium_webhook.technitium_client import (
 
 # --- test helpers -----------------------------------------------------------
 
+
 @pytest.fixture(autouse=True)
 def _stub_health_thread(mocker: MockerFixture) -> None:
     """Prevent the background health server from actually starting.
@@ -69,7 +70,9 @@ def _stub_health_thread(mocker: MockerFixture) -> None:
     port is already in use), we stub the function to a benign lambda.
     """
     # patch the actual implementation used by the lifespan context
-    mocker.patch("external_dns_technitium_webhook.server.run_health_server", lambda *args, **kwargs: None)
+    mocker.patch(
+        "external_dns_technitium_webhook.server.run_health_server", lambda *args, **kwargs: None
+    )
 
 
 def test_app_creation(mocker: MockerFixture) -> None:
