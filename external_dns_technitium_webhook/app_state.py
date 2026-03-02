@@ -44,6 +44,7 @@ class AppState:
             enable_request_compression=config.technitium_enable_request_compression,
             compression_threshold_bytes=config.technitium_compression_threshold_bytes,
             circuit_breaker=self.circuit_breaker,
+            records_cache_ttl_seconds=config.records_cache_ttl_seconds,
         )
         # Use provided helper to replace the module-level rate limiter.
         # This avoids a direct module-level assignment which some static
@@ -67,7 +68,7 @@ class AppState:
         # and use these fields as hooks.
         self.record_fetch_count = 0
 
-    async def ensure_ready(self) -> None:
+    def ensure_ready(self) -> None:
         """Ensure the application is ready.
 
         Raises:
@@ -76,10 +77,10 @@ class AppState:
         if not self.is_ready:
             raise RuntimeError("Service not ready yet. Try again later.")
 
-    async def ensure_writable(self) -> None:
+    def ensure_writable(self) -> None:
         """Ensure the connected Technitium endpoint is writable."""
 
-        await self.ensure_ready()
+        self.ensure_ready()
         if not self.is_writable:
             raise RuntimeError("Technitium endpoint is read-only")
 
@@ -107,6 +108,7 @@ class AppState:
             enable_request_compression=self.config.technitium_enable_request_compression,
             compression_threshold_bytes=self.config.technitium_compression_threshold_bytes,
             circuit_breaker=self.circuit_breaker,
+            records_cache_ttl_seconds=self.config.records_cache_ttl_seconds,
         )
         self.active_endpoint = normalized
         await old_client.close()

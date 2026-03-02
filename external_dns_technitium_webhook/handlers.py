@@ -70,7 +70,7 @@ def sanitize_error_message(error: Exception) -> str:
     return error_str
 
 
-async def health_check(state: AppState) -> Response:
+def health_check(state: AppState) -> Response:
     """Health check endpoint.
 
     Args:
@@ -92,7 +92,7 @@ async def health_check(state: AppState) -> Response:
     return ExternalDNSResponse(content={"status": "ok"}, status_code=status.HTTP_200_OK)
 
 
-async def negotiate_domain_filter(state: AppState) -> ExternalDNSResponse:
+def negotiate_domain_filter(state: AppState) -> ExternalDNSResponse:
     """Negotiate domain filters with ExternalDNS.
 
     Args:
@@ -101,7 +101,7 @@ async def negotiate_domain_filter(state: AppState) -> ExternalDNSResponse:
     Returns:
         Domain filter configuration
     """
-    await state.ensure_ready()
+    state.ensure_ready()
 
     domain_filter = DomainFilter(
         filters=state.config.domain_filter_list,
@@ -116,7 +116,7 @@ async def negotiate_domain_filter(state: AppState) -> ExternalDNSResponse:
 API_UNAVAILABLE = "Upstream Technitium API temporarily unavailable"
 
 
-async def _handle_circuit_error(cboe: CircuitBreakerOpenError) -> None:
+def _handle_circuit_error(cboe: CircuitBreakerOpenError) -> None:
     """Raise HTTPException for circuit breaker open errors."""
     retry_after = int(cboe.retry_after) if cboe.retry_after and cboe.retry_after > 0 else 0
     headers = {"Retry-After": str(retry_after)} if retry_after > 0 else None
@@ -219,7 +219,7 @@ async def _record_stream(response: GetRecordsResponse) -> AsyncGenerator[str]:
 
 async def get_records(state: AppState) -> Response:
     """Get current DNS records and stream them to the caller."""
-    await state.ensure_ready()
+    state.ensure_ready()
 
     import time
 
@@ -232,7 +232,7 @@ async def get_records(state: AppState) -> Response:
             list_zone=True,
         )
     except CircuitBreakerOpenError as cboe:
-        await _handle_circuit_error(cboe)
+        _handle_circuit_error(cboe)
 
     duration_ms = (time.monotonic() - start) * 1000.0
     _log_fetch_metrics(state, response, duration_ms)
@@ -240,7 +240,7 @@ async def get_records(state: AppState) -> Response:
     return StreamingResponse(_record_stream(response), media_type=ExternalDNSResponse.media_type)
 
 
-async def adjust_endpoints(state: AppState, endpoints: list[Endpoint]) -> ExternalDNSResponse:
+def adjust_endpoints(state: AppState, endpoints: list[Endpoint]) -> ExternalDNSResponse:
     """Adjust endpoints before applying changes.
 
     Args:
@@ -250,7 +250,7 @@ async def adjust_endpoints(state: AppState, endpoints: list[Endpoint]) -> Extern
     Returns:
         Adjusted endpoints (no changes in this implementation)
     """
-    await state.ensure_ready()
+    state.ensure_ready()
 
     # Log the incoming endpoints payload safely for diagnostics.
     try:
@@ -274,19 +274,18 @@ async def apply_record(state: AppState, changes: Changes) -> Response:
     Returns:
         204 No Content on success
     """
-    await state.ensure_ready()
-    await state.ensure_writable()
+    state.ensure_ready()
+    state.ensure_writable()
 
     # Safely log the incoming Changes payload for diagnostics (redacts sensitive keys)
     try:
         # Convert to a serializable structure then log
-        changes_dict = (
-            changes.model_dump()
-            if hasattr(changes, "model_dump")
-            else changes.dict()
-            if hasattr(changes, "dict")
-            else dict(changes)
-        )
+        if hasattr(changes, "model_dump"):
+            changes_dict = changes.model_dump()
+        elif hasattr(changes, "dict"):
+            changes_dict = changes.dict()
+        else:
+            changes_dict = dict(changes)
         safe_log_payload("apply_record.changes", changes_dict, logger, level=logging.INFO)
     except Exception:
         logger.info("apply_record received Changes object (failed to serialize)")

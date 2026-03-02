@@ -34,7 +34,7 @@ def create_health_app() -> FastAPI:
         openapi_url=None,
     )
 
-    async def health() -> dict[str, str]:
+    def health() -> dict[str, str]:
         if is_main_server_ready():
             return {"status": "ok"}
         else:
@@ -43,7 +43,7 @@ def create_health_app() -> FastAPI:
                 detail="Main application not responding",
             )
 
-    async def healthz() -> dict[str, str]:
+    def healthz() -> dict[str, str]:
         """Kubernetes-style health check endpoint for liveness/readiness probes."""
         if is_main_server_ready():
             return {"status": "ok"}

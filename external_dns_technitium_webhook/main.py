@@ -626,12 +626,12 @@ def create_app() -> FastAPI:
     # Routes
     state_dependency = create_state_dependency(app)
 
-    async def domain_filter(
+    def domain_filter(
         state: AppState = Depends(state_dependency),
     ) -> Response:
         """Negotiate domain filter."""
         try:
-            return await handlers.negotiate_domain_filter(state)
+            return handlers.negotiate_domain_filter(state)
         except KeyboardInterrupt, SystemExit:
             # dereference interrupts so they propagate to caller
             raise
@@ -656,12 +656,12 @@ def create_app() -> FastAPI:
         # unit tests that mock handlers.get_records expecting a single arg.
         return await handlers.get_records(state)
 
-    async def adjust(
+    def adjust(
         endpoints: list[Endpoint],
         state: AppState = Depends(state_dependency),
     ) -> Response:
         """Adjust endpoints."""
-        return await handlers.adjust_endpoints(state, endpoints)
+        return handlers.adjust_endpoints(state, endpoints)
 
     async def apply(
         changes: Changes,

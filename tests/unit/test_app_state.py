@@ -100,7 +100,7 @@ async def test_ensure_ready_not_ready_raises_error(config: Config) -> None:
     try:
         state.is_ready = False
         with pytest.raises(RuntimeError, match="Service not ready yet"):
-            await state.ensure_ready()
+            state.ensure_ready()
     finally:
         await state.close()
 
@@ -114,7 +114,7 @@ async def test_ensure_writable(config: Config) -> None:
         state.is_ready = True
         state.is_writable = False
         with pytest.raises(RuntimeError, match="read-only"):
-            await state.ensure_writable()
+            state.ensure_writable()
     finally:
         await state.close()
 

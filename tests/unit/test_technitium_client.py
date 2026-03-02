@@ -547,10 +547,32 @@ async def test_get_records_with_optional_params(
 
 
 @pytest.mark.asyncio
-async def test_get_records_uses_cache_for_same_request(
+async def test_get_records_no_cache_by_default(
     client: TechnitiumClient, mocker: MockerFixture
 ) -> None:
-    """get_records should return cached results for repeated identical requests."""
+    """get_records should call the API every time when cache TTL is 0 (default)."""
+
+    response = GetRecordsResponse.model_validate(
+        {"zone": {"name": "example.com", "type": "Primary", "disabled": False}, "records": []}
+    )
+    mock_post = mocker.patch.object(client, "_post", new_callable=AsyncMock, return_value=response)
+
+    await client.get_records(domain="test.example.com", zone="example.com", list_zone=True)
+    await client.get_records(domain="test.example.com", zone="example.com", list_zone=True)
+
+    assert mock_post.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_get_records_uses_cache_when_enabled(
+    mocker: MockerFixture,
+) -> None:
+    """get_records should return cached results when cache TTL > 0."""
+    client = TechnitiumClient(
+        base_url="http://localhost:5380",
+        token="test-token",
+        records_cache_ttl_seconds=30.0,
+    )
 
     response = GetRecordsResponse.model_validate(
         {"zone": {"name": "example.com", "type": "Primary", "disabled": False}, "records": []}
@@ -566,9 +588,14 @@ async def test_get_records_uses_cache_for_same_request(
 
 @pytest.mark.asyncio
 async def test_get_records_cache_miss_for_different_request(
-    client: TechnitiumClient, mocker: MockerFixture
+    mocker: MockerFixture,
 ) -> None:
     """get_records should call the API for different cache keys."""
+    client = TechnitiumClient(
+        base_url="http://localhost:5380",
+        token="test-token",
+        records_cache_ttl_seconds=30.0,
+    )
 
     response = GetRecordsResponse.model_validate(
         {"zone": {"name": "example.com", "type": "Primary", "disabled": False}, "records": []}
@@ -611,9 +638,14 @@ async def test_get_records_cache_expires_after_ttl(
 
 @pytest.mark.asyncio
 async def test_add_record_invalidates_get_records_cache(
-    client: TechnitiumClient, mocker: MockerFixture
+    mocker: MockerFixture,
 ) -> None:
     """add_record should clear cached record responses."""
+    client = TechnitiumClient(
+        base_url="http://localhost:5380",
+        token="test-token",
+        records_cache_ttl_seconds=30.0,
+    )
 
     get_records_response = GetRecordsResponse.model_validate(
         {"zone": {"name": "example.com", "type": "Primary", "disabled": False}, "records": []}
@@ -648,9 +680,14 @@ async def test_add_record_invalidates_get_records_cache(
 
 @pytest.mark.asyncio
 async def test_delete_record_invalidates_get_records_cache(
-    client: TechnitiumClient, mocker: MockerFixture
+    mocker: MockerFixture,
 ) -> None:
     """delete_record should clear cached record responses."""
+    client = TechnitiumClient(
+        base_url="http://localhost:5380",
+        token="test-token",
+        records_cache_ttl_seconds=30.0,
+    )
 
     get_records_response = GetRecordsResponse.model_validate(
         {"zone": {"name": "example.com", "type": "Primary", "disabled": False}, "records": []}
@@ -676,9 +713,14 @@ async def test_delete_record_invalidates_get_records_cache(
 
 @pytest.mark.asyncio
 async def test_delete_record_error_still_invalidates_get_records_cache(
-    client: TechnitiumClient, mocker: MockerFixture
+    mocker: MockerFixture,
 ) -> None:
     """delete_record should invalidate cache even when the delete operation fails."""
+    client = TechnitiumClient(
+        base_url="http://localhost:5380",
+        token="test-token",
+        records_cache_ttl_seconds=30.0,
+    )
 
     get_records_response = GetRecordsResponse.model_validate(
         {"zone": {"name": "example.com", "type": "Primary", "disabled": False}, "records": []}

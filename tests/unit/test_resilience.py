@@ -250,7 +250,7 @@ async def test_health_check_reflects_circuit_open() -> None:
         await cb.call(_fail())
     state.circuit_breaker = cb
 
-    response = await health_check(state)
+    response = health_check(state)
     assert response.status_code == 503
 
     raw_body = response.body
@@ -270,7 +270,7 @@ async def test_health_check_ok_when_circuit_closed() -> None:
     state.is_ready = True
     state.circuit_breaker = CircuitBreaker(failure_threshold=5, timeout=60.0)
 
-    response = await health_check(state)
+    response = health_check(state)
     assert response.status_code == 200
 
 

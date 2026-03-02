@@ -4,8 +4,6 @@ import gzip
 import logging
 import ssl
 import time
-from collections.abc import Generator
-from contextlib import contextmanager
 from typing import Any, Self, TypeVar, cast
 from urllib.parse import urlencode
 
@@ -30,15 +28,37 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T", bound=BaseModel)
 
 
-@contextmanager
-def _track_latency(operation: str) -> Generator[None]:
-    """Context manager to track latency of an operation.
+class _LatencyTracker:
+    """Async context manager to track latency of an operation."""
+
+    def __init__(self, operation: str) -> None:
+        """Initialize the latency tracker.
+
+        Args:
+            operation: Operation name label for the metric
+        """
+        self.operation = operation
+        self._timer = technitium_latency_seconds.labels(operation=operation).time()
+
+    async def __aenter__(self) -> None:
+        """Async context manager entry."""
+        self._timer.__enter__()
+
+    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        """Async context manager exit."""
+        self._timer.__exit__(exc_type, exc_val, exc_tb)
+
+
+def _track_latency(operation: str) -> _LatencyTracker:
+    """Create a context manager to track latency of an operation.
 
     Args:
         operation: Operation name label for the metric
+
+    Returns:
+        Async context manager for tracking latency
     """
-    with technitium_latency_seconds.labels(operation=operation).time():
-        yield
+    return _LatencyTracker(operation)
 
 
 class TechnitiumError(Exception):
@@ -105,7 +125,7 @@ class TechnitiumClient:
         enable_request_compression: bool = False,
         compression_threshold_bytes: int = 32768,
         circuit_breaker: CircuitBreaker | None = None,
-        records_cache_ttl_seconds: float = 30.0,
+        records_cache_ttl_seconds: float = 0.0,
     ) -> None:
         """Initialize the Technitium client.
 
@@ -118,7 +138,7 @@ class TechnitiumClient:
             enable_request_compression: Enable gzip compression for large request bodies
             compression_threshold_bytes: Minimum size for request compression
             circuit_breaker: Optional circuit breaker for protecting API calls
-            records_cache_ttl_seconds: TTL for get_records cache entries
+            records_cache_ttl_seconds: TTL for get_records cache entries (0 to disable)
         """
         self.base_url = base_url.rstrip("/")
         self.token = token
@@ -304,7 +324,7 @@ class TechnitiumClient:
             Login response with token
         """
         data = {"user": username, "pass": password}
-        with _track_latency("login"):
+        async with _track_latency("login"):
             result = await self._post_raw(self.ENDPOINT_LOGIN, data)
         return LoginResponse.model_validate(result)
 
@@ -435,7 +455,7 @@ class TechnitiumClient:
         if update_svcb_hints:
             payload["updateSvcbHints"] = str(update_svcb_hints).lower()
 
-        with _track_latency("add_record"):
+        async with _track_latency("add_record"):
             response = await self._post(self.ENDPOINT_ADD_RECORD, payload, AddRecordResponse)
         self._invalidate_records_cache()
         return response
@@ -462,15 +482,19 @@ class TechnitiumClient:
         if list_zone is not None:
             payload["listZone"] = str(list_zone).lower()
 
-        cache_key = (domain, zone, list_zone)
-        cached = self._records_cache.get(cache_key)
-        now = time.monotonic()
-        if cached and now - cached[0] < self._records_cache_ttl_seconds:
-            return cached[1]
+        if self._records_cache_ttl_seconds > 0:
+            cache_key = (domain, zone, list_zone)
+            cached = self._records_cache.get(cache_key)
+            now = time.monotonic()
+            if cached and now - cached[0] < self._records_cache_ttl_seconds:
+                return cached[1]
 
-        with _track_latency("get_records"):
+        async with _track_latency("get_records"):
             response = await self._post(self.ENDPOINT_GET_RECORDS, payload, GetRecordsResponse)
-        self._records_cache[cache_key] = (now, response)
+
+        if self._records_cache_ttl_seconds > 0:
+            self._records_cache[(domain, zone, list_zone)] = (time.monotonic(), response)
+
         return response
 
     async def delete_record(
@@ -500,7 +524,7 @@ class TechnitiumClient:
             payload["zone"] = zone
 
         self._invalidate_records_cache()
-        with _track_latency("delete_record"):
+        async with _track_latency("delete_record"):
             response = await self._post(self.ENDPOINT_DELETE_RECORD, payload, DeleteRecordResponse)
         return response
 

@@ -20,6 +20,7 @@ def test_config_defaults() -> None:
     assert config.health_port == 8080
     assert config.log_level == "INFO"
     assert config.domain_filters is None
+    assert config.records_cache_ttl_seconds == 0.0
 
 
 def test_config_required_fields() -> None:

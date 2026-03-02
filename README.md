@@ -11,7 +11,7 @@ FastAPI webhook provider that lets [ExternalDNS](https://github.com/kubernetes-s
 
 ## Highlights
 
-- Async-first architecture with graceful startup/shutdown and token auto-renewal
+- Async-first for network I/O with graceful startup/shutdown and token auto-renewal
 - Technitium client with failover rotation, zone auto-create, and catalog enrollment
 - 30-second in-memory cache for `get_records` responses with automatic invalidation on add/delete requests
 - Circuit breaker (CLOSED/OPEN/HALF_OPEN) for fast-fail on Technitium connection failures
@@ -76,6 +76,7 @@ Environment variables map directly to `external_dns_technitium_webhook.config.Co
 | `TECHNITIUM_COMPRESSION_THRESHOLD_BYTES` | ❌ | `32768` | Minimum payload size (bytes) for compression |
 | `CIRCUIT_BREAKER_FAILURE_THRESHOLD` | ❌ | `5` | Consecutive failures before the circuit opens |
 | `CIRCUIT_BREAKER_TIMEOUT` | ❌ | `60.0` | Seconds the circuit stays open before allowing a probe request |
+| `RECORDS_CACHE_TTL_SECONDS` | ❌ | `0.0` | TTL (seconds) for get_records response cache; `0` disables caching |
 | `LISTEN_PORT` | ❌ | `8888` | **Fixed** by ExternalDNS; not configurable in production (used only by local tests) |
 | `HEALTH_PORT` | ❌ | `8080` | **Fixed** by ExternalDNS; Kubernetes probes target this port |
 

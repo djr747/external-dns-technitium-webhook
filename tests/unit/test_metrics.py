@@ -1,7 +1,7 @@
 """Unit tests for Prometheus metrics module and integration."""
 
 import contextlib
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, Mock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -174,7 +174,7 @@ class TestHandlerMetricsIntegration:
         state.is_ready = True
 
         mock_set = mocker.patch.object(webhook_ready, "set")
-        await health_check(state)
+        health_check(state)
         mock_set.assert_called_with(1)
 
     @pytest.mark.asyncio
@@ -187,7 +187,7 @@ class TestHandlerMetricsIntegration:
         state.is_ready = False
 
         mock_set = mocker.patch.object(webhook_ready, "set")
-        await health_check(state)
+        health_check(state)
         mock_set.assert_called_with(0)
 
     @pytest.mark.asyncio
@@ -199,7 +199,7 @@ class TestHandlerMetricsIntegration:
 
         state = MagicMock()
         state.is_ready = True
-        state.ensure_ready = AsyncMock()
+        state.ensure_ready = Mock()
         state.record_fetch_count = 0
         state.config.zone = "example.com"
 
@@ -239,8 +239,8 @@ class TestHandlerMetricsIntegration:
         state = MagicMock()
         state.is_ready = True
         state.is_writable = True
-        state.ensure_ready = AsyncMock()
-        state.ensure_writable = AsyncMock()
+        state.ensure_ready = Mock()
+        state.ensure_writable = Mock()
         state.client.add_record = AsyncMock()
         state.client.delete_record = AsyncMock()
 
@@ -280,8 +280,8 @@ class TestHandlerMetricsIntegration:
         state = MagicMock()
         state.is_ready = True
         state.is_writable = True
-        state.ensure_ready = AsyncMock()
-        state.ensure_writable = AsyncMock()
+        state.ensure_ready = Mock()
+        state.ensure_writable = Mock()
         state.client.add_record = AsyncMock()
         state.client.delete_record = AsyncMock()
 
@@ -323,8 +323,8 @@ class TestHandlerMetricsIntegration:
         state = MagicMock()
         state.is_ready = True
         state.is_writable = True
-        state.ensure_ready = AsyncMock()
-        state.ensure_writable = AsyncMock()
+        state.ensure_ready = Mock()
+        state.ensure_writable = Mock()
         state.client.add_record = AsyncMock(side_effect=Exception("API error"))
         state.client.delete_record = AsyncMock()
 
@@ -368,8 +368,8 @@ class TestHandlerMetricsIntegration:
         state = MagicMock()
         state.is_ready = True
         state.is_writable = True
-        state.ensure_ready = AsyncMock()
-        state.ensure_writable = AsyncMock()
+        state.ensure_ready = Mock()
+        state.ensure_writable = Mock()
         state.client.add_record = AsyncMock()
         state.client.delete_record = AsyncMock(side_effect=Exception("Delete failed"))
 

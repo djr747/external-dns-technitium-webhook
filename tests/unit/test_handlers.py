@@ -4,7 +4,7 @@ import json
 import logging
 import re
 from typing import Any, cast
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, Mock
 
 import pytest
 from fastapi import HTTPException, Request
@@ -62,7 +62,7 @@ class TestAdjustEndpointsErrorHandling:
         ]
 
         with caplog.at_level(logging.DEBUG):
-            result = await adjust_endpoints(mock_state, endpoints)
+            result = adjust_endpoints(mock_state, endpoints)
 
         # Should still return successfully despite logging failure
         assert result is not None
@@ -155,8 +155,8 @@ def app_state(config: Config, mocker: MockerFixture) -> AppState:
 def mock_state(mocker):
     """Create a mock AppState for error handling tests."""
     state = AsyncMock(spec=AppState)
-    state.ensure_ready = AsyncMock()
-    state.ensure_writable = AsyncMock()
+    state.ensure_ready = Mock()
+    state.ensure_writable = Mock()
     state.client = AsyncMock()
     state.config = MagicMock()
     state.config.zone = "example.com"
@@ -175,7 +175,7 @@ def mock_request():
 @pytest.mark.asyncio
 async def test_health_check_ready(app_state: AppState) -> None:
     """Test health check when ready."""
-    response = await health_check(app_state)
+    response = health_check(app_state)
     assert response.status_code == 200
 
 
@@ -183,14 +183,14 @@ async def test_health_check_ready(app_state: AppState) -> None:
 async def test_health_check_not_ready(app_state: AppState) -> None:
     """Test health check when not ready."""
     app_state.is_ready = False
-    response = await health_check(app_state)
+    response = health_check(app_state)
     assert response.status_code == 503
 
 
 @pytest.mark.asyncio
 async def test_negotiate_domain_filter(app_state: AppState) -> None:
     """Test domain filter negotiation."""
-    response = await negotiate_domain_filter(app_state)
+    response = negotiate_domain_filter(app_state)
     raw_body = response.body
     body_bytes = raw_body.tobytes() if isinstance(raw_body, memoryview) else raw_body or b""
     data = json.loads(body_bytes.decode())
@@ -254,7 +254,7 @@ async def test_adjust_endpoints(app_state: AppState) -> None:
         )
     ]
 
-    response = await adjust_endpoints(app_state, endpoints)
+    response = adjust_endpoints(app_state, endpoints)
     raw_body = response.body
     body_bytes = raw_body.tobytes() if isinstance(raw_body, memoryview) else raw_body or b""
     endpoints_resp = json.loads(body_bytes.decode())
@@ -592,7 +592,7 @@ async def test_get_records_circuit_open(mocker):
     class DummyState:
         is_ready = True
 
-        async def ensure_ready(self):
+        def ensure_ready(self):
             return None
 
         config = type("C", (), {"zone": "example.com"})
@@ -1252,3 +1252,126 @@ async def test_apply_record_delete_invalid_record_data(
     response = await apply_record(app_state, changes)
     assert response.status_code == 204
     # Should not call delete_record due to invalid data
+
+
+@pytest.mark.asyncio
+async def test_apply_record_with_pydantic_v1_style_obj(
+    app_state: AppState, mocker: MockerFixture
+) -> None:
+    """Test apply_record with object that has .dict() but not .model_dump().
+
+    This covers the elif branch (line 285-286) for Pydantic v1 compatibility.
+    """
+
+    # Create a mock Changes object that has dict() but not model_dump()
+    class LegacyChanges:
+        def __init__(self):
+            self.create = [
+                Endpoint(
+                    dnsName="test.example.com",
+                    recordType="A",
+                    recordTTL=3600,
+                    setIdentifier="",
+                    targets=["1.2.3.4"],
+                )
+            ]
+            self.delete = []
+            self.update_old = []
+            self.update_new = []
+
+        def dict(self):
+            return {
+                "create": self.create,
+                "delete": self.delete,
+                "update_old": self.update_old,
+                "update_new": self.update_new,
+            }
+
+    mock_add = mocker.patch.object(app_state.client, "add_record")
+    mocker.patch(
+        "external_dns_technitium_webhook.handlers.safe_log_payload",
+    )
+
+    legacy_changes = LegacyChanges()
+    response = await apply_record(app_state, legacy_changes)  # type: ignore[arg-type]
+    assert response.status_code == 204
+    mock_add.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_apply_record_with_raw_dict_obj(app_state: AppState, mocker: MockerFixture) -> None:
+    """Test apply_record with raw dict-like object.
+
+    This covers the else branch (line 287-288) for objects that support dict()
+    constructor but have no .model_dump() or .dict() method.
+    """
+
+    # Create a dict-like object that can be passed to dict() constructor
+    class DictLikeChanges:
+        def __init__(self):
+            self.create = [
+                Endpoint(
+                    dnsName="test.example.com",
+                    recordType="A",
+                    recordTTL=3600,
+                    setIdentifier="",
+                    targets=["1.2.3.4"],
+                )
+            ]
+            self.delete = []
+            self.update_old = []
+            self.update_new = []
+
+        def keys(self) -> list[str]:
+            return ["create", "delete", "update_old", "update_new"]
+
+        def __getitem__(self, key: str) -> Any:
+            mapping = {
+                "create": self.create,
+                "delete": self.delete,
+                "update_old": self.update_old,
+                "update_new": self.update_new,
+            }
+            if key not in mapping:
+                raise KeyError(key)
+            return mapping[key]
+
+    mock_add = mocker.patch.object(app_state.client, "add_record")
+    mocker.patch(
+        "external_dns_technitium_webhook.handlers.safe_log_payload",
+    )
+
+    dict_like_changes = DictLikeChanges()
+    response = await apply_record(app_state, dict_like_changes)  # type: ignore[arg-type]
+    assert response.status_code == 204
+    mock_add.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_apply_record_serialization_fallback_with_exception(
+    app_state: AppState, mocker: MockerFixture
+) -> None:
+    """Test apply_record when all serialization methods fail.
+
+    This covers the except block logging when dict() conversion fails.
+    """
+
+    # Create an object that can't be serialized via any method
+    class UnserializableChanges:
+        def __init__(self):
+            self.delete = []
+            self.create = []
+            self.update_old = []
+            self.update_new = []
+
+    mocker.patch(
+        "external_dns_technitium_webhook.handlers.safe_log_payload",
+        side_effect=TypeError("Not serializable"),
+    )
+    mocker.patch.object(app_state.client, "add_record")
+
+    unserializable = UnserializableChanges()
+    result = await apply_record(app_state, unserializable)  # type: ignore[arg-type]
+
+    # Should still return 204 since it's an empty changes object
+    assert result is not None
