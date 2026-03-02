@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v1.0.3] - 2026-03-01
+
+**Changed:**
+
+- Removed unnecessary `async` keywords from functions that don't perform I/O (SonarCloud findings):
+  - `app_state.py`: Converted `ensure_ready()` and `ensure_writable()` to sync methods (only boolean checks)
+  - `handlers.py`: Converted `health_check()`, `negotiate_domain_filter()`, and `adjust_endpoints()` to sync (pure data manipulation, response construction)
+  - `main.py`: Converted route wrappers `domain_filter` and `adjust` to sync (only call sync handlers)
+- Updated all test calls and mocks to reflect the async-to-sync changes:
+  - Removed `await` keywords from test calls to now-sync functions
+  - Converted test mocks from `AsyncMock()` to `Mock()` for now-sync methods
+  - Updated assertion methods from `assert_awaited_once_with()` to `assert_called_once_with()`
+- Maintained all I/O-bound operations as genuinely async:
+  - `get_records()` and `apply_record()` handlers remain async (call Technitium API)
+  - Route wrappers `records` and `apply` remain async (await real I/O)
+- Verified no blocking behavior: all sync conversions were for guard functions or pure data manipulation with microsecond execution time
+- Test coverage maintained at 100% with 335 tests passing, 0 warnings
+- Ruff/pyright: all checks passing with zero errors and warnings
+
 ## [v1.0.2] - 2026-03-01
 
 **Fixed & Improved:**
@@ -38,10 +57,10 @@ All notable changes to this project will be documented in this file.
 **Changed:**
 
 - Refactored API handlers to reduce cognitive complexity and duplicate logic.
-  * Introduced generic `_process_changes` with dedicated `_execute_change` helper.
-  * Added constant `API_UNAVAILABLE` and helper functions `_handle_circuit_error` and `_log_fetch_metrics`.
-  * Extracted error handling for downstream operations and cleaned up asynchronous logic.
-  * Converted several async helpers to synchronous when no await was required.
+  - Introduced generic `_process_changes` with dedicated `_execute_change` helper.
+  - Added constant `API_UNAVAILABLE` and helper functions `_handle_circuit_error` and `_log_fetch_metrics`.
+  - Extracted error handling for downstream operations and cleaned up asynchronous logic.
+  - Converted several async helpers to synchronous when no await was required.
 - Improved `main.py` exception handlers with consistent readiness checks and simplified control flow.
 - Hardened TLS handling in `technitium_client.py` and added test for minimum_version fallback.
 - Removed stray `tests/test_handlers.py`, consolidated unique test,

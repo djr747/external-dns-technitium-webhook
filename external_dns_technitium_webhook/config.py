@@ -5,6 +5,8 @@ from typing import Any
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+_REDACTED_VALUE = "***REDACTED***"
+
 
 class Config(BaseSettings):
     """Application configuration loaded from environment variables."""
@@ -30,7 +32,6 @@ class Config(BaseSettings):
     rate_limit_burst: int = 10
     technitium_failover_urls: str | None = None
     catalog_zone: str | None = None
-    technitium_verify_ssl: bool = True
     # When set to False we disable *all* TLS verification (certificates and
     # hostname checks).  This is useful when talking to a local or self‑signed
     # Technitium instance in development/testing, but it is **insecure** and
@@ -38,6 +39,7 @@ class Config(BaseSettings):
     # selectively disable only hostname validation.  Refer to the README, docs,
     # and unit tests for examples of how the client behaves when this flag is
     # toggled.
+    technitium_verify_ssl: bool = True
     # Optional path to a PEM file containing one or more CA certificates.
     # Intended to be mounted via ConfigMap (like username/password secrets).
     # When verify_ssl is True and ca_bundle_file is set, the file must exist and be readable.
@@ -46,6 +48,7 @@ class Config(BaseSettings):
     technitium_compression_threshold_bytes: int = 32768
     circuit_breaker_failure_threshold: int = 5
     circuit_breaker_timeout: float = 60.0
+    records_cache_ttl_seconds: float = 0.0  # TTL for get_records cache (0 to disable)
 
     def __init__(self, **values: Any) -> None:
         """Allow instantiation without explicit arguments for env loading."""
@@ -59,6 +62,7 @@ class Config(BaseSettings):
                 )
             try:
                 with path.open("rb"):
+                    # Open file to ensure it is readable; no content is read.
                     pass
             except Exception as exc:
                 raise ValueError(f"TECHNITIUM_CA_BUNDLE_FILE file is not readable: {exc}") from exc
@@ -118,7 +122,7 @@ class Config(BaseSettings):
             f"Config("
             f"url={self.technitium_url}, "
             f"username={self.technitium_username}, "
-            f"password=***REDACTED***, "
+            f"password={_REDACTED_VALUE}, "
             f"zone={self.zone}, "
             f"filters={self.domain_filter_list})"
         )
@@ -134,5 +138,5 @@ class Config(BaseSettings):
         """
         data = super().model_dump(**kwargs)
         if "technitium_password" in data:
-            data["technitium_password"] = "***REDACTED***"
+            data["technitium_password"] = _REDACTED_VALUE
         return data

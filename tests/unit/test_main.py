@@ -952,8 +952,8 @@ def test_app_routes_delegate_to_handlers(mocker: MockerFixture) -> None:
     state = AppState(config=_build_config())
     state.is_ready = True
 
-    # Patch state.ensure_writable to a no-op async function
-    async def noop():
+    # Patch state.ensure_writable to a no-op sync function
+    def noop():
         return None
 
     state.ensure_writable = noop
@@ -1026,9 +1026,9 @@ def test_app_routes_delegate_to_handlers(mocker: MockerFixture) -> None:
         response = client.post("/records", json=changes_payload)
         assert response.status_code == 204
 
-    negotiate_mock.assert_awaited_once_with(state)
+    negotiate_mock.assert_called_once_with(state)
     records_mock.assert_awaited_once_with(state)
-    adjust_mock.assert_awaited_once_with(state, ANY)
+    adjust_mock.assert_called_once_with(state, ANY)
     apply_mock.assert_awaited_once_with(state, ANY)
 
 
@@ -1687,8 +1687,8 @@ class TestNormalizeZoneName:
 class TestExceptionHandlersAndMiddleware:
     def test_runtime_error_service_not_ready(self, mocker):
         app = create_app()
-        state = mocker.AsyncMock(spec=AppState)
-        state.ensure_ready = mocker.AsyncMock()
+        state = mocker.MagicMock(spec=AppState)
+        state.ensure_ready = mocker.Mock()
         state.ready = True
         state.config = mocker.MagicMock()
         state.config.zone = "example.com"
@@ -1712,8 +1712,8 @@ class TestExceptionHandlersAndMiddleware:
 
     def test_runtime_error_other(self, mocker):
         app = create_app()
-        state = mocker.AsyncMock(spec=AppState)
-        state.ensure_ready = mocker.AsyncMock()
+        state = mocker.MagicMock(spec=AppState)
+        state.ensure_ready = mocker.Mock()
         state.ready = True
         state.config = mocker.MagicMock()
         state.config.zone = "example.com"
@@ -1738,8 +1738,8 @@ class TestExceptionHandlersAndMiddleware:
     def test_general_exception_handler_returns_500(self, mocker):
         """Test general Exception handler returns 500 for non-RuntimeError exceptions."""
         app = create_app()
-        state = mocker.AsyncMock(spec=AppState)
-        state.ensure_ready = mocker.AsyncMock()
+        state = mocker.MagicMock(spec=AppState)
+        state.ensure_ready = mocker.Mock()
         state.ready = True
         state.config = mocker.MagicMock()
         state.config.zone = "example.com"
@@ -1767,8 +1767,8 @@ class TestExceptionHandlersAndMiddleware:
     async def test_domain_filter_keyboard_interrupt_propagates(self, mocker):
         """KeyboardInterrupt inside domain_filter must re-raise, not be swallowed."""
         app = create_app()
-        state = mocker.AsyncMock(spec=AppState)
-        state.ensure_ready = mocker.AsyncMock()
+        state = mocker.MagicMock(spec=AppState)
+        state.ensure_ready = mocker.Mock()
         state.config = mocker.MagicMock()
         state.config.zone = "example.com"
         app.state.app_state = state
@@ -1866,8 +1866,8 @@ class TestMainMiddlewareFunctions:
     def test_exception_group_handler_returns_500(self, mocker):
         """Test ExceptionGroup handler returns 500 JSON response."""
         app = create_app()
-        state = mocker.AsyncMock(spec=AppState)
-        state.ensure_ready = mocker.AsyncMock()
+        state = mocker.MagicMock(spec=AppState)
+        state.ensure_ready = mocker.Mock()
         state.ready = True
         state.config = mocker.MagicMock()
         state.config.zone = "example.com"
@@ -1949,8 +1949,8 @@ async def trigger_exception_group():
         from external_dns_technitium_webhook import main as main_mod
 
         app = main_mod.create_app()
-        state = mocker.AsyncMock(spec=AppState)
-        state.ensure_ready = mocker.AsyncMock()
+        state = mocker.MagicMock(spec=AppState)
+        state.ensure_ready = mocker.Mock()
         state.ready = False
         state.config = mocker.MagicMock()
         state.config.zone = "example.com"
