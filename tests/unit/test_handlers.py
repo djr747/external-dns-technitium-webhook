@@ -1464,7 +1464,9 @@ async def test_get_records_failover_success_on_retry(
     mocker.patch.object(app_state.client, "get_records", side_effect=get_records_side_effect)
 
     # Mock successful failover
-    mocker.patch.object(app_state, "try_failover_endpoints", new_callable=AsyncMock, return_value=True)
+    mocker.patch.object(
+        app_state, "try_failover_endpoints", new_callable=AsyncMock, return_value=True
+    )
 
     result = await get_records(app_state)
 
@@ -1484,7 +1486,9 @@ async def test_get_records_failover_all_endpoints_fail(
     mocker.patch.object(app_state.client, "get_records", side_effect=conn_error)
 
     # Mock failed failover
-    mocker.patch.object(app_state, "try_failover_endpoints", new_callable=AsyncMock, return_value=False)
+    mocker.patch.object(
+        app_state, "try_failover_endpoints", new_callable=AsyncMock, return_value=False
+    )
     mocker.patch.object(app_state, "update_status", new_callable=AsyncMock)
 
     with pytest.raises(HTTPException) as exc_info:
@@ -1544,7 +1548,9 @@ async def test_apply_record_failover_success_on_retry(
     mocker.patch.object(app_state.client, "add_record", side_effect=add_record_side_effect)
 
     # Mock successful failover
-    mocker.patch.object(app_state, "try_failover_endpoints", new_callable=AsyncMock, return_value=True)
+    mocker.patch.object(
+        app_state, "try_failover_endpoints", new_callable=AsyncMock, return_value=True
+    )
 
     changes = Changes(
         create=[
@@ -1578,7 +1584,9 @@ async def test_apply_record_failover_all_endpoints_fail(
     mocker.patch.object(app_state.client, "add_record", side_effect=conn_error)
 
     # Mock failed failover
-    mocker.patch.object(app_state, "try_failover_endpoints", new_callable=AsyncMock, return_value=False)
+    mocker.patch.object(
+        app_state, "try_failover_endpoints", new_callable=AsyncMock, return_value=False
+    )
     mocker.patch.object(app_state, "update_status", new_callable=AsyncMock)
 
     changes = Changes(

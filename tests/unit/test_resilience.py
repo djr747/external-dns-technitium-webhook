@@ -322,4 +322,3 @@ def test_circuit_breaker_reset() -> None:
     assert cb._failure_count == 0
     assert cb._last_failure_time is None
     assert cb._half_open_inflight is False
-

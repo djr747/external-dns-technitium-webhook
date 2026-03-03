@@ -1433,9 +1433,7 @@ async def test_get_records_without_zone_param(
 
 
 @pytest.mark.asyncio
-async def test_get_records_list_zone_none(
-    client: TechnitiumClient, mocker: MockerFixture
-) -> None:
+async def test_get_records_list_zone_none(client: TechnitiumClient, mocker: MockerFixture) -> None:
     """Test get_records with list_zone=None (branch 482->485 false path)."""
     mock_response = {
         "status": "ok",

@@ -139,6 +139,7 @@ async def test_close_cancels_token_task(config: Config, mocker: MockerFixture) -
     assert state._token_task.cancelled()
     close_mock.assert_awaited_once()
 
+
 @pytest.mark.asyncio
 async def test_try_failover_endpoints_success(mocker: MockerFixture) -> None:
     """Test successful failover to alternate endpoint."""
@@ -229,9 +230,7 @@ async def test_try_failover_endpoints_all_fail(mocker: MockerFixture) -> None:
         mocker.patch.object(state, "set_active_endpoint", new_callable=AsyncMock)
 
         login_error = TechnitiumError("Connection refused")
-        mocker.patch.object(
-            state.client, "login", new_callable=AsyncMock, side_effect=login_error
-        )
+        mocker.patch.object(state.client, "login", new_callable=AsyncMock, side_effect=login_error)
 
         # Call failover
         result = await state.try_failover_endpoints()
