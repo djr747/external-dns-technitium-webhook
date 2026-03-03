@@ -135,3 +135,60 @@ class AppState:
             self.is_writable = writable
             self.server_role = server_role
             self.catalog_membership = catalog_membership
+
+    async def try_failover_endpoints(self) -> bool:
+        """Attempt failover to alternate Technitium endpoints.
+
+        Tries each configured endpoint in order (excluding the currently active
+        endpoint) and attempts to authenticate. On success, updates the active
+        endpoint and returns True. If all endpoints fail or no alternatives
+        exist, returns False.
+
+        Returns:
+            True if failover to an alternate endpoint succeeded, False otherwise
+        """
+        endpoints = self.config.technitium_endpoints
+        current_endpoint = self.client.base_url
+        failures: list[str] = []
+
+        for endpoint in endpoints:
+            if endpoint == current_endpoint:
+                # Skip the current endpoint
+                continue
+
+            try:
+                logger.info(
+                    "Attempting failover to endpoint %s (from %s)",
+                    endpoint,
+                    current_endpoint,
+                )
+                await self.set_active_endpoint(endpoint)
+
+                # Test connectivity and authentication
+                login_response = await self.client.login(
+                    username=self.config.technitium_username,
+                    password=self.config.technitium_password,
+                )
+                self.client.token = login_response.token
+                logger.info("Successfully authenticated with failover endpoint %s", endpoint)
+
+                # Reset circuit breaker for the new endpoint
+                self.circuit_breaker.reset()
+
+                return True
+            except Exception as exc:
+                logger.warning(
+                    "Failover to endpoint %s failed: %s",
+                    endpoint,
+                    exc,
+                    exc_info=True,
+                )
+                failures.append(f"{endpoint}: {exc}")
+
+        if failures:
+            failure_summary = "; ".join(failures)
+            logger.error("All failover attempts failed: %s", failure_summary)
+        else:
+            logger.warning("No failover endpoints available (all are the current endpoint)")
+
+        return False

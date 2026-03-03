@@ -1,6 +1,8 @@
 """Unit tests for AppState behavior."""
 
 import asyncio
+from typing import cast
+from unittest.mock import MagicMock  # noqa: F401 - used in cast() for type checking
 
 import pytest
 from pytest_mock import MockerFixture
@@ -136,3 +138,104 @@ async def test_close_cancels_token_task(config: Config, mocker: MockerFixture) -
 
     assert state._token_task.cancelled()
     close_mock.assert_awaited_once()
+
+@pytest.mark.asyncio
+async def test_try_failover_endpoints_success(mocker: MockerFixture) -> None:
+    """Test successful failover to alternate endpoint."""
+    config = Config(
+        technitium_url="http://primary.example.com:5380",
+        technitium_username="admin",
+        technitium_password="password",
+        zone="example.com",
+        technitium_failover_urls="http://secondary.example.com:5380",
+    )
+
+    state = AppState(config)
+
+    try:
+        # Mock the login response
+        from unittest.mock import AsyncMock, MagicMock
+
+        login_response = MagicMock()
+        login_response.token = "new_token_123"
+
+        # We need to mock the client replacement process to avoid actual network calls
+        call_count = 0
+
+        async def mock_set_active_endpoint(url: str) -> None:
+            """Mock set_active_endpoint that doesn't try to connect."""
+            nonlocal call_count
+            call_count += 1
+            # Just update the endpoint without replacing the client
+            state.active_endpoint = url
+            if hasattr(state.client, "base_url"):
+                state.client.base_url = url
+
+        # Replace set_active_endpoint with our mock
+        mocker.patch.object(state, "set_active_endpoint", side_effect=mock_set_active_endpoint)
+
+        # Mock the client login method
+        mocker.patch.object(
+            state.client, "login", new_callable=AsyncMock, return_value=login_response
+        )
+
+        # Call failover
+        result = await state.try_failover_endpoints()
+
+        assert result is True
+        assert state.client.token == "new_token_123"
+        assert state.active_endpoint == "http://secondary.example.com:5380"
+        cast(MagicMock, state.client.login).assert_called_once_with(
+            username="admin",
+            password="password",
+        )
+    finally:
+        await state.close()
+
+
+@pytest.mark.asyncio
+async def test_try_failover_endpoints_no_alternatives(config: Config) -> None:
+    """Test failover when no alternate endpoints are available."""
+    state = AppState(config)
+
+    try:
+        # Call failover with no failover_urls configured
+        result = await state.try_failover_endpoints()
+
+        assert result is False
+    finally:
+        await state.close()
+
+
+@pytest.mark.asyncio
+async def test_try_failover_endpoints_all_fail(mocker: MockerFixture) -> None:
+    """Test failover when all alternate endpoints fail."""
+    from unittest.mock import AsyncMock
+
+    from external_dns_technitium_webhook.technitium_client import TechnitiumError
+
+    config = Config(
+        technitium_url="http://primary.example.com:5380",
+        technitium_username="admin",
+        technitium_password="password",
+        zone="example.com",
+        technitium_failover_urls="http://secondary.example.com:5380;http://tertiary.example.com:5380",
+    )
+
+    state = AppState(config)
+
+    try:
+        # Mock set_active_endpoint to succeed but login to fail
+        mocker.patch.object(state, "set_active_endpoint", new_callable=AsyncMock)
+
+        login_error = TechnitiumError("Connection refused")
+        mocker.patch.object(
+            state.client, "login", new_callable=AsyncMock, side_effect=login_error
+        )
+
+        # Call failover
+        result = await state.try_failover_endpoints()
+
+        assert result is False
+    finally:
+        await state.close()

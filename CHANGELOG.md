@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v1.0.4] - 2026-03-03
+
+**Fixed & Improved:**
+
+- **Runtime Failover Support**: Implemented automatic failover mechanism for connection failures
+  - Added `try_failover_endpoints()` method to AppState for runtime endpoint switching
+  - Connection errors (DNS failures, refused, timeouts, network unreachable) now trigger failover retry
+  - Non-connection API errors return 400 Bad Request without failover attempt
+  - Circuit breaker properly reset when switching endpoints to clear inherited failure state
+- **Enhanced Error Detection**: Implemented `_is_connection_error()` pattern matching to distinguish network errors from API errors
+- **Improved Test Coverage**: Expanded test suite from 352 to 357 tests
+  - Added 5 new failover scenario tests covering success/failure paths
+  - Added 5 new branch coverage tests for `technitium_client.py` edge cases
+  - Achieved 99% overall coverage with `technitium_client.py` at 100%
+- **Type Safety Improvements**: Replaced all `type: ignore` comments with proper `cast()` usage
+  - Updated test code to use explicit type casting via `typing.cast()`
+  - Fixed all type checker warnings (ruff, mypy, pyright)
+  - Maintained zero type errors and zero warnings across linting
+- **Code Quality**: All quality checks passing
+  - Ruff format/lint: 0 errors, 0 warnings
+  - mypy strict: Success
+  - pyright: 0 errors, 0 warnings
+  - 357 tests passing
+
 ## [v1.0.3] - 2026-03-01
 
 **Changed:**

@@ -428,7 +428,7 @@ async def test_execute_change_success(app_state: AppState) -> None:
     record_data = {"ipAddress": "1.2.3.4"}
 
     await _execute_change(app_state, ep, record_data, "create")
-    app_state.client.add_record.assert_awaited_once_with(  # type: ignore[reportAttributeAccessIssue]
+    cast(MagicMock, app_state.client.add_record).assert_awaited_once_with(
         domain="foo.example.com",
         record_type="A",
         record_data=record_data,
@@ -437,7 +437,7 @@ async def test_execute_change_success(app_state: AppState) -> None:
 
     # deletion path
     await _execute_change(app_state, ep, record_data, "delete")
-    app_state.client.delete_record.assert_awaited_once_with(  # type: ignore[reportAttributeAccessIssue]
+    cast(MagicMock, app_state.client.delete_record).assert_awaited_once_with(
         domain="foo.example.com",
         record_type="A",
         record_data=record_data,
@@ -1293,7 +1293,7 @@ async def test_apply_record_with_pydantic_v1_style_obj(
     )
 
     legacy_changes = LegacyChanges()
-    response = await apply_record(app_state, legacy_changes)  # type: ignore[arg-type]
+    response = await apply_record(app_state, cast(Changes, legacy_changes))
     assert response.status_code == 204
     mock_add.assert_called_once()
 
@@ -1342,7 +1342,7 @@ async def test_apply_record_with_raw_dict_obj(app_state: AppState, mocker: Mocke
     )
 
     dict_like_changes = DictLikeChanges()
-    response = await apply_record(app_state, dict_like_changes)  # type: ignore[arg-type]
+    response = await apply_record(app_state, cast(Changes, dict_like_changes))
     assert response.status_code == 204
     mock_add.assert_called_once()
 
@@ -1371,7 +1371,269 @@ async def test_apply_record_serialization_fallback_with_exception(
     mocker.patch.object(app_state.client, "add_record")
 
     unserializable = UnserializableChanges()
-    result = await apply_record(app_state, unserializable)  # type: ignore[arg-type]
+    result = await apply_record(app_state, cast(Changes, unserializable))
 
     # Should still return 204 since it's an empty changes object
     assert result is not None
+
+
+def test_is_connection_error_dns_failure() -> None:
+    """Test detection of DNS resolution errors."""
+    from external_dns_technitium_webhook.handlers import _is_connection_error
+    from external_dns_technitium_webhook.technitium_client import TechnitiumError
+
+    error = TechnitiumError("Request error: [Errno -3] Temporary failure in name resolution")
+    assert _is_connection_error(error)
+
+
+def test_is_connection_error_connection_refused() -> None:
+    """Test detection of connection refused errors."""
+    from external_dns_technitium_webhook.handlers import _is_connection_error
+    from external_dns_technitium_webhook.technitium_client import TechnitiumError
+
+    error = TechnitiumError("Request error: Connection refused")
+    assert _is_connection_error(error)
+
+
+def test_is_connection_error_connection_reset() -> None:
+    """Test detection of connection reset errors."""
+    from external_dns_technitium_webhook.handlers import _is_connection_error
+    from external_dns_technitium_webhook.technitium_client import TechnitiumError
+
+    error = TechnitiumError("Request error: Connection reset by peer")
+    assert _is_connection_error(error)
+
+
+def test_is_connection_error_timeout() -> None:
+    """Test detection of connection timeout errors."""
+    from external_dns_technitium_webhook.handlers import _is_connection_error
+    from external_dns_technitium_webhook.technitium_client import TechnitiumError
+
+    error = TechnitiumError("Request error: Connection timeout occurred")
+    assert _is_connection_error(error)
+
+
+def test_is_connection_error_network_unreachable() -> None:
+    """Test detection of network unreachable errors."""
+    from external_dns_technitium_webhook.handlers import _is_connection_error
+    from external_dns_technitium_webhook.technitium_client import TechnitiumError
+
+    error = TechnitiumError("Request error: Network is unreachable")
+    assert _is_connection_error(error)
+
+
+def test_is_connection_error_not_connection_error() -> None:
+    """Test that non-connection errors are not detected as connection errors."""
+    from external_dns_technitium_webhook.handlers import _is_connection_error
+    from external_dns_technitium_webhook.technitium_client import TechnitiumError
+
+    error = TechnitiumError("API error: Invalid parameters")
+    assert not _is_connection_error(error)
+
+
+def test_is_connection_error_non_technitium_error() -> None:
+    """Test that non-TechnitiumError exceptions are not detected as connection errors."""
+    from external_dns_technitium_webhook.handlers import _is_connection_error
+
+    error = ValueError("Some other error")
+    assert not _is_connection_error(error)
+
+
+@pytest.mark.asyncio
+async def test_get_records_failover_success_on_retry(
+    app_state: AppState, mocker: MockerFixture
+) -> None:
+    """Test get_records with connection error that triggers successful failover and retry."""
+    from external_dns_technitium_webhook.technitium_client import TechnitiumError
+
+    # First call fails with connection error, second succeeds after failover
+    success_response = GetRecordsResponse(
+        zone=ZoneInfo(name="example.com", type="Primary", disabled=False),
+        records=[],
+    )
+
+    call_count = 0
+
+    async def get_records_side_effect(*args: Any, **kwargs: Any) -> GetRecordsResponse:
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            raise TechnitiumError("Request error: [Errno -3] Temporary failure in name resolution")
+        return success_response
+
+    mocker.patch.object(app_state.client, "get_records", side_effect=get_records_side_effect)
+
+    # Mock successful failover
+    mocker.patch.object(app_state, "try_failover_endpoints", new_callable=AsyncMock, return_value=True)
+
+    result = await get_records(app_state)
+
+    # Should not raise, should return streaming response
+    assert result is not None
+    cast(MagicMock, app_state.try_failover_endpoints).assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_get_records_failover_all_endpoints_fail(
+    app_state: AppState, mocker: MockerFixture
+) -> None:
+    """Test get_records with connection error where all failover endpoints fail."""
+    from external_dns_technitium_webhook.technitium_client import TechnitiumError
+
+    conn_error = TechnitiumError("Request error: Connection refused")
+    mocker.patch.object(app_state.client, "get_records", side_effect=conn_error)
+
+    # Mock failed failover
+    mocker.patch.object(app_state, "try_failover_endpoints", new_callable=AsyncMock, return_value=False)
+    mocker.patch.object(app_state, "update_status", new_callable=AsyncMock)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await get_records(app_state)
+
+    assert exc_info.value.status_code == 503
+    assert cast(MagicMock, app_state.update_status).called
+
+
+@pytest.mark.asyncio
+async def test_get_records_non_connection_error_no_failover(
+    app_state: AppState, mocker: MockerFixture
+) -> None:
+    """Test get_records with non-connection error doesn't trigger failover."""
+    from external_dns_technitium_webhook.technitium_client import TechnitiumError
+
+    api_error = TechnitiumError("API error: Invalid zone")
+    mocker.patch.object(app_state.client, "get_records", side_effect=api_error)
+
+    mock_failover = mocker.patch.object(app_state, "try_failover_endpoints", new_callable=AsyncMock)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await get_records(app_state)
+
+    # Non-connection errors should return 400 Bad Request
+    assert exc_info.value.status_code == 400
+    # Failover should not be attempted for non-connection errors
+    mock_failover.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_apply_record_failover_success_on_retry(
+    app_state: AppState, mocker: MockerFixture
+) -> None:
+    """Test apply_record with connection error that triggers successful failover and retry."""
+    from external_dns_technitium_webhook.technitium_client import TechnitiumError
+
+    # First call fails with connection error, second succeeds after failover
+    call_count = 0
+
+    async def add_record_side_effect(*args: Any, **kwargs: Any) -> AddRecordResponse:
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            raise TechnitiumError("Request error: Connection refused")
+        return AddRecordResponse(
+            zone=ZoneInfo(name="example.com", type="Primary", disabled=False),
+            addedRecord=RecordInfo(
+                disabled=False,
+                name="test.example.com",
+                type="A",
+                ttl=300,
+                rData={"ipAddress": "192.0.2.1"},
+            ),
+        )
+
+    mocker.patch.object(app_state.client, "add_record", side_effect=add_record_side_effect)
+
+    # Mock successful failover
+    mocker.patch.object(app_state, "try_failover_endpoints", new_callable=AsyncMock, return_value=True)
+
+    changes = Changes(
+        create=[
+            Endpoint(
+                dnsName="test.example.com",
+                recordType="A",
+                recordTTL=300,
+                setIdentifier="",
+                targets=["192.0.2.1"],
+            )
+        ],
+        delete=[],
+        updateOld=[],
+        updateNew=[],
+    )
+
+    result = await apply_record(app_state, changes)
+
+    assert result.status_code == 204
+    assert cast(MagicMock, app_state.try_failover_endpoints).called
+
+
+@pytest.mark.asyncio
+async def test_apply_record_failover_all_endpoints_fail(
+    app_state: AppState, mocker: MockerFixture
+) -> None:
+    """Test apply_record with connection error where all failover endpoints fail."""
+    from external_dns_technitium_webhook.technitium_client import TechnitiumError
+
+    conn_error = TechnitiumError("Request error: Network is unreachable")
+    mocker.patch.object(app_state.client, "add_record", side_effect=conn_error)
+
+    # Mock failed failover
+    mocker.patch.object(app_state, "try_failover_endpoints", new_callable=AsyncMock, return_value=False)
+    mocker.patch.object(app_state, "update_status", new_callable=AsyncMock)
+
+    changes = Changes(
+        create=[
+            Endpoint(
+                dnsName="test.example.com",
+                recordType="A",
+                recordTTL=300,
+                setIdentifier="",
+                targets=["192.0.2.1"],
+            )
+        ],
+        delete=[],
+        updateOld=[],
+        updateNew=[],
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        await apply_record(app_state, changes)
+
+    assert exc_info.value.status_code == 503
+    assert cast(MagicMock, app_state.update_status).called
+
+
+@pytest.mark.asyncio
+async def test_apply_record_non_connection_error_no_failover(
+    app_state: AppState, mocker: MockerFixture
+) -> None:
+    """Test apply_record with non-connection error doesn't trigger failover."""
+    from external_dns_technitium_webhook.technitium_client import TechnitiumError
+
+    api_error = TechnitiumError("API error: Invalid parameters")
+    mocker.patch.object(app_state.client, "add_record", side_effect=api_error)
+
+    mock_failover = mocker.patch.object(app_state, "try_failover_endpoints", new_callable=AsyncMock)
+
+    changes = Changes(
+        create=[
+            Endpoint(
+                dnsName="test.example.com",
+                recordType="A",
+                recordTTL=300,
+                setIdentifier="",
+                targets=["192.0.2.1"],
+            )
+        ],
+        delete=[],
+        updateOld=[],
+        updateNew=[],
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        await apply_record(app_state, changes)
+
+    # Non-connection errors should return 400 Bad Request
+    assert exc_info.value.status_code == 400
+    # Failover should not be attempted for non-connection errors
+    mock_failover.assert_not_called()

@@ -19,8 +19,46 @@ from .metrics import api_errors_total, dns_records_processed_total, dns_records_
 from .models import Changes, DomainFilter, Endpoint
 from .resilience import CircuitBreakerOpenError, CircuitState
 from .responses import ExternalDNSResponse
+from .technitium_client import TechnitiumError
 
 logger = logging.getLogger(__name__)
+
+
+def _is_connection_error(error: Exception) -> bool:
+    """Check if an error is a connection/network-level error.
+
+    These kinds of errors warrant an attempt to failover to alternate endpoints.
+
+    Args:
+        error: Exception to check
+
+    Returns:
+        True if error appears to be a connection/network-level error
+    """
+    if not isinstance(error, TechnitiumError):
+        return False
+
+    error_str = str(error).lower()
+
+    # Check for common connection/network error patterns
+    connection_patterns = [
+        "connection refused",
+        "connection reset",
+        "connection timeout",
+        "temporary failure in name resolution",  # DNS failure
+        "name or service not known",  # DNS failure
+        "nodename nor servname provided",  # DNS/lookup failure
+        "cannot assign requested address",
+        "network is unreachable",
+        "host is unreachable",
+        "connection aborted",
+        "no route to host",
+        "errno -3",  # Temporary failure in name resolution (numeric)
+        "errno -2",  # Name or service not known (numeric)
+        "errno -11",  # Temporary failure (numeric)
+    ]
+
+    return any(pattern in error_str for pattern in connection_patterns)
 
 
 def sanitize_error_message(error: Exception) -> str:
@@ -233,6 +271,55 @@ async def get_records(state: AppState) -> Response:
         )
     except CircuitBreakerOpenError as cboe:
         _handle_circuit_error(cboe)
+    except TechnitiumError as exc:
+        # If this is a connection error, attempt failover to alternate endpoints
+        if _is_connection_error(exc):
+            logger.warning(
+                "Connection error detected, attempting failover to alternate endpoints: %s",
+                exc,
+            )
+            failover_ok = await state.try_failover_endpoints()
+            if failover_ok:
+                # Retry the operation with the new endpoint
+                logger.info("Failover successful, retrying get_records with new endpoint")
+                try:
+                    response = await state.client.get_records(
+                        domain=state.config.zone,
+                        list_zone=True,
+                    )
+                except Exception as retry_exc:
+                    logger.error("Retry failed after failover: %s", retry_exc, exc_info=True)
+                    await state.update_status(
+                        ready=False,
+                        writable=False,
+                        server_role=None,
+                        catalog_membership=None,
+                    )
+                    raise HTTPException(
+                        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                        detail="Service temporarily unavailable. All failover endpoints failed.",
+                    ) from retry_exc
+            else:
+                # Failover failed
+                logger.error("Failover to alternate endpoints failed")
+                await state.update_status(
+                    ready=False,
+                    writable=False,
+                    server_role=None,
+                    catalog_membership=None,
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="Service temporarily unavailable. Failed to reach any Technitium endpoint.",
+                ) from exc
+        else:
+            # Not a connection error, return error response
+            logger.error("API error during get_records: %s", exc, exc_info=True)
+            sanitized = sanitize_error_message(exc)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=sanitized,
+            ) from exc
 
     duration_ms = (time.monotonic() - start) * 1000.0
     _log_fetch_metrics(state, response, duration_ms)
@@ -316,9 +403,58 @@ async def apply_record(state: AppState, changes: Changes) -> Response:
         logger.info("All records already up to date, skipping apply")
         return ExternalDNSResponse(content=None, status_code=status.HTTP_204_NO_CONTENT)
 
-    # Delegate processing to helpers to reduce cognitive complexity
-    await _process_deletions(state, deletions)
-    await _process_additions(state, additions)
+    # Attempt to apply changes with failover support
+    try:
+        # Delegate processing to helpers to reduce cognitive complexity
+        await _process_deletions(state, deletions)
+        await _process_additions(state, additions)
+    except TechnitiumError as exc:
+        # If this is a connection error, attempt failover to alternate endpoints
+        if _is_connection_error(exc):
+            logger.warning(
+                "Connection error during record application, attempting failover: %s",
+                exc,
+            )
+            failover_ok = await state.try_failover_endpoints()
+            if failover_ok:
+                # Retry the operation with the new endpoint
+                logger.info("Failover successful, retrying record changes with new endpoint")
+                try:
+                    await _process_deletions(state, deletions)
+                    await _process_additions(state, additions)
+                except Exception as retry_exc:
+                    logger.error("Retry failed after failover: %s", retry_exc, exc_info=True)
+                    await state.update_status(
+                        ready=False,
+                        writable=False,
+                        server_role=None,
+                        catalog_membership=None,
+                    )
+                    raise HTTPException(
+                        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                        detail="Service temporarily unavailable. All failover endpoints failed.",
+                    ) from retry_exc
+            else:
+                # Failover failed
+                logger.error("Failover to alternate endpoints failed")
+                await state.update_status(
+                    ready=False,
+                    writable=False,
+                    server_role=None,
+                    catalog_membership=None,
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="Service temporarily unavailable. Failed to reach any Technitium endpoint.",
+                ) from exc
+        else:
+            # Not a connection error, return error response
+            logger.error("API error during record application: %s", exc, exc_info=True)
+            sanitized = sanitize_error_message(exc)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=sanitized,
+            ) from exc
 
     return ExternalDNSResponse(content=None, status_code=status.HTTP_204_NO_CONTENT)
 
@@ -329,6 +465,10 @@ async def _execute_change(
     """Perform a single create/delete operation with circuit breaker handling.
 
     Abstracted from ``_process_changes`` to reduce its cognitive complexity.
+
+    Raises:
+        HTTPException: For circuit breaker open or general errors
+        TechnitiumError: Re-raised for connection errors (to be caught by caller)
     """
     # ``client_method`` is either add_record or delete_record.  Giving it
     # a loose Callable type prevents pyright from complaining about the
@@ -360,6 +500,10 @@ async def _execute_change(
             detail=API_UNAVAILABLE,
             headers=headers,
         ) from cboe
+    except TechnitiumError:
+        # Re-raise TechnitiumError so it can be caught by _process_changes or apply_record
+        # for failover handling
+        raise
     except Exception as e:
         safe_message = sanitize_error_message(e)
         logger.error(f"Failed to {operation} record {ep.dns_name}: {e}")
