@@ -107,7 +107,7 @@ jobs:
 
       - name: SonarCloud Scan
         if: ${{ github.ref == 'refs/heads/main' }}
-        uses: sonarsource/sonarcloud-github-action@v2
+        uses: sonarsource/sonarcloud-github-action@v5
         with:
           projectBaseDir: .
           args: >
