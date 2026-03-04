@@ -895,11 +895,35 @@ async def test_auto_renew_token_success_sets_token(mocker: MockerFixture) -> Non
         client=client,
         active_endpoint="http://localhost:5380",
     )
+    # Mock the try_failback_to_primary method
+    failback_mock = AsyncMock(return_value=False)
+    state.try_failback_to_primary = failback_mock
+
     sleep_mock = mocker.patch(
         "external_dns_technitium_webhook.main.asyncio.sleep",
         new_callable=AsyncMock,
     )
-    sleep_mock.side_effect = [None, asyncio.CancelledError()]
+    # Need 3 sleeps: first goes through, second goes through and triggers failback check,
+    # third raises CancelledError to exit the loop
+    sleep_mock.side_effect = [None, None, asyncio.CancelledError()]
+
+    # Mock time.time() to control when failback is attempted
+    # Simulate time advancing so failback threshold is met (>5 min)
+    # Create a custom callable that tracks call count and returns appropriate time
+    class MockEventLoop:
+        def __init__(self) -> None:
+            self.time_calls = 0
+
+        def time(self) -> float:
+            result = 0.0 if self.time_calls < 1 else 5 * 60 + 1
+            self.time_calls += 1
+            return result
+
+    mock_event_loop = MockEventLoop()
+    mocker.patch(
+        "external_dns_technitium_webhook.main.asyncio.get_event_loop",
+        return_value=mock_event_loop,
+    )
 
     # CancelledError is used by the side_effect to break out of the loop;
     # we don't regard it as a failure in this test so suppress it.
@@ -908,11 +932,15 @@ async def test_auto_renew_token_success_sets_token(mocker: MockerFixture) -> Non
     with suppress(asyncio.CancelledError):  # pragma: no cover - test control flow
         await auto_renew_technitium_token(cast(AppState, state))
 
-    login_mock.assert_awaited_once_with(
+    # login should be called twice (once per loop iteration)
+    assert login_mock.await_count == 2
+    login_mock.assert_awaited_with(
         username=config.technitium_username,
         password=config.technitium_password,
     )
     assert state.client.token == "renewed"
+    # failback should be called once in the second iteration when time threshold is met
+    failback_mock.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -928,11 +956,20 @@ async def test_auto_renew_token_failure_uses_failure_interval(mocker: MockerFixt
         client=client,
         active_endpoint="http://localhost:5380",
     )
+    # Mock the try_failback_to_primary method (won't be called on failure)
+    state.try_failback_to_primary = AsyncMock(return_value=False)
+
     sleep_mock = mocker.patch(
         "external_dns_technitium_webhook.main.asyncio.sleep",
         new_callable=AsyncMock,
     )
     sleep_mock.side_effect = [None, None, asyncio.CancelledError()]
+
+    # Mock time to ensure failback timing logic works
+    time_mock = mocker.patch("external_dns_technitium_webhook.main.asyncio.get_event_loop")
+    mock_loop = MagicMock()
+    mock_loop.time.return_value = 0.0  # time() always returns 0 so failback not triggered
+    time_mock.return_value = mock_loop
 
     from contextlib import suppress
 

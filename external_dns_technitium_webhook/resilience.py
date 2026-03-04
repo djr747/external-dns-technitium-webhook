@@ -178,3 +178,15 @@ class CircuitBreaker:
             raise
         await self._on_success()
         return result
+
+    def reset(self) -> None:
+        """Reset the circuit breaker to CLOSED state.
+
+        This is typically called when failover occurs to a new endpoint,
+        to allow requests to proceed without accumulated failure history.
+        """
+        self._state = CircuitState.CLOSED
+        self._failure_count = 0
+        self._last_failure_time = None
+        self._half_open_inflight = False
+        logger.info("Circuit breaker has been reset to CLOSED state")

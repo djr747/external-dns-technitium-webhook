@@ -486,15 +486,21 @@ async def ensure_catalog_membership(
 
 
 async def auto_renew_technitium_token(state: AppState) -> None:
-    """Automatically renew the Technitium authentication token.
+    """Automatically renew the Technitium authentication token and attempt failback.
+
+    This function runs two independent cycles:
+    1. Token renewal: every 20 minutes on success, 1 minute on failure
+    2. Failback attempts: every 5 minutes to detect when primary is recovered
 
     Args:
         state: Application state
     """
-    DURATION_SUCCESS = 20 * 60  # 20 minutes
-    DURATION_FAILURE = 60  # 1 minute
+    DURATION_TOKEN_SUCCESS = 20 * 60  # 20 minutes
+    DURATION_TOKEN_FAILURE = 60  # 1 minute
+    DURATION_FAILBACK_ATTEMPT = 5 * 60  # 5 minutes - check primary recovery frequently
 
-    sleep_for = DURATION_SUCCESS
+    sleep_for = DURATION_TOKEN_SUCCESS
+    last_failback_attempt = 0.0
 
     while True:
         try:
@@ -503,6 +509,8 @@ async def auto_renew_technitium_token(state: AppState) -> None:
             logger.debug("Token renewal task cancelled")
             raise
 
+        current_time = asyncio.get_event_loop().time()
+
         try:
             login_response = await state.client.login(
                 username=state.config.technitium_username,
@@ -510,7 +518,15 @@ async def auto_renew_technitium_token(state: AppState) -> None:
             )
             state.client.token = login_response.token
             logger.debug("Successfully renewed Technitium DNS server access token")
-            sleep_for = DURATION_SUCCESS
+
+            # Attempt failback to primary if enough time has passed
+            if current_time - last_failback_attempt >= DURATION_FAILBACK_ATTEMPT:
+                failback_ok = await state.try_failback_to_primary()
+                last_failback_attempt = current_time
+                if failback_ok:
+                    logger.info("Successfully failed back to primary endpoint")
+
+            sleep_for = DURATION_TOKEN_SUCCESS
         except (
             TechnitiumError,
             httpx.HTTPError,
@@ -520,7 +536,7 @@ async def auto_renew_technitium_token(state: AppState) -> None:
             RuntimeError,
         ) as exc:
             logger.error("Technitium DNS server renewal failed: %s", exc)
-            sleep_for = DURATION_FAILURE
+            sleep_for = DURATION_TOKEN_FAILURE
 
 
 def create_app() -> FastAPI:

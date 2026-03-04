@@ -1322,3 +1322,184 @@ async def test_parse_response_unexpected_format(client: TechnitiumClient) -> Non
 
     with pytest.raises(TechnitiumError, match="Unexpected response format"):
         client._parse_response(DummyResp2())  # type: ignore[arg-type]
+
+
+@pytest.mark.asyncio
+async def test_request_compression_enabled_small_payload(
+    client: TechnitiumClient, mocker: MockerFixture
+) -> None:
+    """Test compression enabled but payload is below threshold (branch 221->228 false path)."""
+    # Enable compression with large threshold
+    client.enable_request_compression = True
+    client.compression_threshold_bytes = 1000
+
+    # Create a small payload that's below the threshold
+    small_data = {"data": "small"}
+
+    mock_response = {"status": "ok"}
+
+    mock_post = mocker.patch.object(
+        client._client,
+        "post",
+        new_callable=AsyncMock,
+        return_value=mocker.Mock(
+            status_code=200,
+            json=mocker.Mock(return_value=mock_response),
+            raise_for_status=mocker.Mock(),
+        ),
+    )
+
+    await client._post_raw("/test", small_data)
+
+    # Verify compression was NOT used (uses data, not content)
+    call_args = mock_post.call_args
+    assert "data" in call_args[1]  # Should use data for small uncompressed requests
+    assert "content" not in call_args[1]  # Should not use content
+    assert "Content-Encoding" not in call_args[1]["headers"]
+
+
+@pytest.mark.asyncio
+async def test_list_zones_without_pagination(
+    client: TechnitiumClient, mocker: MockerFixture
+) -> None:
+    """Test list_zones without page_number/zones_per_page (branches 393->395, 395->398)."""
+    mock_response = {
+        "status": "ok",
+        "response": {
+            "pageNumber": 1,
+            "totalPages": 1,
+            "totalZones": 1,
+            "zones": [
+                {"name": "example.com", "type": "Primary", "disabled": False},
+            ],
+        },
+    }
+
+    mock_post = mocker.patch.object(
+        client._client,
+        "post",
+        new_callable=AsyncMock,
+        return_value=mocker.Mock(
+            status_code=200,
+            json=mocker.Mock(return_value=mock_response),
+            raise_for_status=mocker.Mock(),
+        ),
+    )
+
+    # Call without page_number and zones_per_page (None values)
+    response = await client.list_zones(zone="example.com")
+
+    assert response.page_number == 1
+    # Verify pagination parameters were NOT passed
+    call_args = mock_post.call_args
+    payload = call_args[1]["data"]
+    assert "pageNumber" not in payload
+    assert "zonesPerPage" not in payload
+
+
+@pytest.mark.asyncio
+async def test_get_records_without_zone_param(
+    client: TechnitiumClient, mocker: MockerFixture
+) -> None:
+    """Test get_records without zone parameter (branch 480->482)."""
+    mock_response = {
+        "status": "ok",
+        "response": {
+            "zone": {"name": "example.com", "type": "Primary", "disabled": False},
+            "records": [],
+        },
+    }
+
+    mock_post = mocker.patch.object(
+        client._client,
+        "post",
+        new_callable=AsyncMock,
+        return_value=mocker.Mock(
+            status_code=200,
+            json=mocker.Mock(return_value=mock_response),
+            raise_for_status=mocker.Mock(),
+        ),
+    )
+
+    # Call without zone parameter
+    response = await client.get_records(domain="test.example.com")
+
+    assert response.zone.name == "example.com"
+
+    # Verify zone was NOT passed when None
+    call_args = mock_post.call_args
+    payload = call_args[1]["data"]
+    assert "zone" not in payload
+
+
+@pytest.mark.asyncio
+async def test_get_records_list_zone_none(client: TechnitiumClient, mocker: MockerFixture) -> None:
+    """Test get_records with list_zone=None (branch 482->485 false path)."""
+    mock_response = {
+        "status": "ok",
+        "response": {
+            "zone": {"name": "example.com", "type": "Primary", "disabled": False},
+            "records": [],
+        },
+    }
+
+    mock_post = mocker.patch.object(
+        client._client,
+        "post",
+        new_callable=AsyncMock,
+        return_value=mocker.Mock(
+            status_code=200,
+            json=mocker.Mock(return_value=mock_response),
+            raise_for_status=mocker.Mock(),
+        ),
+    )
+
+    # Call without list_zone parameter (defaults to None)
+    response = await client.get_records(
+        domain="test.example.com", zone="example.com", list_zone=None
+    )
+
+    assert response.zone.name == "example.com"
+
+    # Verify listZone was NOT passed when None
+    call_args = mock_post.call_args
+    payload = call_args[1]["data"]
+    assert "listZone" not in payload
+
+
+@pytest.mark.asyncio
+async def test_get_zone_options_without_catalog_names(
+    client: TechnitiumClient, mocker: MockerFixture
+) -> None:
+    """Test get_zone_options with include_catalog_names=False (branch 547->550 false path)."""
+    mock_response = {
+        "status": "ok",
+        "response": {
+            "zone": "example.com",
+            "isCatalogZone": False,
+            "isReadOnly": False,
+            "catalogZoneName": None,
+            "availableCatalogZoneNames": [],
+        },
+    }
+
+    mock_post = mocker.patch.object(
+        client._client,
+        "post",
+        new_callable=AsyncMock,
+        return_value=mocker.Mock(
+            status_code=200,
+            json=mocker.Mock(return_value=mock_response),
+            raise_for_status=mocker.Mock(),
+        ),
+    )
+
+    # Call with include_catalog_names=False (default)
+    response = await client.get_zone_options("example.com", include_catalog_names=False)
+
+    assert response.zone == "example.com"
+
+    # Verify includeAvailableCatalogZoneNames was NOT passed
+    call_args = mock_post.call_args
+    payload = call_args[1]["data"]
+    assert "includeAvailableCatalogZoneNames" not in payload

@@ -12,6 +12,7 @@ FastAPI webhook provider that lets [ExternalDNS](https://github.com/kubernetes-s
 ## Highlights
 
 - Async-first for network I/O with graceful startup/shutdown and token auto-renewal
+- **Cluster-aware failover & intelligent failback**: Automatic detection of primary vs secondary nodes with 5-minute failback checks; read operations work on all nodes, writes only on primary
 - Technitium client with failover rotation, zone auto-create, and catalog enrollment
 - 30-second in-memory cache for `get_records` responses with automatic invalidation on add/delete requests
 - Circuit breaker (CLOSED/OPEN/HALF_OPEN) for fast-fail on Technitium connection failures
@@ -63,7 +64,7 @@ Environment variables map directly to `external_dns_technitium_webhook.config.Co
 | `TECHNITIUM_PASSWORD` | ✅ | — | Password for the service account |
 | `ZONE` | ✅ | — | Forward zone managed through ExternalDNS |
 | `DOMAIN_FILTERS` | ❌ | — | Semicolon-separated allowlist for ExternalDNS |
-| `TECHNITIUM_FAILOVER_URLS` | ❌ | — | Semicolon-separated fallback endpoints |
+| `TECHNITIUM_FAILOVER_URLS` | ❌ | — | Semicolon-separated fallback endpoints; automatic read-only replica detection with intelligent primary failback |
 | `CATALOG_ZONE` | ❌ | — | Catalog zone joined when the endpoint is writable |
 | `TECHNITIUM_VERIFY_SSL` | ❌ | `true` | Verify TLS certificates; set to `false` for self-signed certs **only in dev/tests**. Disabling this skips hostname validation and is insecure in production. |
 | `TECHNITIUM_CA_BUNDLE_FILE` | ❌ | — | Path to PEM file with CA cert(s) for private CAs; mounted via ConfigMap |

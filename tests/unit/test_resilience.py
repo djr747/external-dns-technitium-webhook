@@ -303,3 +303,22 @@ def test_seconds_until_half_open_after_failure() -> None:
     cb._last_failure_time = time.monotonic()
     remaining = cb._seconds_until_half_open()
     assert 0 < remaining <= 60.0
+
+
+def test_circuit_breaker_reset() -> None:
+    """Test circuit breaker reset functionality."""
+    cb = CircuitBreaker(failure_threshold=5, timeout=60)
+
+    # Transition to OPEN state
+    cb._state = CircuitState.OPEN
+    cb._failure_count = 5
+    cb._last_failure_time = 123.456
+    cb._half_open_inflight = True
+
+    # Reset
+    cb.reset()
+
+    assert cb._state == CircuitState.CLOSED
+    assert cb._failure_count == 0
+    assert cb._last_failure_time is None
+    assert cb._half_open_inflight is False
