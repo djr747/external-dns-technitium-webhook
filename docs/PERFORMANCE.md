@@ -140,6 +140,83 @@ failures when Technitium is unreachable:
 - A `webhook_api_errors_total{error_type="circuit_open"}` Prometheus counter is incremented on every
   fast rejection, making the open state visible in your metrics dashboard.
 
+### Cluster-Aware Failover & Intelligent Failback
+
+The webhook detects when the primary Technitium DNS node fails and automatically fails over to read-only replica nodes. It then intelligently fails back when the primary recovers.
+
+**How it works**:
+
+1. **Connection Error Detection**: When the webhook detects connection errors (timeouts, connection refused, etc.), it rotates to the next endpoint in `TECHNITIUM_FAILOVER_URLS`
+
+2. **Cluster Role Detection**: After successfully connecting to any endpoint, the webhook queries zone status to detect if it's a **primary (writable)** or **secondary (read-only)** node:
+   - **Primary (writable)**: All operations allowed (read and write)
+   - **Secondary (read-only)**: Read operations allowed; write operations are rejected with clear error messages
+
+3. **Read Operations on Any Node**: Since DNS record reads are idempotent, they work on both primary and secondary nodes for maximum availability
+
+4. **Intelligent Failback**: Every 5 minutes (configurable via application code), the webhook attempts to fail back to the primary endpoint if:
+   - Enough time has passed since the last failback attempt
+   - The primary endpoint is healthy (connection succeeds)
+   - The primary node is writable (not a secondary)
+
+**Timing Strategy**:
+
+- **Token Renewal**: Every 20 minutes (normal) or 1 minute (after failure)
+- **Failback Attempts**: Every 5 minutes (independently tracked)
+
+This dual-timing approach ensures:
+
+- Fast token refresh after transient errors (1-minute retry)
+- Frequent primary recovery checks (5-minute interval)
+- No interference between token renewal and failback logic
+
+**Configuration**:
+
+| Variable | Required | Default | Notes |
+| --- | --- | --- | --- |
+| `TECHNITIUM_FAILOVER_URLS` | ❌ | — | Semicolon-separated list of fallback endpoints (e.g., `http://backup1:5380;http://backup2:5380`) |
+
+**Example Setup** (Technitium Cluster with 1 Primary + 2 Secondaries):
+
+```bash
+# Primary DNS server
+export TECHNITIUM_URL="http://primary.dns:5380"
+
+# Fallback secondaries (automatically discovered as read-only)
+export TECHNITIUM_FAILOVER_URLS="http://secondary1.dns:5380;http://secondary2.dns:5380"
+
+# If primary fails, webhook automatically:
+# 1. Rotates to secondary1, detects read-only status
+# 2. Serves read operations from secondary1
+# 3. Rejects write operations with clear error message
+# 4. Every 5 min, checks if primary recovered
+# 5. When primary is writable again, fails back automatically
+```
+
+**Failure Scenarios**:
+
+| Scenario | Behavior |
+| --- | --- |
+| Primary fails | Failover to secondary, serve reads from secondary, reject writes |
+| All nodes fail | Circuit breaker opens, health endpoint returns 503 |
+| Primary recovers | Within 5 minutes, failback to primary and resume normal operation |
+| Multiple secondaries fail | Rotate through remaining healthy endpoints |
+| Primary is read-only | Detected via zone status check, failback declined until primary is writable |
+
+**Error Message Examples**:
+
+```json
+// Write operation rejected when on read-only secondary
+{
+  "error": "Cannot apply DNS changes: current endpoint is read-only. Waiting for primary failback..."
+}
+
+// All endpoints failed
+{
+  "error": "All failover endpoints exhausted. Circuit breaker is open."
+}
+```
+
 ### Retry Logic Recommendations
 
 For production deployments, consider adding retry logic for transient failures:

@@ -238,14 +238,18 @@ class TechnitiumClient:
             raise
         except httpx.TimeoutException as e:
             api_errors_total.labels(error_type="timeout").inc()
-            raise TechnitiumError(f"Request error: {e}") from e
+            # Include exception type name if the message is empty
+            error_msg = str(e) if str(e) else type(e).__name__
+            raise TechnitiumError(f"Request error: {error_msg}") from e
         except httpx.HTTPStatusError as e:
             raise TechnitiumError(
                 f"Server responded with status code {e.response.status_code}"
             ) from e
         except httpx.RequestError as e:
             api_errors_total.labels(error_type="connection_error").inc()
-            raise TechnitiumError(f"Request error: {e}") from e
+            # Include exception type name if the message is empty
+            error_msg = str(e) if str(e) else type(e).__name__
+            raise TechnitiumError(f"Request error: {error_msg}") from e
 
         return self._parse_response(response)
 

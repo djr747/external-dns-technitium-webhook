@@ -1439,6 +1439,33 @@ def test_is_connection_error_non_technitium_error() -> None:
     assert not _is_connection_error(error)
 
 
+def test_is_connection_error_empty_message() -> None:
+    """Test detection of connection errors with empty message (just 'Request error:')."""
+    from external_dns_technitium_webhook.handlers import _is_connection_error
+    from external_dns_technitium_webhook.technitium_client import TechnitiumError
+
+    error = TechnitiumError("Request error: ")
+    assert _is_connection_error(error)
+
+
+def test_is_connection_error_connect_timeout_type() -> None:
+    """Test detection of ConnectTimeout exception type in error message."""
+    from external_dns_technitium_webhook.handlers import _is_connection_error
+    from external_dns_technitium_webhook.technitium_client import TechnitiumError
+
+    error = TechnitiumError("Request error: ConnectTimeout")
+    assert _is_connection_error(error)
+
+
+def test_is_connection_error_connect_error_type() -> None:
+    """Test detection of ConnectError exception type in error message."""
+    from external_dns_technitium_webhook.handlers import _is_connection_error
+    from external_dns_technitium_webhook.technitium_client import TechnitiumError
+
+    error = TechnitiumError("Request error: ConnectError")
+    assert _is_connection_error(error)
+
+
 @pytest.mark.asyncio
 async def test_get_records_failover_success_on_retry(
     app_state: AppState, mocker: MockerFixture
@@ -1465,7 +1492,7 @@ async def test_get_records_failover_success_on_retry(
 
     # Mock successful failover
     mocker.patch.object(
-        app_state, "try_failover_endpoints", new_callable=AsyncMock, return_value=True
+        app_state, "try_failover_endpoints", new_callable=AsyncMock, return_value=(True, True)
     )
 
     result = await get_records(app_state)
@@ -1487,7 +1514,7 @@ async def test_get_records_failover_all_endpoints_fail(
 
     # Mock failed failover
     mocker.patch.object(
-        app_state, "try_failover_endpoints", new_callable=AsyncMock, return_value=False
+        app_state, "try_failover_endpoints", new_callable=AsyncMock, return_value=(False, False)
     )
     mocker.patch.object(app_state, "update_status", new_callable=AsyncMock)
 
@@ -1520,37 +1547,48 @@ async def test_get_records_non_connection_error_no_failover(
 
 
 @pytest.mark.asyncio
+async def test_get_records_failover_retry_fails(app_state: AppState, mocker: MockerFixture) -> None:
+    """Test get_records failover succeeds but retry fails."""
+    from external_dns_technitium_webhook.technitium_client import TechnitiumError
+
+    conn_error = TechnitiumError("Request error: Connection refused")
+    retry_error = TechnitiumError("Request error: Connection reset")
+
+    # First call: connection error, second call after failover: another error
+    get_records_mock = AsyncMock(side_effect=[conn_error, retry_error])
+    mocker.patch.object(app_state.client, "get_records", get_records_mock)
+
+    # Mock failover success
+    failover_mock = AsyncMock(return_value=(True, True))
+    mocker.patch.object(app_state, "try_failover_endpoints", failover_mock)
+    mocker.patch.object(app_state, "update_status", new_callable=AsyncMock)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await get_records(app_state)
+
+    # Should fail with 503 when retry after failover fails
+    assert exc_info.value.status_code == 503
+    assert "All failover endpoints failed" in exc_info.value.detail
+
+
+@pytest.mark.asyncio
 async def test_apply_record_failover_success_on_retry(
     app_state: AppState, mocker: MockerFixture
 ) -> None:
-    """Test apply_record with connection error that triggers successful failover and retry."""
+    """Test apply_record attempts failover when connection error occurs on first add."""
     from external_dns_technitium_webhook.technitium_client import TechnitiumError
 
-    # First call fails with connection error, second succeeds after failover
-    call_count = 0
+    # Mock add_record to fail once then succeed
+    conn_error = TechnitiumError("Request error: Connection refused")
+    add_record_mock = AsyncMock(side_effect=[conn_error, None])
+    app_state.client.add_record = add_record_mock
 
-    async def add_record_side_effect(*args: Any, **kwargs: Any) -> AddRecordResponse:
-        nonlocal call_count
-        call_count += 1
-        if call_count == 1:
-            raise TechnitiumError("Request error: Connection refused")
-        return AddRecordResponse(
-            zone=ZoneInfo(name="example.com", type="Primary", disabled=False),
-            addedRecord=RecordInfo(
-                disabled=False,
-                name="test.example.com",
-                type="A",
-                ttl=300,
-                rData={"ipAddress": "192.0.2.1"},
-            ),
-        )
+    # Mock a successful failover to a writable endpoint
+    failover_mock = AsyncMock(return_value=(True, True))
+    app_state.try_failover_endpoints = failover_mock
 
-    mocker.patch.object(app_state.client, "add_record", side_effect=add_record_side_effect)
-
-    # Mock successful failover
-    mocker.patch.object(
-        app_state, "try_failover_endpoints", new_callable=AsyncMock, return_value=True
-    )
+    # Mock update_status to avoid interference
+    mocker.patch.object(app_state, "update_status", new_callable=AsyncMock)
 
     changes = Changes(
         create=[
@@ -1570,7 +1608,10 @@ async def test_apply_record_failover_success_on_retry(
     result = await apply_record(app_state, changes)
 
     assert result.status_code == 204
-    assert cast(MagicMock, app_state.try_failover_endpoints).called
+    # Verify failover was attempted
+    failover_mock.assert_called_once()
+    # Verify add_record was called twice (once failed, once succeeded)
+    assert add_record_mock.call_count == 2
 
 
 @pytest.mark.asyncio
@@ -1585,7 +1626,7 @@ async def test_apply_record_failover_all_endpoints_fail(
 
     # Mock failed failover
     mocker.patch.object(
-        app_state, "try_failover_endpoints", new_callable=AsyncMock, return_value=False
+        app_state, "try_failover_endpoints", new_callable=AsyncMock, return_value=(False, False)
     )
     mocker.patch.object(app_state, "update_status", new_callable=AsyncMock)
 
@@ -1645,3 +1686,83 @@ async def test_apply_record_non_connection_error_no_failover(
     assert exc_info.value.status_code == 400
     # Failover should not be attempted for non-connection errors
     mock_failover.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_apply_record_failover_retry_fails(
+    app_state: AppState, mocker: MockerFixture
+) -> None:
+    """Test apply_record when retry after failover fails."""
+    from external_dns_technitium_webhook.technitium_client import TechnitiumError
+
+    conn_error = TechnitiumError("Request error: Connection refused")
+    retry_error = TechnitiumError("Request error: Connection reset")
+
+    # First call: connection error, second call: another error
+    add_record_mock = AsyncMock(side_effect=[conn_error, retry_error])
+    app_state.client.add_record = add_record_mock
+
+    # Mock failover success but retry will still fail
+    failover_mock = AsyncMock(return_value=(True, True))
+    app_state.try_failover_endpoints = failover_mock
+    mocker.patch.object(app_state, "update_status", new_callable=AsyncMock)
+
+    changes = Changes(
+        create=[
+            Endpoint(
+                dnsName="test.example.com",
+                recordType="A",
+                recordTTL=300,
+                setIdentifier="",
+                targets=["192.0.2.1"],
+            )
+        ],
+        delete=[],
+        updateOld=[],
+        updateNew=[],
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        await apply_record(app_state, changes)
+
+    # Should fail with "All failover endpoints failed" message
+    assert exc_info.value.status_code == 503
+    assert "All failover endpoints failed" in exc_info.value.detail
+
+
+@pytest.mark.asyncio
+async def test_apply_record_failover_all_read_only(
+    app_state: AppState, mocker: MockerFixture
+) -> None:
+    """Test apply_record when all failover endpoints are read-only."""
+    from external_dns_technitium_webhook.technitium_client import TechnitiumError
+
+    conn_error = TechnitiumError("Request error: Connection refused")
+    mocker.patch.object(app_state.client, "add_record", side_effect=conn_error)
+
+    # Mock failover success but endpoint is read-only
+    failover_mock = AsyncMock(return_value=(True, False))
+    app_state.try_failover_endpoints = failover_mock
+    mocker.patch.object(app_state, "update_status", new_callable=AsyncMock)
+
+    changes = Changes(
+        create=[
+            Endpoint(
+                dnsName="test.example.com",
+                recordType="A",
+                recordTTL=300,
+                setIdentifier="",
+                targets=["192.0.2.1"],
+            )
+        ],
+        delete=[],
+        updateOld=[],
+        updateNew=[],
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        await apply_record(app_state, changes)
+
+    # Should fail with "writable" message when all endpoints are read-only
+    assert exc_info.value.status_code == 503
+    assert "writable" in exc_info.value.detail

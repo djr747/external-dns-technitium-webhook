@@ -7,15 +7,28 @@ All notable changes to this project will be documented in this file.
 **Fixed & Improved:**
 
 - **Runtime Failover Support**: Implemented automatic failover mechanism for connection failures
-  - Added `try_failover_endpoints()` method to AppState for runtime endpoint switching
-  - Connection errors (DNS failures, refused, timeouts, network unreachable) now trigger failover retry
+  - Added `try_failover_endpoints()` method to rotate through `TECHNITIUM_FAILOVER_URLS` on connection errors
+  - Added `try_failback_to_primary()` method with periodic (5-min) health checks to detect primary recovery
+  - Connection errors in `get_records` and `apply_record` handlers now trigger failover with automatic retry
   - Non-connection API errors return 400 Bad Request without failover attempt
+  - Detects primary (writable) vs secondary (read-only) nodes via `_check_zone_status()`
+  - Returns 503 "No writable endpoint available" when all failover options are read-only
   - Circuit breaker properly reset when switching endpoints to clear inherited failure state
+  - Automatic failback to primary endpoint when it recovers and is writable (separate 5-min timing)
 - **Enhanced Error Detection**: Implemented `_is_connection_error()` pattern matching to distinguish network errors from API errors
-- **Improved Test Coverage**: Expanded test suite from 352 to 357 tests
-  - Added 5 new failover scenario tests covering success/failure paths
-  - Added 5 new branch coverage tests for `technitium_client.py` edge cases
-  - Achieved 99% overall coverage with `technitium_client.py` at 100%
+- **Improved Test Coverage**: Expanded test suite from 352 to 367 tests
+  - Added 8 new failover scenario tests covering:
+    - `test_get_records_failover_retry_fails` - get_records retry after failover fails (handlers)
+    - `test_apply_record_failover_success_on_retry` - successful retry after failover (handlers)
+    - `test_apply_record_failover_all_endpoints_fail` - all failover endpoints exhausted (handlers)
+    - `test_apply_record_failover_retry_fails` - apply_record retry after failover fails (handlers)
+    - `test_apply_record_failover_all_read_only` - all failover endpoints are read-only (handlers)
+    - Plus 3 additional branch coverage tests for edge cases
+  - Achieved 99% overall coverage:
+    - `handlers.py` at 100% (302 lines fully covered)
+    - `technitium_client.py` at 100% (244 lines fully covered)
+    - `models.py`, `config.py`, `resilience.py` at 100%
+    - Only 8 defensive edge cases remaining in `app_state.py` (nested exception handlers in failback logic)
 - **Type Safety Improvements**: Replaced all `type: ignore` comments with proper `cast()` usage
   - Updated test code to use explicit type casting via `typing.cast()`
   - Fixed all type checker warnings (ruff, mypy, pyright)

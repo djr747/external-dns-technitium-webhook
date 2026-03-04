@@ -136,7 +136,68 @@ class AppState:
             self.server_role = server_role
             self.catalog_membership = catalog_membership
 
-    async def try_failover_endpoints(self) -> bool:
+    async def _authenticate_with_endpoint(self, endpoint: str) -> None:
+        """Authenticate with the given endpoint.
+
+        Args:
+            endpoint: The endpoint to authenticate with
+
+        Raises:
+            Exception: If authentication fails
+        """
+        login_response = await self.client.login(
+            username=self.config.technitium_username,
+            password=self.config.technitium_password,
+        )
+        self.client.token = login_response.token
+        logger.info("Successfully authenticated with failover endpoint %s", endpoint)
+
+    async def _try_endpoint_failover(
+        self, endpoint: str, current_endpoint: str
+    ) -> tuple[bool, bool]:
+        """Attempt failover to a single endpoint.
+
+        Args:
+            endpoint: The endpoint to try
+            current_endpoint: The currently active endpoint (for logging)
+
+        Returns:
+            Tuple of (success, is_writable). If success is False, is_writable is undefined.
+        """
+        try:
+            logger.info(
+                "Attempting failover to endpoint %s (from %s)",
+                endpoint,
+                current_endpoint,
+            )
+            await self.set_active_endpoint(endpoint)
+            await self._authenticate_with_endpoint(endpoint)
+
+            # Check zone status to determine if this node is primary or secondary
+            is_writable, server_role, catalog_membership = await self._check_zone_status(endpoint)
+
+            # Reset circuit breaker for the new endpoint
+            self.circuit_breaker.reset()
+
+            # Update application status with the new endpoint's cluster role
+            await self.update_status(
+                ready=True,
+                writable=is_writable,
+                server_role=server_role,
+                catalog_membership=catalog_membership,
+            )
+
+            return (True, is_writable)
+        except Exception as exc:
+            logger.warning(
+                "Failover to endpoint %s failed: %s",
+                endpoint,
+                exc,
+                exc_info=True,
+            )
+            return (False, False)
+
+    async def try_failover_endpoints(self) -> tuple[bool, bool]:
         """Attempt failover to alternate Technitium endpoints.
 
         Tries each configured endpoint in order (excluding the currently active
@@ -144,8 +205,13 @@ class AppState:
         endpoint and returns True. If all endpoints fail or no alternatives
         exist, returns False.
 
+        When successful, also checks zone read-only status to determine if the
+        new endpoint is a primary (writable) or secondary (read-only) node in
+        a cluster.
+
         Returns:
-            True if failover to an alternate endpoint succeeded, False otherwise
+            Tuple of (failover_ok, is_writable). If failover_ok is False,
+            is_writable value is undefined.
         """
         endpoints = self.config.technitium_endpoints
         current_endpoint = self.client.base_url
@@ -156,34 +222,11 @@ class AppState:
                 # Skip the current endpoint
                 continue
 
-            try:
-                logger.info(
-                    "Attempting failover to endpoint %s (from %s)",
-                    endpoint,
-                    current_endpoint,
-                )
-                await self.set_active_endpoint(endpoint)
+            success, is_writable = await self._try_endpoint_failover(endpoint, current_endpoint)
+            if success:
+                return (True, is_writable)
 
-                # Test connectivity and authentication
-                login_response = await self.client.login(
-                    username=self.config.technitium_username,
-                    password=self.config.technitium_password,
-                )
-                self.client.token = login_response.token
-                logger.info("Successfully authenticated with failover endpoint %s", endpoint)
-
-                # Reset circuit breaker for the new endpoint
-                self.circuit_breaker.reset()
-
-                return True
-            except Exception as exc:
-                logger.warning(
-                    "Failover to endpoint %s failed: %s",
-                    endpoint,
-                    exc,
-                    exc_info=True,
-                )
-                failures.append(f"{endpoint}: {exc}")
+            failures.append(endpoint)
 
         if failures:
             failure_summary = "; ".join(failures)
@@ -191,4 +234,121 @@ class AppState:
         else:
             logger.warning("No failover endpoints available (all are the current endpoint)")
 
-        return False
+        return (False, False)
+
+    async def _check_zone_status(self, endpoint: str) -> tuple[bool, str, str | None]:
+        """Check zone read-only status and catalog membership for an endpoint.
+
+        Args:
+            endpoint: The endpoint being checked (for logging)
+
+        Returns:
+            Tuple of (is_writable, server_role, catalog_membership)
+        """
+        from .models import GetZoneOptionsResponse
+
+        is_writable = True
+        server_role = "primary"
+        catalog_membership = None
+
+        try:
+            zone_options: GetZoneOptionsResponse | None = await self.client.get_zone_options(
+                self.config.zone, include_catalog_names=True
+            )
+            if zone_options:
+                is_writable = not zone_options.is_read_only
+                server_role = "secondary" if zone_options.is_read_only else "primary"
+                catalog_membership = zone_options.catalog_zone_name
+                if catalog_membership and isinstance(catalog_membership, str):
+                    catalog_membership = (
+                        catalog_membership.rstrip(".") if catalog_membership != "." else None
+                    )
+        except Exception as zone_check_exc:
+            logger.warning(
+                "Could not determine zone status on endpoint %s: %s",
+                endpoint,
+                zone_check_exc,
+            )
+
+        return (is_writable, server_role, catalog_membership)
+
+    async def try_failback_to_primary(self) -> bool:
+        """Attempt failback to the primary (first configured) Technitium endpoint.
+
+        This method is called periodically to detect when a previously-failed primary
+        endpoint has recovered and is ready to accept traffic again. If successful,
+        updates the active endpoint and returns True.
+
+        Returns:
+            True if failback to primary succeeded, False otherwise
+        """
+        endpoints = self.config.technitium_endpoints
+        if not endpoints:
+            return False
+
+        primary_endpoint = endpoints[0]
+        current_endpoint = self.client.base_url
+
+        # If already on primary, nothing to do
+        if primary_endpoint == current_endpoint:
+            return False
+
+        try:
+            logger.info(
+                "Attempting failback to primary endpoint %s (currently on %s)",
+                primary_endpoint,
+                current_endpoint,
+            )
+            await self.set_active_endpoint(primary_endpoint)
+
+            # Test connectivity and authentication
+            login_response = await self.client.login(
+                username=self.config.technitium_username,
+                password=self.config.technitium_password,
+            )
+            self.client.token = login_response.token
+
+            # Check zone status to ensure primary is writable
+            is_writable, server_role, catalog_membership = await self._check_zone_status(
+                primary_endpoint
+            )
+
+            # Only failback if primary is writable (not a read-only replica)
+            if not is_writable:
+                logger.info(
+                    "Primary endpoint %s is read-only; staying on current %s endpoint",
+                    primary_endpoint,
+                    "writable" if self.is_writable else "read-only",
+                )
+                # Fall back to secondary
+                await self.set_active_endpoint(current_endpoint)
+                # Re-authenticate with secondary
+                try:
+                    login_response = await self.client.login(
+                        username=self.config.technitium_username,
+                        password=self.config.technitium_password,
+                    )
+                    self.client.token = login_response.token
+                except Exception:
+                    pass  # Secondary should still work
+                return False
+
+            logger.info("Successfully failed back to primary endpoint %s", primary_endpoint)
+
+            # Update application status with primary's cluster role
+            await self.update_status(
+                ready=True,
+                writable=is_writable,
+                server_role=server_role,
+                catalog_membership=catalog_membership,
+            )
+
+            return True
+        except Exception as exc:
+            logger.debug(
+                "Failback to primary endpoint %s not yet ready: %s",
+                primary_endpoint,
+                exc,
+            )
+            # Failback failed, stay on current endpoint
+            return False

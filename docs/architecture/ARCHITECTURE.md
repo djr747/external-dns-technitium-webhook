@@ -154,6 +154,64 @@ args:
 - Configuration singleton
 - Ready state flag
 
+#### 2.7 Resilience & Failover (`resilience.py`, `app_state.py`, `main.py`)
+
+**Cluster-Aware Failover & Failback Design:**
+
+The webhook provides automatic failover to read-only replicas and intelligent failback to the primary node:
+
+**Components:**
+
+- **`resilience.py`** - Circuit breaker implementation (CLOSED/OPEN/HALF_OPEN states)
+- **`app_state.py:try_failover_endpoints()`** - Rotates through fallback endpoints and detects cluster role (primary vs secondary)
+- **`app_state.py:try_failback_to_primary()`** - Intelligently fails back when primary recovers and is writable
+- **`main.py:auto_renew_technitium_token()`** - Dual-timing: token renewal (20/1 min) + failback checks (5 min)
+
+**Failover Flow:**
+
+```mermaid
+graph TD
+    A["Request fails<br/>Connection error"] --> B["Detect error type<br/>timeout, refused, etc"]
+    B --> C{"Connection<br/>error?"}
+    C -->|Yes| D["Call try_failover_endpoints()"]
+    C -->|No| E["Return error"]
+    D --> F["Rotate to next endpoint<br/>in TECHNITIUM_FAILOVER_URLS"]
+    F --> G["Query zone status<br/>to detect role"]
+    G --> H{"Zone is<br/>writable?"}
+    H -->|Yes| I["Primary node<br/>Accept reads & writes"]
+    H -->|No| J["Secondary node<br/>Accept reads only"]
+    I --> K["Return failover_ok=true<br/>is_writable=true"]
+    J --> L["Return failover_ok=true<br/>is_writable=false"]
+```
+
+**Failback Flow:**
+
+```mermaid
+graph TD
+    A["Every 5 minutes<br/>if enough time elapsed"] --> B["Call try_failback_to_primary()"]
+    B --> C["Attempt connection<br/>to primary endpoint"]
+    C --> D{"Connection<br/>succeeds?"}
+    D -->|No| E["Retry in 5 min"]
+    D -->|Yes| F["Query zone status<br/>on primary"]
+    F --> G{"Primary is<br/>writable?"}
+    G -->|No| H["Fail back declined<br/>primary still read-only"]
+    G -->|Yes| I["Failback successful<br/>Resume normal operation"]
+```
+
+**Timing Strategy:**
+
+| Operation | Interval | Trigger |
+| --- | --- | --- |
+| Token renewal (success) | 20 minutes | After successful login |
+| Token renewal (failure) | 1 minute | After login error |
+| Failback checks | 5 minutes | **Independent** of token renewal |
+| Circuit breaker probe | 60 seconds | When circuit is OPEN |
+
+This dual-timing ensures:
+- Fast token refresh on errors (1 min)
+- Frequent primary recovery detection (5 min)
+- No thundering herd (staggered timers)
+
 ### 3. Technitium DNS Server (External Component)
 
 **Purpose:** Authoritative DNS server with REST API
@@ -424,7 +482,9 @@ This architecture provides:
 5. ✅ **Observability** - Logging and health checks
 6. ✅ **Maintainability** - Clean code structure
 7. ✅ **Extensibility** - Easy to add new record types
-8. ✅ **Production Ready** - All best practices followed
+8. ✅ **Resilience** - Cluster-aware failover with intelligent failback
+9. ✅ **High Availability** - Read operations on all nodes, writes on primary only
+10. ✅ **Production Ready** - All best practices followed
 
 For detailed implementation guides, see:
 

@@ -105,6 +105,36 @@ Required vars (see `config.py`):
 - **10 DNS record types**: A, AAAA, CNAME, TXT, ANAME, CAA, URI, SSHFP, SVCB, HTTPS
 - **Advanced options**: Comments, expiry TTL, PTR records via provider-specific properties
 
+### Cluster-Aware Failover & Intelligent Failback
+
+The webhook provides high-availability support for Technitium DNS clusters with automatic failover and intelligent failback:
+
+**Key Components:**
+- **`resilience.py`** - Circuit breaker pattern (CLOSED/OPEN/HALF_OPEN)
+- **`app_state.py:try_failover_endpoints()`** - Returns `(failover_ok: bool, is_writable: bool)` tuple; detects primary vs secondary nodes
+- **`app_state.py:try_failback_to_primary()`** - Intelligently fails back when primary is recovered and writable
+- **`main.py:auto_renew_technitium_token()`** - Dual-timing: token renewal (20/1 min) **and** failback checks (5 min interval)
+
+**Failover Behavior:**
+1. Connection error detected (timeout, refused, etc) → rotates to next endpoint in `TECHNITIUM_FAILOVER_URLS`
+2. Queries zone to detect if endpoint is primary (writable) or secondary (read-only)
+3. Read operations work on all nodes; write operations rejected on read-only secondaries
+4. Every 5 minutes, attempts failback to primary if it's healthy and writable
+
+**Timing Strategy:**
+- Token renewal: 20 min (success) or 1 min (failure) - **unchanged**
+- Failback checks: 5 minutes - **independent of token renewal**
+- This dual-timing ensures fast token refresh without impacting failback detection
+
+**Configuration:**
+- `TECHNITIUM_URL` - Primary endpoint
+- `TECHNITIUM_FAILOVER_URLS` - Semicolon-separated secondary endpoints (e.g., `http://backup1:5380;http://backup2:5380`)
+
+**Testing Failover:**
+- Mock `try_failover_endpoints()` to return `(True, False)` for secondary node scenarios
+- Mock `try_failback_to_primary()` to verify timing logic (5-min threshold)
+- Test connection error detection with enhanced pattern matching for empty messages and exception type names
+
 ### Testing Patterns
 - Use `pytest-asyncio` for async tests
 - `conftest.py` resets environment variables between tests
@@ -113,6 +143,7 @@ Required vars (see `config.py`):
 - Mock external HTTP calls with `pytest-mock`
 - Test both success and error scenarios for all handlers
 - Unit tests file names must start with `test_` and be placed in the `tests/unit` directory.  These test files should be named after the corresponding module they are testing (e.g., `test_handlers.py` for `handlers.py`).
+
 - Integration tests can be added in `tests/integration/` with the file name of test_modules they are testing (e.g., `test_integration_handlers.py`).
 - Coverage must be at least 95% for all code paths; CI enforces this strictly.  Do not preference skipping coverage for core functions of the application over code that is infrequently used.
 

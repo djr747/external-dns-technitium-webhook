@@ -31,6 +31,67 @@ time="2025-11-02T20:33:19Z" level=error module=external_dns_technitium_webhook.t
 - Monitor WARNING logs for retry patterns indicating issues
 - Alert on ERROR logs for immediate investigation
 
+### Failover & Failback Monitoring
+
+**Cluster Detection & Recovery Events**:
+
+Watch for these key log messages to understand failover/failback behavior:
+
+```logs
+# Connection error detected - failover initiated
+time="2025-11-02T20:33:20Z" level=warning module=handlers msg="Connection error detected, attempting failover to alternate endpoints: Connection refused"
+
+# Successful failover to alternate endpoint
+time="2025-11-02T20:33:21Z" level=info module=app_state msg="Successfully authenticated with failover endpoint http://secondary1:5380"
+
+# Cluster role detected (primary vs secondary)
+time="2025-11-02T20:33:21Z" level=info module=app_state msg="Failover endpoint http://secondary1:5380 is secondary node (writable=false)"
+
+# Retry after failover succeeded
+time="2025-11-02T20:33:22Z" level=info module=handlers msg="Failover successful to writable endpoint, retrying record changes"
+
+# Intelligent failback to primary
+time="2025-11-02T20:35:30Z" level=info module=main msg="Successfully failed back to primary endpoint"
+
+# Token renewal continues independently
+time="2025-11-02T20:40:00Z" level=debug module=main msg="Successfully renewed Technitium DNS server access token"
+```
+
+**Monitoring Checklist**:
+
+| Event | Log Level | What It Means | Action |
+| --- | --- | --- | --- |
+| "Connection error detected" | WARNING | Primary failed, attempting failover | Monitor - automatic recovery in progress |
+| "Successfully authenticated with failover endpoint" | INFO | Failover succeeded, now on secondary | Monitor - waiting for primary recovery |
+| "secondary node (writable=false)" | INFO | Confirmed on read-only replica | Expected when primary is down |
+| "Successfully failed back to primary" | INFO | Primary recovered and is writable | Good - normal operation restored |
+| "Failover endpoint X is primary node (writable=true)" | INFO | Failover to alternate primary | Monitor - verify topology is as expected |
+| "All failover endpoints failed" | ERROR | Complete outage across all nodes | **CRITICAL** - check Technitium cluster health |
+
+**Key Timings to Monitor**:
+
+- **Failover detection**: < 1 second (triggered by connection error)
+- **Failback attempt frequency**: Every 5 minutes (configurable in code)
+- **Failback success**: Usually < 5 minutes after primary recovers
+- **Token renewal**: Every 20 minutes (normal) or 1 minute (after failure)
+
+**Setting up Alerts**:
+
+```yaml
+# Example Prometheus alerting rules (future enhancement)
+- alert: TechnitiumFailoverActive
+  expr: rate(failover_attempts_total[5m]) > 0
+  for: 1m
+  annotations:
+    summary: "Active Technitium DNS failover"
+
+- alert: TechnitiumAllNodesFailed
+  expr: rate(all_failover_endpoints_failed_total[5m]) > 0
+  for: 30s
+  annotations:
+    summary: "All Technitium DNS nodes unreachable"
+```
+
 ### Health Checks
 
 **Endpoints** (on separate health server thread, port 8080):
