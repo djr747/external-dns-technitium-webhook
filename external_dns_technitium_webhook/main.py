@@ -186,6 +186,16 @@ class ZonePreparationResult:
     catalog_membership: str | None
 
 
+@dataclass
+class PrimaryProbeResult:
+    """Result of probing the primary endpoint during failback."""
+
+    token: str
+    is_writable: bool
+    server_role: str
+    catalog_membership: str | None
+
+
 def _normalize_zone_name(name: str | None) -> str | None:
     """Normalize a DNS zone name for comparison."""
 
@@ -280,6 +290,7 @@ async def setup_technitium_connection(state: AppState) -> None:
             )
 
             state.start_token_renewal(auto_renew_technitium_token)
+            state.start_failback_attempts(auto_attempt_failback)
 
             if zone_result.zone_created:
                 logger.info(
@@ -486,21 +497,18 @@ async def ensure_catalog_membership(
 
 
 async def auto_renew_technitium_token(state: AppState) -> None:
-    """Automatically renew the Technitium authentication token and attempt failback.
+    """Automatically renew the Technitium authentication token.
 
-    This function runs two independent cycles:
-    1. Token renewal: every 20 minutes on success, 1 minute on failure
-    2. Failback attempts: every 5 minutes to detect when primary is recovered
+    Runs on a 20-minute success interval or 1-minute failure interval.
+    Token renewal is independent from failback detection.
 
     Args:
         state: Application state
     """
     DURATION_TOKEN_SUCCESS = 20 * 60  # 20 minutes
     DURATION_TOKEN_FAILURE = 60  # 1 minute
-    DURATION_FAILBACK_ATTEMPT = 5 * 60  # 5 minutes - check primary recovery frequently
 
     sleep_for = DURATION_TOKEN_SUCCESS
-    last_failback_attempt = 0.0
 
     while True:
         try:
@@ -509,7 +517,7 @@ async def auto_renew_technitium_token(state: AppState) -> None:
             logger.debug("Token renewal task cancelled")
             raise
 
-        current_time = asyncio.get_event_loop().time()
+        logger.debug("Token renewal cycle started (sleep interval: %.1f sec)", sleep_for)
 
         try:
             login_response = await state.client.login(
@@ -518,14 +526,6 @@ async def auto_renew_technitium_token(state: AppState) -> None:
             )
             state.client.token = login_response.token
             logger.debug("Successfully renewed Technitium DNS server access token")
-
-            # Attempt failback to primary if enough time has passed
-            if current_time - last_failback_attempt >= DURATION_FAILBACK_ATTEMPT:
-                failback_ok = await state.try_failback_to_primary()
-                last_failback_attempt = current_time
-                if failback_ok:
-                    logger.info("Successfully failed back to primary endpoint")
-
             sleep_for = DURATION_TOKEN_SUCCESS
         except (
             TechnitiumError,
@@ -537,6 +537,159 @@ async def auto_renew_technitium_token(state: AppState) -> None:
         ) as exc:
             logger.error("Technitium DNS server renewal failed: %s", exc)
             sleep_for = DURATION_TOKEN_FAILURE
+
+
+async def auto_attempt_failback(state: AppState) -> None:
+    """Continuously poll endpoints to validate health and detect primary recovery.
+
+    This function polls at the interval configured via HEALTH_POLLING_INTERVAL_SECONDS
+    (default 15 seconds) to:
+    1. Validate the current endpoint is still healthy
+    2. Check if the primary endpoint has recovered and is writable
+    3. Fail back to primary automatically when it's ready
+
+    Args:
+        state: Application state
+    """
+    poll_interval = state.config.health_polling_interval_seconds
+
+    while True:
+        try:
+            await asyncio.sleep(poll_interval)
+        except asyncio.CancelledError:
+            logger.debug("Health check polling task cancelled")
+            raise
+
+        logger.debug("Running health check poll for both primary and current endpoints")
+
+        try:
+            await _run_failback_health_check_cycle(state)
+
+        except asyncio.CancelledError:
+            logger.debug("Health check polling task cancelled")
+            raise
+        except Exception as exc:
+            logger.debug("Health check polling error: %s", exc)
+
+
+async def _run_failback_health_check_cycle(state: AppState) -> None:
+    """Run one health-check cycle for current endpoint validation and primary recovery."""
+
+    endpoints = state.config.technitium_endpoints
+    if not endpoints:
+        return
+
+    primary_endpoint = endpoints[0]
+    if primary_endpoint == state.client.base_url:
+        await _validate_primary_endpoint_health(state, primary_endpoint)
+        return
+
+    await _attempt_failback_to_primary(state, primary_endpoint)
+
+
+async def _validate_primary_endpoint_health(state: AppState, primary_endpoint: str) -> None:
+    """Validate that the active primary remains writable and fail over if it does not."""
+
+    logger.debug("Already on primary endpoint, validating health")
+    try:
+        zone_options = await state.client.get_zone_options(
+            state.config.zone, include_catalog_names=True
+        )
+    except Exception as health_exc:
+        logger.warning(
+            "Health check failed on primary endpoint %s: %s",
+            primary_endpoint,
+            health_exc,
+        )
+        return
+
+    if not zone_options.is_read_only:
+        return
+
+    logger.warning(
+        "Primary endpoint %s became read-only, initiating failover",
+        primary_endpoint,
+    )
+    failover_ok, is_writable_after = await state.try_failover_endpoints()
+    if not failover_ok or not is_writable_after:
+        logger.error("Failed to failover from read-only primary endpoint")
+
+
+async def _attempt_failback_to_primary(state: AppState, primary_endpoint: str) -> None:
+    """Probe the primary endpoint and switch back when it becomes writable."""
+
+    logger.debug("On failover endpoint, checking if primary has recovered")
+    try:
+        probe_result = await _probe_primary_endpoint(state, primary_endpoint)
+    except Exception as check_exc:
+        logger.debug("Primary endpoint %s not yet ready: %s", primary_endpoint, check_exc)
+        return
+
+    if not probe_result.is_writable:
+        logger.debug(
+            "Primary endpoint %s is reachable but read-only (secondary), staying on failover",
+            primary_endpoint,
+        )
+        return
+
+    logger.info(
+        "Primary endpoint %s has recovered and is writable, failing back",
+        primary_endpoint,
+    )
+    await state.set_active_endpoint(primary_endpoint)
+    state.client.token = probe_result.token
+    await state.update_status(
+        ready=True,
+        writable=probe_result.is_writable,
+        server_role=probe_result.server_role,
+        catalog_membership=probe_result.catalog_membership,
+    )
+
+
+async def _probe_primary_endpoint(state: AppState, primary_endpoint: str) -> PrimaryProbeResult:
+    """Return the primary endpoint status using a temporary client."""
+
+    from .technitium_client import TechnitiumClient
+
+    temp_client = TechnitiumClient(
+        base_url=primary_endpoint,
+        timeout=state.config.technitium_timeout,
+        verify_ssl=state.config.technitium_verify_ssl,
+        ca_bundle=state.config.technitium_ca_bundle_file,
+        enable_request_compression=state.config.technitium_enable_request_compression,
+        compression_threshold_bytes=state.config.technitium_compression_threshold_bytes,
+        circuit_breaker=state.circuit_breaker,
+        records_cache_ttl_seconds=state.config.records_cache_ttl_seconds,
+    )
+
+    try:
+        login_response = await temp_client.login(
+            username=state.config.technitium_username,
+            password=state.config.technitium_password,
+        )
+        zone_options = await temp_client.get_zone_options(
+            state.config.zone, include_catalog_names=True
+        )
+        is_writable = not zone_options.is_read_only
+        server_role = "secondary" if zone_options.is_read_only else "primary"
+        return PrimaryProbeResult(
+            token=login_response.token,
+            is_writable=is_writable,
+            server_role=server_role,
+            catalog_membership=_normalize_catalog_membership(zone_options.catalog_zone_name),
+        )
+    finally:
+        await temp_client.close()
+
+
+def _normalize_catalog_membership(catalog_membership: str | None) -> str | None:
+    """Normalize catalog membership values returned by Technitium."""
+
+    if not catalog_membership or not isinstance(catalog_membership, str):
+        return None
+    if catalog_membership == ".":
+        return None
+    return catalog_membership.rstrip(".")
 
 
 def create_app() -> FastAPI:

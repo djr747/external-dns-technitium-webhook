@@ -2,7 +2,7 @@
 
 import asyncio
 from typing import cast
-from unittest.mock import MagicMock  # noqa: F401 - used in cast() for type checking
+from unittest.mock import MagicMock
 
 import pytest
 from pytest_mock import MockerFixture
@@ -71,6 +71,29 @@ async def test_start_token_renewal_idempotent(config: Config) -> None:
         state.start_token_renewal(_dummy)
         assert state._token_task is first_task
     finally:
+        await state.close()
+
+
+@pytest.mark.asyncio
+async def test_start_failback_attempts_idempotent(config: Config) -> None:
+    """start_failback_attempts should schedule once and reuse the running task."""
+
+    state = AppState(config)
+    blocker = asyncio.Event()
+
+    try:
+
+        async def _dummy(_state: AppState) -> None:
+            await blocker.wait()
+
+        state.start_failback_attempts(_dummy)
+        first_task = state._failback_task
+        assert first_task is not None
+
+        state.start_failback_attempts(_dummy)
+        assert state._failback_task is first_task
+    finally:
+        blocker.set()
         await state.close()
 
 
@@ -241,6 +264,55 @@ async def test_try_failover_endpoints_all_fail(mocker: MockerFixture) -> None:
 
 
 @pytest.mark.asyncio
+async def test_check_zone_status_defaults_when_zone_options_missing(
+    mocker: MockerFixture, config: Config
+) -> None:
+    """Zone status should stay primary and writable when no options are returned."""
+
+    state = AppState(config)
+
+    try:
+        mocker.patch.object(
+            state.client,
+            "get_zone_options",
+            new_callable=mocker.AsyncMock,
+            return_value=None,
+        )
+
+        result = await state._check_zone_status("http://primary:5380")
+
+        assert result == (True, "primary", None)
+    finally:
+        await state.close()
+
+
+@pytest.mark.asyncio
+async def test_check_zone_status_normalizes_root_catalog_membership(
+    mocker: MockerFixture, config: Config
+) -> None:
+    """A root catalog marker should be normalized to None."""
+
+    state = AppState(config)
+    zone_options = MagicMock()
+    zone_options.is_read_only = False
+    zone_options.catalog_zone_name = "."
+
+    try:
+        mocker.patch.object(
+            state.client,
+            "get_zone_options",
+            new_callable=mocker.AsyncMock,
+            return_value=zone_options,
+        )
+
+        result = await state._check_zone_status("http://primary:5380")
+
+        assert result == (True, "primary", None)
+    finally:
+        await state.close()
+
+
+@pytest.mark.asyncio
 async def test_try_failback_to_primary_success(mocker: MockerFixture) -> None:
     """Test successful failback to primary endpoint."""
     from unittest.mock import AsyncMock
@@ -351,6 +423,23 @@ async def test_try_failback_already_on_primary(config: Config) -> None:
 
 
 @pytest.mark.asyncio
+async def test_try_failback_returns_false_with_no_configured_endpoints(
+    config: Config,
+) -> None:
+    """Failback should stop immediately when no endpoints are available."""
+
+    config.technitium_url = " "
+    state = AppState(config)
+
+    try:
+        result = await state.try_failback_to_primary()
+
+        assert result is False
+    finally:
+        await state.close()
+
+
+@pytest.mark.asyncio
 async def test_try_failback_primary_is_readonly(mocker: MockerFixture) -> None:
     """Test failback when primary is read-only (secondary)."""
     from unittest.mock import AsyncMock
@@ -402,5 +491,93 @@ async def test_try_failback_primary_is_readonly(mocker: MockerFixture) -> None:
         assert result is False
         # Should stay on secondary
         assert state.active_endpoint == "http://secondary.example.com:5380"
+    finally:
+        await state.close()
+
+
+@pytest.mark.asyncio
+async def test_try_failback_primary_readonly_ignores_secondary_reauth_failure(
+    mocker: MockerFixture,
+) -> None:
+    """Readonly primary should fall back even if secondary re-authentication fails."""
+
+    config = Config(
+        technitium_url="http://primary.example.com:5380",
+        technitium_username="admin",
+        technitium_password="password",
+        zone="example.com",
+        technitium_failover_urls="http://secondary.example.com:5380",
+    )
+
+    state = AppState(config)
+
+    try:
+        login_response = MagicMock()
+        login_response.token = "token_123"
+
+        zone_options = MagicMock()
+        zone_options.is_read_only = True
+        zone_options.catalog_zone_name = None
+
+        state.active_endpoint = "http://secondary.example.com:5380"
+        state.client.base_url = "http://secondary.example.com:5380"
+
+        async def mock_set_active_endpoint(url: str) -> None:
+            state.active_endpoint = url
+            state.client.base_url = url
+
+        mocker.patch.object(state, "set_active_endpoint", side_effect=mock_set_active_endpoint)
+        mocker.patch.object(
+            state.client,
+            "login",
+            new_callable=mocker.AsyncMock,
+            side_effect=[login_response, RuntimeError("secondary offline")],
+        )
+        mocker.patch.object(
+            state.client,
+            "get_zone_options",
+            new_callable=mocker.AsyncMock,
+            return_value=zone_options,
+        )
+
+        result = await state.try_failback_to_primary()
+
+        assert result is False
+        assert state.active_endpoint == "http://secondary.example.com:5380"
+    finally:
+        await state.close()
+
+
+@pytest.mark.asyncio
+async def test_try_failback_primary_login_failure_on_secondary_endpoint(
+    mocker: MockerFixture,
+) -> None:
+    """Failback should return False when the primary cannot be reached from a secondary."""
+
+    config = Config(
+        technitium_url="http://primary.example.com:5380",
+        technitium_username="admin",
+        technitium_password="password",
+        zone="example.com",
+        technitium_failover_urls="http://secondary.example.com:5380",
+    )
+
+    state = AppState(config)
+
+    try:
+        state.active_endpoint = "http://secondary.example.com:5380"
+        state.client.base_url = "http://secondary.example.com:5380"
+
+        mocker.patch.object(state, "set_active_endpoint", new_callable=mocker.AsyncMock)
+        mocker.patch.object(
+            state.client,
+            "login",
+            new_callable=mocker.AsyncMock,
+            side_effect=RuntimeError("primary unavailable"),
+        )
+
+        result = await state.try_failback_to_primary()
+
+        assert result is False
     finally:
         await state.close()

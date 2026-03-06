@@ -3,13 +3,14 @@
 import asyncio
 import logging
 import os
+from collections.abc import Callable
 from contextlib import asynccontextmanager, suppress
 from types import SimpleNamespace
 from typing import cast
 from unittest.mock import ANY, AsyncMock, MagicMock
 
 import pytest
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.testclient import TestClient
 from pytest_mock import MockerFixture
 
@@ -32,7 +33,9 @@ from external_dns_technitium_webhook.main import (
     ZonePreparationResult,
     _apply_structured_formatter_to_logger,
     _fetch_zone_options,
+    _normalize_catalog_membership,
     _normalize_zone_name,
+    auto_attempt_failback,
     auto_renew_technitium_token,
     create_app,
     create_default_zone,
@@ -895,41 +898,19 @@ async def test_auto_renew_token_success_sets_token(mocker: MockerFixture) -> Non
         client=client,
         active_endpoint="http://localhost:5380",
     )
-    # Mock the try_failback_to_primary method
-    failback_mock = AsyncMock(return_value=False)
-    state.try_failback_to_primary = failback_mock
 
     sleep_mock = mocker.patch(
         "external_dns_technitium_webhook.main.asyncio.sleep",
         new_callable=AsyncMock,
     )
-    # Need 3 sleeps: first goes through, second goes through and triggers failback check,
-    # third raises CancelledError to exit the loop
+    # Need 3 sleeps: two successful iterations, then exit on third
     sleep_mock.side_effect = [None, None, asyncio.CancelledError()]
-
-    # Mock time.time() to control when failback is attempted
-    # Simulate time advancing so failback threshold is met (>5 min)
-    # Create a custom callable that tracks call count and returns appropriate time
-    class MockEventLoop:
-        def __init__(self) -> None:
-            self.time_calls = 0
-
-        def time(self) -> float:
-            result = 0.0 if self.time_calls < 1 else 5 * 60 + 1
-            self.time_calls += 1
-            return result
-
-    mock_event_loop = MockEventLoop()
-    mocker.patch(
-        "external_dns_technitium_webhook.main.asyncio.get_event_loop",
-        return_value=mock_event_loop,
-    )
 
     # CancelledError is used by the side_effect to break out of the loop;
     # we don't regard it as a failure in this test so suppress it.
     from contextlib import suppress
 
-    with suppress(asyncio.CancelledError):  # pragma: no cover - test control flow
+    with suppress(asyncio.CancelledError):
         await auto_renew_technitium_token(cast(AppState, state))
 
     # login should be called twice (once per loop iteration)
@@ -939,8 +920,6 @@ async def test_auto_renew_token_success_sets_token(mocker: MockerFixture) -> Non
         password=config.technitium_password,
     )
     assert state.client.token == "renewed"
-    # failback should be called once in the second iteration when time threshold is met
-    failback_mock.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -973,12 +952,423 @@ async def test_auto_renew_token_failure_uses_failure_interval(mocker: MockerFixt
 
     from contextlib import suppress
 
-    with suppress(asyncio.CancelledError):  # pragma: no cover
+    with suppress(asyncio.CancelledError):
         await auto_renew_technitium_token(cast(AppState, state))
 
     assert sleep_mock.await_args_list[0].args[0] == 20 * 60
     assert sleep_mock.await_args_list[1].args[0] == 60
     assert state.client.token == "unchanged"
+
+
+@pytest.mark.asyncio
+async def test_auto_attempt_failback_skips_when_no_endpoints(mocker: MockerFixture) -> None:
+    """Failback polling should continue cleanly when no endpoints are configured."""
+
+    config = Config(
+        technitium_url=" ",
+        technitium_username="admin",
+        technitium_password="password",
+        zone="example.com",
+    )
+    state = SimpleNamespace(
+        config=config,
+        client=SimpleNamespace(base_url="http://secondary:5380"),
+        circuit_breaker=MagicMock(),
+    )
+
+    sleep_mock = mocker.patch(
+        "external_dns_technitium_webhook.main.asyncio.sleep",
+        new_callable=AsyncMock,
+    )
+    sleep_mock.side_effect = [None, asyncio.CancelledError()]
+
+    with suppress(asyncio.CancelledError):
+        await auto_attempt_failback(cast(AppState, state))
+
+
+@pytest.mark.asyncio
+async def test_auto_attempt_failback_primary_readonly_triggers_failover(
+    mocker: MockerFixture,
+) -> None:
+    """A readonly primary should trigger failover attempts during health polling."""
+
+    config = Config(
+        technitium_url="http://primary:5380",
+        technitium_username="admin",
+        technitium_password="password",
+        zone="example.com",
+        technitium_failover_urls="http://secondary:5380",
+    )
+    zone_options = MagicMock()
+    zone_options.is_read_only = True
+
+    state = SimpleNamespace(
+        config=config,
+        client=SimpleNamespace(
+            base_url="http://primary:5380",
+            get_zone_options=AsyncMock(return_value=zone_options),
+        ),
+        try_failover_endpoints=AsyncMock(return_value=(False, False)),
+        circuit_breaker=MagicMock(),
+    )
+
+    sleep_mock = mocker.patch(
+        "external_dns_technitium_webhook.main.asyncio.sleep",
+        new_callable=AsyncMock,
+    )
+    sleep_mock.side_effect = [None, asyncio.CancelledError()]
+
+    with suppress(asyncio.CancelledError):
+        await auto_attempt_failback(cast(AppState, state))
+
+    state.client.get_zone_options.assert_awaited_once_with(config.zone, include_catalog_names=True)
+    state.try_failover_endpoints.assert_awaited_once_with()
+
+
+@pytest.mark.asyncio
+async def test_auto_attempt_failback_primary_stays_put_when_writable(
+    mocker: MockerFixture,
+) -> None:
+    """A healthy writable primary should not trigger failover."""
+
+    config = Config(
+        technitium_url="http://primary:5380",
+        technitium_username="admin",
+        technitium_password="password",
+        zone="example.com",
+        technitium_failover_urls="http://secondary:5380",
+    )
+    zone_options = MagicMock()
+    zone_options.is_read_only = False
+
+    state = SimpleNamespace(
+        config=config,
+        client=SimpleNamespace(
+            base_url="http://primary:5380",
+            get_zone_options=AsyncMock(return_value=zone_options),
+        ),
+        try_failover_endpoints=AsyncMock(return_value=(False, False)),
+        circuit_breaker=MagicMock(),
+    )
+
+    sleep_mock = mocker.patch(
+        "external_dns_technitium_webhook.main.asyncio.sleep",
+        new_callable=AsyncMock,
+    )
+    sleep_mock.side_effect = [None, asyncio.CancelledError()]
+
+    with suppress(asyncio.CancelledError):
+        await auto_attempt_failback(cast(AppState, state))
+
+    state.client.get_zone_options.assert_awaited_once_with(config.zone, include_catalog_names=True)
+    state.try_failover_endpoints.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_auto_attempt_failback_primary_health_check_warning_branch(
+    mocker: MockerFixture,
+) -> None:
+    """A primary health-check exception should be logged and the loop should continue."""
+
+    config = Config(
+        technitium_url="http://primary:5380",
+        technitium_username="admin",
+        technitium_password="password",
+        zone="example.com",
+    )
+    state = SimpleNamespace(
+        config=config,
+        client=SimpleNamespace(
+            base_url="http://primary:5380",
+            get_zone_options=AsyncMock(side_effect=RuntimeError("health failed")),
+        ),
+        try_failover_endpoints=AsyncMock(),
+        circuit_breaker=MagicMock(),
+    )
+
+    sleep_mock = mocker.patch(
+        "external_dns_technitium_webhook.main.asyncio.sleep",
+        new_callable=AsyncMock,
+    )
+    sleep_mock.side_effect = [None, asyncio.CancelledError()]
+    warning_mock = mocker.patch("external_dns_technitium_webhook.main.logger.warning")
+
+    with suppress(asyncio.CancelledError):
+        await auto_attempt_failback(cast(AppState, state))
+
+    warning_mock.assert_any_call(
+        "Health check failed on primary endpoint %s: %s",
+        "http://primary:5380",
+        ANY,
+    )
+    state.try_failover_endpoints.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_auto_attempt_failback_primary_readonly_successful_failover(
+    mocker: MockerFixture,
+) -> None:
+    """A readonly primary should continue cleanly when failover succeeds to a writable node."""
+
+    config = Config(
+        technitium_url="http://primary:5380",
+        technitium_username="admin",
+        technitium_password="password",
+        zone="example.com",
+        technitium_failover_urls="http://secondary:5380",
+    )
+    zone_options = MagicMock()
+    zone_options.is_read_only = True
+
+    state = SimpleNamespace(
+        config=config,
+        client=SimpleNamespace(
+            base_url="http://primary:5380",
+            get_zone_options=AsyncMock(return_value=zone_options),
+        ),
+        try_failover_endpoints=AsyncMock(return_value=(True, True)),
+        circuit_breaker=MagicMock(),
+    )
+
+    sleep_mock = mocker.patch(
+        "external_dns_technitium_webhook.main.asyncio.sleep",
+        new_callable=AsyncMock,
+    )
+    sleep_mock.side_effect = [None, asyncio.CancelledError()]
+
+    with suppress(asyncio.CancelledError):
+        await auto_attempt_failback(cast(AppState, state))
+
+    state.try_failover_endpoints.assert_awaited_once_with()
+
+
+@pytest.mark.asyncio
+async def test_auto_attempt_failback_cancels_during_primary_health_check(
+    mocker: MockerFixture,
+) -> None:
+    """Cancellation during the polling body should propagate cleanly."""
+
+    config = Config(
+        technitium_url="http://primary:5380",
+        technitium_username="admin",
+        technitium_password="password",
+        zone="example.com",
+    )
+    state = SimpleNamespace(
+        config=config,
+        client=SimpleNamespace(
+            base_url="http://primary:5380",
+            get_zone_options=AsyncMock(side_effect=asyncio.CancelledError()),
+        ),
+        circuit_breaker=MagicMock(),
+    )
+
+    sleep_mock = mocker.patch(
+        "external_dns_technitium_webhook.main.asyncio.sleep",
+        new_callable=AsyncMock,
+        return_value=None,
+    )
+
+    with pytest.raises(asyncio.CancelledError):
+        await auto_attempt_failback(cast(AppState, state))
+
+    sleep_mock.assert_awaited_once_with(config.health_polling_interval_seconds)
+
+
+@pytest.mark.asyncio
+async def test_auto_attempt_failback_recovers_to_writable_primary(
+    mocker: MockerFixture,
+) -> None:
+    """Polling should fail back when the primary becomes reachable and writable."""
+
+    config = Config(
+        technitium_url="http://primary:5380",
+        technitium_username="admin",
+        technitium_password="password",
+        zone="example.com",
+        technitium_failover_urls="http://secondary:5380",
+    )
+    login_response = SimpleNamespace(token="renewed-primary-token")
+    zone_options = MagicMock()
+    zone_options.is_read_only = False
+    zone_options.catalog_zone_name = "catalog.example.com."
+
+    temp_client = SimpleNamespace(
+        login=AsyncMock(return_value=login_response),
+        get_zone_options=AsyncMock(return_value=zone_options),
+        close=AsyncMock(),
+    )
+
+    state = SimpleNamespace(
+        config=config,
+        client=SimpleNamespace(base_url="http://secondary:5380", token=None),
+        circuit_breaker=MagicMock(),
+        set_active_endpoint=AsyncMock(),
+        update_status=AsyncMock(),
+    )
+
+    mocker.patch(
+        "external_dns_technitium_webhook.technitium_client.TechnitiumClient",
+        return_value=temp_client,
+    )
+    sleep_mock = mocker.patch(
+        "external_dns_technitium_webhook.main.asyncio.sleep",
+        new_callable=AsyncMock,
+    )
+    sleep_mock.side_effect = [None, asyncio.CancelledError()]
+
+    with suppress(asyncio.CancelledError):
+        await auto_attempt_failback(cast(AppState, state))
+
+    temp_client.login.assert_awaited_once_with(
+        username=config.technitium_username,
+        password=config.technitium_password,
+    )
+    temp_client.get_zone_options.assert_awaited_once_with(config.zone, include_catalog_names=True)
+    temp_client.close.assert_awaited_once_with()
+    state.set_active_endpoint.assert_awaited_once_with("http://primary:5380")
+    state.update_status.assert_awaited_once_with(
+        ready=True,
+        writable=True,
+        server_role="primary",
+        catalog_membership="catalog.example.com",
+    )
+    assert state.client.token == "renewed-primary-token"
+
+
+@pytest.mark.asyncio
+async def test_auto_attempt_failback_keeps_failover_when_primary_is_readonly(
+    mocker: MockerFixture,
+) -> None:
+    """A reachable but readonly primary should not trigger failback."""
+
+    config = Config(
+        technitium_url="http://primary:5380",
+        technitium_username="admin",
+        technitium_password="password",
+        zone="example.com",
+        technitium_failover_urls="http://secondary:5380",
+    )
+    login_response = SimpleNamespace(token="unused-token")
+    zone_options = MagicMock()
+    zone_options.is_read_only = True
+    zone_options.catalog_zone_name = None
+
+    temp_client = SimpleNamespace(
+        login=AsyncMock(return_value=login_response),
+        get_zone_options=AsyncMock(return_value=zone_options),
+        close=AsyncMock(),
+    )
+
+    state = SimpleNamespace(
+        config=config,
+        client=SimpleNamespace(base_url="http://secondary:5380", token=None),
+        circuit_breaker=MagicMock(),
+        set_active_endpoint=AsyncMock(),
+        update_status=AsyncMock(),
+    )
+
+    mocker.patch(
+        "external_dns_technitium_webhook.technitium_client.TechnitiumClient",
+        return_value=temp_client,
+    )
+    sleep_mock = mocker.patch(
+        "external_dns_technitium_webhook.main.asyncio.sleep",
+        new_callable=AsyncMock,
+    )
+    sleep_mock.side_effect = [None, asyncio.CancelledError()]
+
+    with suppress(asyncio.CancelledError):
+        await auto_attempt_failback(cast(AppState, state))
+
+    state.set_active_endpoint.assert_not_awaited()
+    state.update_status.assert_not_awaited()
+    temp_client.close.assert_awaited_once_with()
+
+
+@pytest.mark.asyncio
+async def test_auto_attempt_failback_primary_check_exception_branch(
+    mocker: MockerFixture,
+) -> None:
+    """Primary recovery check failures should be logged at debug and not fail the loop."""
+
+    config = Config(
+        technitium_url="http://primary:5380",
+        technitium_username="admin",
+        technitium_password="password",
+        zone="example.com",
+        technitium_failover_urls="http://secondary:5380",
+    )
+    temp_client = SimpleNamespace(
+        login=AsyncMock(side_effect=RuntimeError("primary probe failed")),
+        get_zone_options=AsyncMock(),
+        close=AsyncMock(),
+    )
+
+    state = SimpleNamespace(
+        config=config,
+        client=SimpleNamespace(base_url="http://secondary:5380", token=None),
+        circuit_breaker=MagicMock(),
+        set_active_endpoint=AsyncMock(),
+        update_status=AsyncMock(),
+    )
+
+    mocker.patch(
+        "external_dns_technitium_webhook.technitium_client.TechnitiumClient",
+        return_value=temp_client,
+    )
+    sleep_mock = mocker.patch(
+        "external_dns_technitium_webhook.main.asyncio.sleep",
+        new_callable=AsyncMock,
+    )
+    sleep_mock.side_effect = [None, asyncio.CancelledError()]
+    debug_mock = mocker.patch("external_dns_technitium_webhook.main.logger.debug")
+
+    with suppress(asyncio.CancelledError):
+        await auto_attempt_failback(cast(AppState, state))
+
+    temp_client.close.assert_awaited_once_with()
+    state.set_active_endpoint.assert_not_awaited()
+    state.update_status.assert_not_awaited()
+    assert any(
+        call.args and call.args[0] == "Primary endpoint %s not yet ready: %s"
+        for call in debug_mock.call_args_list
+    )
+
+
+@pytest.mark.asyncio
+async def test_auto_attempt_failback_logs_outer_polling_errors(
+    mocker: MockerFixture,
+) -> None:
+    """Unexpected polling errors should be logged and the loop should continue."""
+
+    class BrokenConfig:
+        health_polling_interval_seconds = 0.0
+
+        @property
+        def technitium_endpoints(self) -> list[str]:
+            raise RuntimeError("broken endpoints")
+
+    state = SimpleNamespace(
+        config=BrokenConfig(),
+        client=SimpleNamespace(base_url="http://secondary:5380"),
+        circuit_breaker=MagicMock(),
+    )
+
+    sleep_mock = mocker.patch(
+        "external_dns_technitium_webhook.main.asyncio.sleep",
+        new_callable=AsyncMock,
+    )
+    sleep_mock.side_effect = [None, asyncio.CancelledError()]
+    debug_mock = mocker.patch("external_dns_technitium_webhook.main.logger.debug")
+
+    with suppress(asyncio.CancelledError):
+        await auto_attempt_failback(cast(AppState, state))
+
+    assert any(
+        call.args and call.args[0] == "Health check polling error: %s"
+        for call in debug_mock.call_args_list
+    )
 
 
 def test_app_routes_delegate_to_handlers(mocker: MockerFixture) -> None:
@@ -1721,6 +2111,11 @@ class TestNormalizeZoneName:
         assert _normalize_zone_name("") is None
 
 
+class TestNormalizeCatalogMembership:
+    def test_normalize_catalog_membership_root_marker(self):
+        assert _normalize_catalog_membership(".") is None
+
+
 class TestExceptionHandlersAndMiddleware:
     def test_runtime_error_service_not_ready(self, mocker):
         app = create_app()
@@ -1981,6 +2376,21 @@ async def trigger_exception_group():
         # Should still detect "not ready yet" from message and return 503
         assert response.status_code == 503
 
+    def test_runtime_error_handler_without_app_state_falls_back_to_message(self):
+        """Missing app state should fall back to message-based readiness detection."""
+
+        app = create_app()
+        client = TestClient(app)
+
+        @app.get("/test-no-state")
+        async def test_route():
+            raise RuntimeError("service not ready yet")
+
+        response = client.get("/test-no-state")
+
+        assert response.status_code == 503
+        assert "Service not ready yet" in response.json().get("error", "")
+
     def test_runtime_error_handler_state_unready_early_branch(self, mocker):
         """When app state reports ready=False, runtime_error_handler should return 503 immediately."""
         from external_dns_technitium_webhook import main as main_mod
@@ -2005,6 +2415,25 @@ async def trigger_exception_group():
 
         client = TestClient(app)
         response = client.get("/raise-runtime")
+
+        assert response.status_code == 503
+
+    def test_runtime_error_handler_state_ready_uses_text_fallback(self, mocker):
+        """When state is available but ready is not False, text detection should still work."""
+
+        from external_dns_technitium_webhook import main as main_mod
+
+        app = main_mod.create_app()
+        state = mocker.MagicMock(spec=AppState)
+        state.ready = True
+        app.state.app_state = state
+
+        request = mocker.MagicMock(spec=Request)
+        request.app = app
+        handler = cast(
+            Callable[[Request, RuntimeError], Response], app.exception_handlers[RuntimeError]
+        )
+        response = handler(request, RuntimeError("service not ready yet"))
 
         assert response.status_code == 503
 

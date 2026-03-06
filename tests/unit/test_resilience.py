@@ -322,3 +322,13 @@ def test_circuit_breaker_reset() -> None:
     assert cb._failure_count == 0
     assert cb._last_failure_time is None
     assert cb._half_open_inflight is False
+
+
+@pytest.mark.asyncio
+async def test_on_success_while_open() -> None:
+    """Test _on_success call when state is already OPEN."""
+    cb = CircuitBreaker()
+    cb._state = CircuitState.OPEN
+    await cb._on_success()
+    # It should not change state simply because an old request succeeded
+    assert cb._state == CircuitState.OPEN

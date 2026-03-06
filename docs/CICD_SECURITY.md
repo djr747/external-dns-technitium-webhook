@@ -5,7 +5,7 @@ This project implements enterprise-grade CI/CD pipelines with comprehensive secu
 ## Workflow Summary
 
 | Workflow | File | Triggers | Purpose |
-|----------|------|----------|---------|
+| ---------- | ------ | ---------- | --------- |
 | CI | `.github/workflows/ci.yml` | Push to any branch; PR to `main`/`develop` | Lints (Ruff), type-checks (mypy, pyright), runs tests with coverage validation (95% minimum), uploads coverage to Codecov, builds multi-arch Docker images for commit, validates Python version matches Chainguard base |
 | Security Scanning | `.github/workflows/security.yml` | Daily schedule (UTC midnight); push to `main`/`develop`; PR to `main`; manual | CodeQL semantic code analysis, Trivy container vulnerability scan (SARIF + JSON), generates Trivy summary, uploads to GitHub Security tab |
 | Scheduled Security Rebuild | `.github/workflows/scheduled-rebuild.yml` | Mondays 02:00 UTC; manual | Rebuilds container on latest Chainguard Python base, runs Trivy scan, opens GitHub issue for critical CVEs |

@@ -147,6 +147,7 @@ Use [Semantic Versioning](https://semver.org/):
 - **PATCH** (e.g., 0.2.9): Bug fixes, dependency updates
 
 **Example progression:**
+
 - 0.2.8 (last release)
 - 0.2.9 (fastapi dependency bump)
 - 0.3.0 (new feature added)
@@ -192,6 +193,7 @@ The release workflow requires:
 ### Release didn't trigger after merge
 
 **Check:**
+
 1. Was `version =` line changed in pyproject.toml?
 2. Look at workflow run details in Actions tab
 3. Check `check-version-changed` job output
@@ -199,6 +201,7 @@ The release workflow requires:
 ### Container image not built
 
 **Check:**
+
 1. Is `build-and-publish-container` job running?
 2. Check Docker registry push logs
 3. Verify registry credentials are valid

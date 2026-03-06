@@ -32,6 +32,7 @@ Please be respectful and constructive in all interactions related to this projec
 2. Create a new branch (`git checkout -b feature/amazing-feature`)
 3. Make your changes
 4. Run tests and linting:
+
    ```bash
    make test           # Unit tests
    make test-integration  # Integration tests (requires kind/kubectl)
@@ -39,6 +40,7 @@ Please be respectful and constructive in all interactions related to this projec
    make type-check     # Type checking
    make all            # Full CI pipeline
    ```
+
 5. Commit your changes with clear messages
 6. Push to your fork
 7. Open a Pull Request
@@ -68,12 +70,14 @@ make test
 ## Code Style
 
 This project uses:
+
 - **Ruff** for linting and formatting (replaces flake8, isort, black)
 - **mypy** for static type checking with strict settings
 - **pyright** for additional type checking (VS Code/Pylance compatible)
 - **semgrep** for security scanning
 
 Run formatting and checks:
+
 ```bash
 make format        # Format code with ruff
 make format-check  # Check formatting without changes
@@ -127,7 +131,7 @@ Update dependencies to fix CVE-2024-12345
 
 Releases are automatically created when the version in `pyproject.toml` changes on the main branch.
 
-### Creating a Release:
+### Creating a Release
 
 1. **Update `pyproject.toml`** - Bump the version field:
 
@@ -156,7 +160,7 @@ Releases are automatically created when the version in `pyproject.toml` changes 
    - **auto-tag-on-main**: Detects version change, creates git tag
    - **release**: Publishes artifacts and release notes
 
-### Dependabot Releases:
+### Dependabot Releases
 
 When Dependabot merges a dependency update PR, it may bump the patch version in `pyproject.toml`. This automatically triggers a patch release - this is expected and desired for security updates.
 

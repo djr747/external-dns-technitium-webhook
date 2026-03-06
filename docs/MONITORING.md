@@ -68,11 +68,18 @@ time="2025-11-02T20:40:00Z" level=debug module=main msg="Successfully renewed Te
 | "Failover endpoint X is primary node (writable=true)" | INFO | Failover to alternate primary | Monitor - verify topology is as expected |
 | "All failover endpoints failed" | ERROR | Complete outage across all nodes | **CRITICAL** - check Technitium cluster health |
 
+**Failover Method Summary**:
+
+- Failover is event-driven on connection errors (no fixed timer for initial failover).
+- Failback is polling-based and controlled by `HEALTH_POLLING_INTERVAL_SECONDS` (default: 15 seconds).
+- Polling checks both endpoint reachability and endpoint role/writability before failback.
+- The webhook only fails back to a node when it is confirmed writable.
+
 **Key Timings to Monitor**:
 
 - **Failover detection**: < 1 second (triggered by connection error)
-- **Failback attempt frequency**: Every 5 minutes (configurable in code)
-- **Failback success**: Usually < 5 minutes after primary recovers
+- **Failback attempt frequency**: Every `HEALTH_POLLING_INTERVAL_SECONDS` (default: 15 seconds)
+- **Failback success**: Typically one poll cycle after primary recovers and is writable
 - **Token renewal**: Every 20 minutes (normal) or 1 minute (after failure)
 
 **Setting up Alerts**:
@@ -257,6 +264,12 @@ time="2025-11-02T20:33:16Z" level=info module=external_dns_technitium_webhook.te
 ```
 
 **Rate limiting**:
+
+## Technitium Cluster References
+
+- [Technitium DNS Server features (includes clustering and catalog zones)](https://technitium.com/dns/)
+- [Technitium DNS HTTP API documentation](https://github.com/TechnitiumSoftware/DnsServer/blob/master/APIDOCS.md)
+- [Technitium Catalog Zones RFC reference (RFC 9432)](https://datatracker.ietf.org/doc/rfc9432/)
 
 ```logs
 time="2025-11-02T20:33:20Z" level=warning module=external_dns_technitium_webhook.middleware msg="Rate limit exceeded for client 10.0.0.1. Tokens: 0.50"

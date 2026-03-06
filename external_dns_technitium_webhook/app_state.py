@@ -57,6 +57,7 @@ class AppState:
         )
         self._lock = asyncio.Lock()
         self._token_task: asyncio.Task[None] | None = None
+        self._failback_task: asyncio.Task[None] | None = None
         self.active_endpoint = self.client.base_url
         self.is_writable = False
         self.server_role: str | None = None
@@ -86,9 +87,15 @@ class AppState:
 
     async def close(self) -> None:
         """Close the application state."""
+        tasks_to_cancel = []
         if self._token_task:
             self._token_task.cancel()
-            await asyncio.gather(self._token_task, return_exceptions=True)
+            tasks_to_cancel.append(self._token_task)
+        if self._failback_task:
+            self._failback_task.cancel()
+            tasks_to_cancel.append(self._failback_task)
+        if tasks_to_cancel:
+            await asyncio.gather(*tasks_to_cancel, return_exceptions=True)
         await self.client.close()
 
     async def set_active_endpoint(self, base_url: str) -> None:
@@ -119,6 +126,15 @@ class AppState:
         if self._token_task and not self._token_task.done():
             return
         self._token_task = asyncio.create_task(renewer(self))
+
+    def start_failback_attempts(
+        self, failback_task: Callable[[AppState], Coroutine[Any, Any, None]]
+    ) -> None:
+        """Start the background failback attempt loop if not already running."""
+
+        if self._failback_task and not self._failback_task.done():
+            return
+        self._failback_task = asyncio.create_task(failback_task(self))
 
     async def update_status(
         self,

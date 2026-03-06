@@ -83,31 +83,34 @@ def sanitize_error_message(error: Exception) -> str:
         Safe error message for client response
     """
     error_str = str(error)
+    redaction_string = "***"
 
     def _replace_sensitive_param(match: re.Match[str]) -> str:
-        """Replace sensitive parameter values with ***."""
-        return match.group().replace(match.group(1), "***")
+        """Replace sensitive parameter values with redaction string.
+
+        The regex captures the parameter name in group(1), so we reconstruct
+        the full pattern as 'param_name=***' to keep the param name visible
+        while hiding the actual value.
+        """
+        param_name = match.group(1)
+        # Determine separator (= or :) from the original match
+        separator = "=" if "=" in match.group() else ":"
+        return f"{param_name}{separator}{redaction_string}"
 
     # Remove sensitive patterns
     sensitive_patterns: list[tuple[str, str | Callable[[re.Match[str]], str]]] = [
-        (
-            r"password[=:]\s*\S+",
-            "password=***",
-        ),  # pragma: no sonar - regex pattern not a real secret
-        (r"token[=:]\s*\S+", "token=***"),
-        (r"api[_-]?key[=:]\s*\S+", "api_key=***"),
-        (r"secret[=:]\s*\S+", "secret=***"),
-        (r"auth[=:]\s*\S+", "auth=***"),
-        (r"/home/[^/\s]+", "/home/***"),
-        (r"/Users/[^/\s]+", "/Users/***"),
-        (r"C:\\Users\\[^\\s]+", r"C:\\Users\\***"),
+        (r"password[=:]\s*\S+", f"password={redaction_string}"),
+        (r"token[=:]\s*\S+", f"token={redaction_string}"),
+        (r"api[_-]?key[=:]\s*\S+", f"api_key={redaction_string}"),
+        (r"secret[=:]\s*\S+", f"secret={redaction_string}"),
+        (r"auth[=:]\s*\S+", f"auth={redaction_string}"),
+        (r"/home/[^/\s]+", f"/home/{redaction_string}"),
+        (r"/Users/[^/\s]+", f"/Users/{redaction_string}"),
+        (r"C:\\Users\\[^\\s]+", rf"C:\\Users\\{redaction_string}"),
         # Sanitize URLs with sensitive query parameters
+        # This pattern captures the param name in group(1) and matches the value
         (
-            r"https?://[^\s]*?(password|token|api[_-]?key|secret|auth)[=:][^\s&]+",
-            _replace_sensitive_param,
-        ),
-        (
-            r"https?://[^\s]*?[?&](password|token|api[_-]?key|secret|auth)[=:][^\s&]+",
+            r"(password|token|api[_-]?key|secret|auth)[=:][^\s&]+",
             _replace_sensitive_param,
         ),
     ]
