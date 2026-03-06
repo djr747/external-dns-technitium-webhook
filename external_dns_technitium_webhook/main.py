@@ -175,7 +175,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     # Ensure setup task completes before shutdown
     if not setup_task.done():
         logger.info("Waiting for Technitium setup to complete before shutdown...")
-        await setup_task
+        _ = await setup_task
 
     # Shutdown
     logger.info("Shutting down application...")

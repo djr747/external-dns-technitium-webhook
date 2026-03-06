@@ -57,10 +57,8 @@ def test_startup_delay_negative(mocker):
 
 def test_startup_delay_not_set(mocker):
     """Test that startup delay returns True when start time not set."""
-    # Reset the start time by directly manipulating the module state
-    import external_dns_technitium_webhook.health as health_module
-
-    health_module._health_server_start_time = None
+    # Reset the start time by patching module state
+    mocker.patch("external_dns_technitium_webhook.health._health_server_start_time", None)
 
     mocker.patch(
         "external_dns_technitium_webhook.health.AppConfig",
@@ -73,10 +71,11 @@ def test_startup_delay_not_set(mocker):
 
 def test_health_endpoint_during_startup_delay(mocker):
     """Test health endpoint returns 503 during startup delay."""
-    import external_dns_technitium_webhook.health as health_module
-
     # Set the start time to just now
-    health_module._health_server_start_time = datetime.now(UTC)
+    mocker.patch(
+        "external_dns_technitium_webhook.health._health_server_start_time",
+        datetime.now(UTC),
+    )
 
     app = create_health_app()
     mocker.patch(
@@ -128,10 +127,11 @@ def test_health_endpoint_not_ready(mocker):
 
 def test_healthz_endpoint_during_startup_delay(mocker):
     """Test /healthz endpoint returns 503 during startup delay."""
-    import external_dns_technitium_webhook.health as health_module
-
     # Set the start time to just now
-    health_module._health_server_start_time = datetime.now(UTC)
+    mocker.patch(
+        "external_dns_technitium_webhook.health._health_server_start_time",
+        datetime.now(UTC),
+    )
 
     app = create_health_app()
     mocker.patch(
