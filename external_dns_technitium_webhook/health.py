@@ -2,12 +2,44 @@
 
 import logging
 import socket
+from datetime import UTC, datetime
 
 from fastapi import FastAPI, HTTPException, Response, status
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 from . import __version__
 from .config import Config as AppConfig
+
+# Track when the health server started for startup delay logic
+_health_server_start_time: datetime | None = None
+
+
+def set_health_server_start_time() -> None:
+    """Record the current time as the health server start time."""
+    global _health_server_start_time
+    _health_server_start_time = datetime.now(UTC)
+
+
+def is_startup_delay_complete() -> bool:
+    """Check if the startup delay period has elapsed.
+
+    During the startup delay, health checks return 503 to give the main
+    application time to initialize Technitium connections and zones.
+
+    Returns:
+        True if startup delay has expired or was disabled (0 seconds)
+    """
+    if _health_server_start_time is None:
+        # If start time not set, assume startup is complete
+        return True
+
+    config = AppConfig()
+    if config.startup_delay_seconds <= 0:
+        # Startup delay disabled
+        return True
+
+    elapsed = (datetime.now(UTC) - _health_server_start_time).total_seconds()
+    return elapsed >= config.startup_delay_seconds
 
 
 def is_main_server_ready() -> bool:
@@ -35,6 +67,11 @@ def create_health_app() -> FastAPI:
     )
 
     def health() -> dict[str, str]:
+        if not is_startup_delay_complete():
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Service starting up, initializing Technitium connection",
+            )
         if is_main_server_ready():
             return {"status": "ok"}
         else:
@@ -45,6 +82,11 @@ def create_health_app() -> FastAPI:
 
     def healthz() -> dict[str, str]:
         """Kubernetes-style health check endpoint for liveness/readiness probes."""
+        if not is_startup_delay_complete():
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Service starting up, initializing Technitium connection",
+            )
         if is_main_server_ready():
             return {"status": "ok"}
         else:

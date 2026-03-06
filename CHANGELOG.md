@@ -2,6 +2,54 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v1.0.6] - 2026-03-06
+
+**Fixed & Improved:**
+
+- **Startup readiness and deploy stability**:
+  - Refactored FastAPI lifespan startup in `main.py` to run `setup_technitium_connection()` as a background task instead of blocking server startup.
+  - Webhook now accepts connections on port `8888` immediately at process start; requests return `503` until initialization completes.
+  - Added graceful shutdown handling that waits for the setup task when still in progress.
+- **Health check startup delay**:
+  - Added `STARTUP_DELAY_SECONDS` configuration (default `10.0`) in `config.py`.
+  - Added startup delay tracking in `health.py` via `set_health_server_start_time()` and `is_startup_delay_complete()`.
+  - Updated `/health` and `/healthz` to return `503` during startup grace period before reporting ready.
+  - Updated `server.py` to record health server start time when the health thread starts.
+- **Version management cleanup**:
+  - Updated package version source in `__init__.py` to read from installed package metadata (`importlib.metadata.version`) with a development fallback (`0.0.0+dev`) when metadata is unavailable.
+- **Sonar and maintainability cleanups**:
+  - `technitium_client.py`: replaced `_post()` `TypeVar` pattern with generic type parameter syntax (`_post[T: BaseModel]`).
+  - `logging_utils.py`: simplified control-character regex by removing duplicate newline/carriage-return entries from the character class.
+  - `tests/integration/fixtures/init-technitium.sh`: redirected error output messages to `stderr` (`>&2`) for script consistency.
+
+**Added:**
+
+- **New unit test coverage**:
+  - Added `tests/unit/test___init__.py` to validate both `__version__` paths (metadata-present and metadata-missing fallback).
+  - Added lifespan shutdown branch tests in `tests/unit/test_main.py` for:
+    - waiting for setup task completion on shutdown
+    - no extra wait when setup task is already complete
+  - Added comprehensive startup delay tests in `tests/unit/test_health.py` for delay enabled/disabled/not-set and `/health` + `/healthz` behavior during delay windows.
+
+**Documentation:**
+
+- Updated `README.md` with:
+  - `STARTUP_DELAY_SECONDS` environment variable documentation
+  - explicit non-blocking startup behavior notes
+  - guidance for tuning startup delay on slow Technitium environments
+- Updated `docs/MONITORING.md` with:
+  - startup sequence details (immediate bind + background initialization)
+  - startup delay behavior and tuning examples
+  - Kubernetes probe timing guidance relative to `STARTUP_DELAY_SECONDS`
+- Updated `helm/values-webhook-example.yaml` comments to clarify probe inheritance and startup-delay tuning recommendations.
+
+**Quality:**
+
+- Full quality pipeline validated after changes:
+  - `make format`, `make lint`, and `make test` passing
+  - Unit tests at `396 passed`
+  - Coverage at `100%` across project modules
+
 ## [v1.0.5] - 2026-03-06
 
 **Changed:**

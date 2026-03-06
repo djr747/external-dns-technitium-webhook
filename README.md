@@ -79,8 +79,19 @@ Environment variables map directly to `external_dns_technitium_webhook.config.Co
 | `CIRCUIT_BREAKER_TIMEOUT` | ❌ | `60.0` | Seconds the circuit stays open before allowing a probe request |
 | `RECORDS_CACHE_TTL_SECONDS` | ❌ | `0.0` | TTL (seconds) for get_records response cache; `0` disables caching |
 | `HEALTH_POLLING_INTERVAL_SECONDS` | ❌ | `15.0` | Interval (seconds) for endpoint health polling and automatic failback checks |
+| `STARTUP_DELAY_SECONDS` | ❌ | `10.0` | Grace period (seconds) during startup before health checks report ready; allows Technitium connection initialization to complete |
 | `LISTEN_PORT` | ❌ | `8888` | **Fixed** by ExternalDNS; not configurable in production (used only by local tests) |
 | `HEALTH_PORT` | ❌ | `8080` | **Fixed** by ExternalDNS; Kubernetes probes target this port |
+
+### Startup Behavior
+
+The webhook server starts accepting connections on port 8888 **immediately** on startup, even while Technitium connection setup (authentication, zone checks) runs in the background. This prevents "connection refused" errors when ExternalDNS connects during initialization.
+
+- Requests received during setup return `503 Service Unavailable` until the service is ready
+- Health check endpoints return `503` during the `STARTUP_DELAY_SECONDS` grace period to allow initialization to complete
+- After setup completes and the grace period expires, endpoints return `200 OK`
+
+For slow Technitium connections (WAN, high latency, self-signed SSL), increase `STARTUP_DELAY_SECONDS`. See [docs/MONITORING.md](docs/MONITORING.md) and `helm/values-webhook-example.yaml` for health probe configuration.
 
 ### Cluster Failover Behavior
 

@@ -50,6 +50,9 @@ class Config(BaseSettings):
     circuit_breaker_timeout: float = 60.0
     records_cache_ttl_seconds: float = 0.0  # TTL for get_records cache (0 to disable)
     health_polling_interval_seconds: float = 15.0  # Health check polling interval
+    startup_delay_seconds: float = (
+        10.0  # Grace period during startup before health checks return ready
+    )
 
     def __init__(self, **values: Any) -> None:
         """Allow instantiation without explicit arguments for env loading."""

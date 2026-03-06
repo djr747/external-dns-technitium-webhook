@@ -28,6 +28,12 @@ def run_health_server(health_app: FastAPI, config: AppConfig) -> None:
         config: Application configuration
     """
     logging.info("[HEALTH] Health server thread function called")
+
+    # Record health server start time for startup delay logic
+    from .health import set_health_server_start_time
+
+    set_health_server_start_time()
+
     try:
         sys.stderr.write("[HEALTH-THREAD-START] Health server thread function called\n")
         sys.stderr.flush()

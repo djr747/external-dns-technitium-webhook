@@ -8,7 +8,7 @@ from collections.abc import AsyncGenerator, Callable
 from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import cast
+from typing import Annotated, cast
 
 import httpx
 from fastapi import Depends, FastAPI, Request, Response
@@ -166,10 +166,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     state = AppState(config)
     app.state.app_state = state
 
-    # Setup Technitium connection
-    await setup_technitium_connection(state)
+    # Start Technitium setup as background task to allow server to start listening immediately.
+    # The handlers will return 503 (not ready) until setup completes.
+    setup_task = asyncio.create_task(setup_technitium_connection(state))
 
     yield
+
+    # Ensure setup task completes before shutdown
+    if not setup_task.done():
+        logger.info("Waiting for Technitium setup to complete before shutdown...")
+        await asyncio.gather(setup_task)
 
     # Shutdown
     logger.info("Shutting down application...")
@@ -796,7 +802,7 @@ def create_app() -> FastAPI:
     state_dependency = create_state_dependency(app)
 
     def domain_filter(
-        state: AppState = Depends(state_dependency),
+        state: Annotated[AppState, Depends(state_dependency)],
     ) -> Response:
         """Negotiate domain filter."""
         try:
@@ -818,7 +824,7 @@ def create_app() -> FastAPI:
             )
 
     async def records(
-        state: AppState = Depends(state_dependency),
+        state: Annotated[AppState, Depends(state_dependency)],
     ) -> Response:
         """Get current DNS records."""
         # Call handler with only state to preserve compatibility with
@@ -827,14 +833,14 @@ def create_app() -> FastAPI:
 
     def adjust(
         endpoints: list[Endpoint],
-        state: AppState = Depends(state_dependency),
+        state: Annotated[AppState, Depends(state_dependency)],
     ) -> Response:
         """Adjust endpoints."""
         return handlers.adjust_endpoints(state, endpoints)
 
     async def apply(
         changes: Changes,
-        state: AppState = Depends(state_dependency),
+        state: Annotated[AppState, Depends(state_dependency)],
     ) -> Response:
         """Apply DNS record changes."""
         return await handlers.apply_record(state, changes)

@@ -885,6 +885,101 @@ async def test_lifespan_initializes_and_closes_state(mocker: MockerFixture) -> N
 
 
 @pytest.mark.asyncio
+async def test_lifespan_waits_for_setup_task_on_shutdown(mocker: MockerFixture) -> None:
+    """lifespan should wait for setup task to complete if it's still running during shutdown."""
+
+    app = FastAPI()
+    config = _build_config()
+    mocker.patch("external_dns_technitium_webhook.main.AppConfig", return_value=config)
+    state = MagicMock(spec=AppState)
+    state.close = AsyncMock()
+    mocker.patch("external_dns_technitium_webhook.main.AppState", return_value=state)
+
+    # Use a lock to ensure setup is still running when we check
+    setup_lock = asyncio.Lock()
+
+    async def slow_setup(app_state):
+        # Acquire lock, so we block until it's released
+        async with setup_lock:
+            pass
+
+    setup_mock = mocker.patch(
+        "external_dns_technitium_webhook.main.setup_technitium_connection",
+        side_effect=slow_setup,
+    )
+
+    # Pre-acquire the lock so setup will block
+    await setup_lock.acquire()
+
+    # Stub the health server to avoid threading issues
+    mocker.patch(
+        "external_dns_technitium_webhook.server.run_health_server", lambda *args, **kwargs: None
+    )
+    logger_mock = mocker.patch("external_dns_technitium_webhook.main.logger")
+
+    # Run the lifespan in a task so we can control when it exits
+    async def run_lifespan():
+        async with lifespan(app):
+            assert app.state.app_state is state
+            # Give the setup task time to start and block on the lock
+            await asyncio.sleep(0.05)
+        # After exiting the context, the shutdown code should wait for setup to complete
+
+    lifespan_task = asyncio.create_task(run_lifespan())
+
+    # Wait for the lifespan to get to shutdown
+    await asyncio.sleep(0.1)
+
+    # Release the lock so setup can complete
+    setup_lock.release()
+
+    # Wait for lifespan to complete
+    await asyncio.gather(lifespan_task)
+
+    # Verify setup was called and we logged waiting
+    setup_mock.assert_called_once_with(state)
+    state.close.assert_awaited_once()
+    # Verify we logged the wait message
+    logger_mock.info.assert_any_call("Waiting for Technitium setup to complete before shutdown...")
+
+
+@pytest.mark.asyncio
+async def test_lifespan_does_not_wait_if_setup_task_ready(mocker: MockerFixture) -> None:
+    """lifespan should not wait if setup task is already done during shutdown."""
+
+    app = FastAPI()
+    config = _build_config()
+    mocker.patch("external_dns_technitium_webhook.main.AppConfig", return_value=config)
+    state = MagicMock(spec=AppState)
+    state.close = AsyncMock()
+    mocker.patch("external_dns_technitium_webhook.main.AppState", return_value=state)
+
+    # Setup completes quickly
+    setup_mock = mocker.patch(
+        "external_dns_technitium_webhook.main.setup_technitium_connection",
+        new_callable=AsyncMock,
+    )
+
+    # Stub the health server to avoid threading issues
+    mocker.patch(
+        "external_dns_technitium_webhook.server.run_health_server", lambda *args, **kwargs: None
+    )
+    logger_mock = mocker.patch("external_dns_technitium_webhook.main.logger")
+
+    async with lifespan(app):
+        assert app.state.app_state is state
+        # Give setup time to complete before we exit
+        await asyncio.sleep(0.05)
+
+    # Verify setup was called
+    setup_mock.assert_awaited_once_with(state)
+    state.close.assert_awaited_once()
+    # Verify we did NOT log the wait message (because task was already done)
+    for call in logger_mock.info.call_args_list:
+        assert "Waiting for Technitium setup" not in str(call)
+
+
+@pytest.mark.asyncio
 async def test_auto_renew_token_success_sets_token(mocker: MockerFixture) -> None:
     """auto_renew_technitium_token refreshes the token after sleeping."""
 
