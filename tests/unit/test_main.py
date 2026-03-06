@@ -1021,9 +1021,7 @@ async def test_auto_attempt_failback_primary_readonly_triggers_failover(
     with suppress(asyncio.CancelledError):
         await auto_attempt_failback(cast(AppState, state))
 
-    state.client.get_zone_options.assert_awaited_once_with(
-        config.zone, include_catalog_names=True
-    )
+    state.client.get_zone_options.assert_awaited_once_with(config.zone, include_catalog_names=True)
     state.try_failover_endpoints.assert_awaited_once_with()
 
 
@@ -1062,9 +1060,7 @@ async def test_auto_attempt_failback_primary_stays_put_when_writable(
     with suppress(asyncio.CancelledError):
         await auto_attempt_failback(cast(AppState, state))
 
-    state.client.get_zone_options.assert_awaited_once_with(
-        config.zone, include_catalog_names=True
-    )
+    state.client.get_zone_options.assert_awaited_once_with(config.zone, include_catalog_names=True)
     state.try_failover_endpoints.assert_not_awaited()
 
 
@@ -1228,9 +1224,7 @@ async def test_auto_attempt_failback_recovers_to_writable_primary(
         username=config.technitium_username,
         password=config.technitium_password,
     )
-    temp_client.get_zone_options.assert_awaited_once_with(
-        config.zone, include_catalog_names=True
-    )
+    temp_client.get_zone_options.assert_awaited_once_with(config.zone, include_catalog_names=True)
     temp_client.close.assert_awaited_once_with()
     state.set_active_endpoint.assert_awaited_once_with("http://primary:5380")
     state.update_status.assert_awaited_once_with(
