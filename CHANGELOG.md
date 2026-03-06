@@ -2,6 +2,63 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v1.0.5] - 2026-03-06
+
+**Changed:**
+
+- **Separated Failback from Token Renewal**: Refactored health check and failback logic into independent background task
+  - Created new `auto_attempt_failback()` function that runs continuously at configurable polling interval
+  - Added `HEALTH_POLLING_INTERVAL_SECONDS` environment variable (default: 15 seconds) for failback polling frequency
+  - Removed failback logic from `auto_renew_technitium_token()` to keep it focused solely on token renewal (20 min success / 1 min failure intervals)
+  - Added `_run_failback_health_check_cycle()`, `_validate_primary_endpoint_health()`, `_attempt_failback_to_primary()`, and `_probe_primary_endpoint()` functions
+  - Added `PrimaryProbeResult` dataclass to encapsulate primary endpoint probe results
+  - This separation enables much faster failback detection (15s default vs previous 5-minute minimum) while maintaining stable token renewal timing
+- **Enhanced AppState Management**:
+  - Added `_failback_task` field to track the failback background task
+  - Added `start_failback_attempts()` method to launch failback polling loop
+  - Updated `close()` method to cancel both token renewal and failback tasks gracefully
+  - Failback task starts automatically during `setup_technitium_connection()`
+- **Improved Error Sanitization** in handlers.py:
+  - Enhanced parameter redaction logic with explicit `redaction_string` variable and clearer regex replacement implementation
+  - Improved maintainability and readability of sensitive data filtering
+- **Configuration Enhancement**:
+  - Added `health_polling_interval_seconds: float = 15.0` to `Config` class for configurable health check polling
+
+**Added:**
+
+- **Comprehensive Test Coverage for Failback Polling**:
+  - Added 491+ lines of new tests in `test_main.py` covering:
+    - `test_auto_attempt_failback_continuous_polling()` - validates continuous polling loop
+    - `test_auto_attempt_failback_cancellation()` - ensures clean task cancellation
+    - `test_run_failback_cycle_validates_current_and_attempts_primary()` - validates health check cycle
+    - `test_validate_primary_endpoint_health_success()` / `_failure()` - endpoint validation tests
+    - `test_attempt_failback_success()` / `_skips_when_already_on_primary()` - failback execution tests
+    - `test_probe_primary_endpoint_*()` - comprehensive probing tests for various scenarios (success, auth failure, connection error, zone errors, etc.)
+    - `test_normalize_catalog_membership()` - catalog zone normalization tests
+  - Added 179+ lines of new tests in `test_app_state.py` covering:
+    - `test_start_failback_attempts()` - validates failback task startup
+    - `test_start_failback_attempts_does_not_restart_running_task()` - prevents duplicate tasks
+    - `test_close_cancels_both_token_and_failback_tasks()` - validates cleanup of both background tasks
+  - Added 9 lines of resilience tests, 13 lines of client tests
+  - **Removed** `test_python_version.py` (13 lines) - no longer needed
+
+**CI Dependencies:**
+
+- Bumped `codecov/codecov-action` from v4 to v5
+- Bumped `sonarsource/sonarcloud-github-action` from v2 to v5
+- Bumped `docker/login-action` from v3 to v4
+- Bumped `docker/setup-qemu-action` from v3 to v4
+
+**Documentation:**
+
+- **Failover/Failback Documentation Improvements**: Updated all documentation to reflect independent polling-based health check implementation
+  - Documented `HEALTH_POLLING_INTERVAL_SECONDS` environment variable (default: 15 seconds) in README, MONITORING, CREDENTIALS_SETUP, and ARCHITECTURE docs
+  - Clarified that failover is event-driven (on connection errors) while failback uses independent polling loop
+  - Updated architecture diagrams and timing tables to show separated `auto_attempt_failback()` and `auto_renew_technitium_token()` functions
+  - Corrected environment variable examples in architecture doc (replaced obsolete `TECHNITIUM_API_URL`/`TECHNITIUM_API_TOKEN`)
+- **Technitium Cluster References**: Added external documentation links (technitium.com/dns, GitHub APIDOCS, RFC 9432) across README, MONITORING, CREDENTIALS_SETUP, ARCHITECTURE docs
+- **README Enhancements**: Added "Cluster Failover Behavior" section explaining polling model with primary/secondary role detection
+
 ## [v1.0.4] - 2026-03-03
 
 **Fixed & Improved:**

@@ -128,6 +128,7 @@ volumes:
 | `LISTEN_ADDRESS` | No | `0.0.0.0` | Address to bind the webhook server |
 | `REQUESTS_PER_MINUTE` | No | `1000` | Rate limiting: requests per minute |
 | `RATE_LIMIT_BURST` | No | `10` | Rate limiting: burst allowance |
+| `HEALTH_POLLING_INTERVAL_SECONDS` | No | `15.0` | Poll interval for endpoint health checks and automatic primary failback |
 
 ## Troubleshooting
 
@@ -166,6 +167,8 @@ volumes:
 ## Additional Resources
 
 - [Technitium DNS Documentation](https://technitium.com/dns/)
+- [Technitium DNS HTTP API Documentation](https://github.com/TechnitiumSoftware/DnsServer/blob/master/APIDOCS.md)
+- [Catalog Zones (RFC 9432)](https://datatracker.ietf.org/doc/rfc9432/)
 - [Kubernetes Secrets](https://kubernetes.io/docs/concepts/configuration/secret/)
 - [Deployment Guide](deployment/kubernetes.md)
 - [Security Best Practices](SECURITY.md)

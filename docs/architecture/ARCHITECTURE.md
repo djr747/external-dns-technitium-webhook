@@ -140,9 +140,11 @@ args:
 > `HEALTH_PORT` are available only for local testing and are ignored by
 > ExternalDNS.
 
-- `TECHNITIUM_API_URL` - DNS server URL
-- `TECHNITIUM_API_TOKEN` - Authentication token
-- `DOMAIN_FILTER` - Domain filtering
+- `TECHNITIUM_URL` - Primary Technitium API endpoint
+- `TECHNITIUM_USERNAME` / `TECHNITIUM_PASSWORD` - Authentication credentials
+- `TECHNITIUM_FAILOVER_URLS` - Optional semicolon-separated fallback endpoints
+- `HEALTH_POLLING_INTERVAL_SECONDS` - Poll interval for endpoint health and automatic failback checks
+- `DOMAIN_FILTERS` - Semicolon-separated domain allowlist
 - `LISTEN_ADDRESS` - Bind address for FastAPI (port itself is fixed)
 - `LOG_LEVEL` - Logging verbosity
 
@@ -164,8 +166,9 @@ The webhook provides automatic failover to read-only replicas and intelligent fa
 
 - **`resilience.py`** - Circuit breaker implementation (CLOSED/OPEN/HALF_OPEN states)
 - **`app_state.py:try_failover_endpoints()`** - Rotates through fallback endpoints and detects cluster role (primary vs secondary)
-- **`app_state.py:try_failback_to_primary()`** - Intelligently fails back when primary recovers and is writable
-- **`main.py:auto_renew_technitium_token()`** - Dual-timing: token renewal (20/1 min) + failback checks (5 min)
+- **`main.py:auto_attempt_failback()`** - Polls endpoint health and probes primary recovery on a configurable interval
+- **`main.py:_attempt_failback_to_primary()`** - Performs writable-primary probe and switches active endpoint on success
+- **`main.py:auto_renew_technitium_token()`** - Token renewal loop (20-minute success interval, 1-minute failure retry)
 
 **Failover Flow:**
 
@@ -188,10 +191,10 @@ graph TD
 
 ```mermaid
 graph TD
-    A["Every 5 minutes<br/>if enough time elapsed"] --> B["Call try_failback_to_primary()"]
+    A["Every HEALTH_POLLING_INTERVAL_SECONDS<br/>default 15s"] --> B["Run auto_attempt_failback() cycle"]
     B --> C["Attempt connection<br/>to primary endpoint"]
     C --> D{"Connection<br/>succeeds?"}
-    D -->|No| E["Retry in 5 min"]
+    D -->|No| E["Retry on next poll interval"]
     D -->|Yes| F["Query zone status<br/>on primary"]
     F --> G{"Primary is<br/>writable?"}
     G -->|No| H["Fail back declined<br/>primary still read-only"]
@@ -204,12 +207,13 @@ graph TD
 | --- | --- | --- |
 | Token renewal (success) | 20 minutes | After successful login |
 | Token renewal (failure) | 1 minute | After login error |
-| Failback checks | 5 minutes | **Independent** of token renewal |
+| Health/failback checks | `HEALTH_POLLING_INTERVAL_SECONDS` (default 15s) | **Independent** of token renewal |
 | Circuit breaker probe | 60 seconds | When circuit is OPEN |
 
 This dual-timing ensures:
+
 - Fast token refresh on errors (1 min)
-- Frequent primary recovery detection (5 min)
+- Frequent primary recovery detection (15s by default)
 - No thundering herd (staggered timers)
 
 ### 3. Technitium DNS Server (External Component)
@@ -223,6 +227,14 @@ This dual-timing ensures:
 - `GET /api/zones/records/get` - Record retrieval
 - `GET /api/zones/records/add` - Record creation
 - `GET /api/zones/records/delete` - Record deletion
+
+**Technitium Cluster References:**
+
+- [Technitium DNS Server features (includes clustering and catalog zones)](https://technitium.com/dns/)
+- [Technitium DNS HTTP API documentation](https://github.com/TechnitiumSoftware/DnsServer/blob/master/APIDOCS.md)
+- [Catalog Zones RFC 9432](https://datatracker.ietf.org/doc/rfc9432/)
+
+See also: [README failover overview](../../README.md#cluster-failover-behavior)
 
 ## Data Flow
 

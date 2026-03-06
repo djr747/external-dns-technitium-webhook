@@ -12,7 +12,7 @@ FastAPI webhook provider that lets [ExternalDNS](https://github.com/kubernetes-s
 ## Highlights
 
 - Async-first for network I/O with graceful startup/shutdown and token auto-renewal
-- **Cluster-aware failover & intelligent failback**: Automatic detection of primary vs secondary nodes with 5-minute failback checks; read operations work on all nodes, writes only on primary
+- **Cluster-aware failover & intelligent failback**: Continuous health polling with automatic primary/secondary role detection; read operations can run on secondary nodes, writes require a writable primary
 - Technitium client with failover rotation, zone auto-create, and catalog enrollment
 - 30-second in-memory cache for `get_records` responses with automatic invalidation on add/delete requests
 - Circuit breaker (CLOSED/OPEN/HALF_OPEN) for fast-fail on Technitium connection failures
@@ -78,8 +78,24 @@ Environment variables map directly to `external_dns_technitium_webhook.config.Co
 | `CIRCUIT_BREAKER_FAILURE_THRESHOLD` | ❌ | `5` | Consecutive failures before the circuit opens |
 | `CIRCUIT_BREAKER_TIMEOUT` | ❌ | `60.0` | Seconds the circuit stays open before allowing a probe request |
 | `RECORDS_CACHE_TTL_SECONDS` | ❌ | `0.0` | TTL (seconds) for get_records response cache; `0` disables caching |
+| `HEALTH_POLLING_INTERVAL_SECONDS` | ❌ | `15.0` | Interval (seconds) for endpoint health polling and automatic failback checks |
 | `LISTEN_PORT` | ❌ | `8888` | **Fixed** by ExternalDNS; not configurable in production (used only by local tests) |
 | `HEALTH_PORT` | ❌ | `8080` | **Fixed** by ExternalDNS; Kubernetes probes target this port |
+
+### Cluster Failover Behavior
+
+When `TECHNITIUM_FAILOVER_URLS` is configured, the webhook uses a polling-based failover model:
+
+1. Connection errors trigger immediate endpoint failover attempts.
+2. The active endpoint is checked for role and writability (primary vs secondary/read-only).
+3. While running on a failover node, the webhook probes the configured primary endpoint every `HEALTH_POLLING_INTERVAL_SECONDS`.
+4. Automatic failback occurs only when the primary is reachable and writable.
+
+For Technitium cluster background and API details, see:
+
+- [Technitium DNS Server features (includes clustering and catalog zones)](https://technitium.com/dns/)
+- [Technitium DNS HTTP API documentation](https://github.com/TechnitiumSoftware/DnsServer/blob/master/APIDOCS.md)
+- [Technitium Catalog Zones RFC reference (RFC 9432)](https://datatracker.ietf.org/doc/rfc9432/)
 
 ## Security & Container Image
 

@@ -6,6 +6,7 @@ import ssl
 from typing import Any
 from unittest.mock import AsyncMock
 
+import httpx
 import pytest
 from pydantic import BaseModel
 from pytest_mock import MockerFixture
@@ -1304,24 +1305,16 @@ async def test_add_record_with_optional_parameters(
 async def test_parse_response_malformed_json_raises(client: TechnitiumClient) -> None:
     """The low-level parser should wrap JSON errors in TechnitiumError."""
 
-    class DummyResp:
-        def json(self) -> Any:  # type: ignore[override]
-            raise ValueError("not json")
-
     with pytest.raises(TechnitiumError, match="Failed to parse JSON response"):
-        client._parse_response(DummyResp())  # type: ignore[arg-type]
+        client._parse_response(httpx.Response(200, content=b"not json"))
 
 
 @pytest.mark.asyncio
 async def test_parse_response_unexpected_format(client: TechnitiumClient) -> None:
     """A non-dict JSON body triggers an error."""
 
-    class DummyResp2:
-        def json(self) -> Any:  # type: ignore[override]
-            return [1, 2, 3]
-
     with pytest.raises(TechnitiumError, match="Unexpected response format"):
-        client._parse_response(DummyResp2())  # type: ignore[arg-type]
+        client._parse_response(httpx.Response(200, json=[1, 2, 3]))
 
 
 @pytest.mark.asyncio
