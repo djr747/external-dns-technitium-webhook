@@ -934,7 +934,7 @@ async def test_lifespan_waits_for_setup_task_on_shutdown(mocker: MockerFixture) 
     setup_lock.release()
 
     # Wait for lifespan to complete
-    _ = await lifespan_task
+    await asyncio.gather(lifespan_task)
 
     # Verify setup was called and we logged waiting
     setup_mock.assert_called_once_with(state)
