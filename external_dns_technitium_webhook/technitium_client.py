@@ -4,7 +4,7 @@ import gzip
 import logging
 import ssl
 import time
-from typing import Any, Self, TypeVar, cast
+from typing import Any, Self, cast
 from urllib.parse import urlencode
 
 import httpx
@@ -24,8 +24,6 @@ from .models import (
 from .resilience import CircuitBreaker, CircuitBreakerOpenError
 
 logger = logging.getLogger(__name__)
-
-T = TypeVar("T", bound=BaseModel)
 
 
 class _LatencyTracker:
@@ -295,7 +293,12 @@ class TechnitiumClient:
 
         return result
 
-    async def _post(self, endpoint: str, payload: dict[str, Any], response_model: type[T]) -> T:
+    async def _post[T: BaseModel](
+        self,
+        endpoint: str,
+        payload: dict[str, Any],
+        response_model: type[T],
+    ) -> T:
         """Make an authenticated POST request.
 
         Args:

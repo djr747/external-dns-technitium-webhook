@@ -40,8 +40,9 @@ import logging
 import re
 from collections.abc import Mapping
 
-# Remove control characters and newlines that could corrupt logs
-_CONTROL_RE = re.compile(r"[\x00-\x1f\x7f\r\n]+")
+# Remove ASCII control characters (0x00-0x1F and DEL 0x7F).
+# Newlines are included in 0x00-0x1F, so no explicit \r/\n is needed.
+_CONTROL_RE = re.compile(r"[\x00-\x1f\x7f]+")
 
 
 def _sanitize_value(value: str | None, max_len: int = 256) -> str | None:

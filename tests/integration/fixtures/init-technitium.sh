@@ -33,7 +33,7 @@ while [[ $RETRY_COUNT -lt $MAX_RETRIES ]]; do
 done
 
 if [[ $RETRY_COUNT -eq $MAX_RETRIES ]]; then
-  echo "✗ ERROR: Technitium API did not become ready after ${MAX_RETRIES} attempts"
+  echo "✗ ERROR: Technitium API did not become ready after ${MAX_RETRIES} attempts" >&2
   exit 1
 fi
 
@@ -51,7 +51,7 @@ if echo "$LOGIN_RESPONSE" | grep -q '"status":"ok"'; then
   TOKEN=$(echo "$LOGIN_RESPONSE" | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
 
   if [[ -z "$TOKEN" ]]; then
-    echo "✗ ERROR: Could not extract authentication token"
+    echo "✗ ERROR: Could not extract authentication token" >&2
     exit 1
   fi
 
@@ -73,8 +73,8 @@ if echo "$LOGIN_RESPONSE" | grep -q '"status":"ok"'; then
     echo "⚠ Failed to add user to DNS Administrators group: $GROUP_RESPONSE"
   fi
 else
-  echo "✗ ERROR: Could not authenticate to Technitium"
-  echo "Response: $LOGIN_RESPONSE"
+  echo "✗ ERROR: Could not authenticate to Technitium" >&2
+  echo "Response: $LOGIN_RESPONSE" >&2
   exit 1
 fi
 

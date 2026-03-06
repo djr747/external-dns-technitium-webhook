@@ -113,11 +113,40 @@ time="2025-11-02T20:40:00Z" level=debug module=main msg="Successfully renewed Te
 **Behavior**:
 
 - Returns `200 OK` with `{"status": "ok"}` when service is ready and circuit breaker is closed
-- Returns `503 Service Unavailable` when not ready **or** when the circuit breaker is open
-  - When the circuit is open the body includes `"circuit_breaker": "open"` to distinguish this case
-    from a normal startup/readiness failure
+- Returns `503 Service Unavailable` when:
+  - During the **startup delay period** (default 10 seconds) while initializing Technitium connections
+  - Not yet connected to Technitium
+  - Circuit breaker is open (distinguishable by `"circuit_breaker": "open"` in response)
 - Checks main API server connectivity (port 8888)
 - Runs on separate thread to isolate from main API load
+
+**Startup Sequence (Non-Blocking)**:
+The webhook server starts accepting connections on port 8888 **immediately**, even during Technitium initialization:
+
+1. Pod starts
+2. Server binds to port 8888 and accepts connections
+3. Technitium setup runs in background (connecting, authenticating, checking zones)
+4. Handler requests return `503 Service Unavailable` until Technitium is ready
+5. After Technitium is ready, handlers return normal responses
+
+This prevents "connection refused" errors. ExternalDNS can connect immediately and retries until the service is ready.
+
+**Startup Delay**: 
+The health check endpoint (port 8080) includes a configurable grace period (default `STARTUP_DELAY_SECONDS=10`) before reporting ready. This gives Technitium initialization time to complete.
+
+**Tuning Startup Delay**:
+If your Technitium DNS server has high latency or initial zone checks are slow, increase `STARTUP_DELAY_SECONDS`:
+
+```bash
+# For slow Technitium connections (WAN, high latency)
+STARTUP_DELAY_SECONDS=30
+
+# For very fast local connections
+STARTUP_DELAY_SECONDS=5
+
+# To disable (not recommended)
+STARTUP_DELAY_SECONDS=0
+```
 
 **Kubernetes Integration**:
 
@@ -140,6 +169,8 @@ readinessProbe:
   timeoutSeconds: 3
   failureThreshold: 2
 ```
+
+> **Note**: The `initialDelaySeconds` in Kubernetes probes should be **less than** your `STARTUP_DELAY_SECONDS` environment variable. This allows the health server to start reporting status during the grace period. For example, if `STARTUP_DELAY_SECONDS=15`, use `initialDelaySeconds: 5` in the probe configuration.
 
 ### Performance Monitoring (Current)
 
