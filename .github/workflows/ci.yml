@@ -96,7 +96,7 @@ jobs:
           test -f pytest-report.xml && ls -l pytest-report.xml || echo "pytest-report.xml not found"
 
       - name: Upload coverage to Codecov (branch coverage)
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         with:
           files: coverage.xml
           verbose: true
