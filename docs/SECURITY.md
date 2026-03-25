@@ -35,9 +35,9 @@ This project implements several security measures:
 - **Semgrep**: Pattern-based security vulnerability detection
 - **CodeQL**: Advanced semantic code analysis
 
-### Container Security
+-### Container Security
 
-- **Trivy**: Container image vulnerability scanning
+- **Snyk**: Container image vulnerability scanning
 - **Chainguard Python**: Ultra-minimal base image with zero CVEs, daily security updates, SLSA Level 3 provenance
 - Multi-stage Docker builds to minimize attack surface
 - Non-root user in container

@@ -51,7 +51,7 @@ When you **merge to main**, the release workflow automatically:
    - Builds multi-arch Docker image (linux/amd64, linux/arm64)
    - Pushes to GitHub Container Registry
    - Generates and uploads SBOM (SPDX format)
-   - Runs Trivy security scan
+   - Runs Snyk security scan
    - Signs image with Cosign
 6. **update-changelog**: Updates CHANGELOG.md with release info
 
@@ -171,7 +171,7 @@ When a release is created:
    - Uploaded to GitHub Release
 
 3. **Security Scan Results**
-   - Trivy scan: Known CVE vulnerabilities
+   - Snyk scan: Known CVE vulnerabilities
    - SARIF report: Upload to GitHub Security tab
 
 4. **GitHub Release**
