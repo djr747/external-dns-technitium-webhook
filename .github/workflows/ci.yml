@@ -96,7 +96,7 @@ jobs:
           test -f pytest-report.xml && ls -l pytest-report.xml || echo "pytest-report.xml not found"
 
       - name: Upload coverage to Codecov (branch coverage)
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           files: coverage.xml
           verbose: true
@@ -145,10 +145,10 @@ jobs:
           echo "tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Build Docker image for amd64
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         id: build-amd64
         with:
           context: .
@@ -187,10 +187,10 @@ jobs:
           echo "tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Build Docker image for arm64
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         id: build-arm64
         with:
           context: .
@@ -473,7 +473,7 @@ jobs:
     if: ${{ success() &&!(github.event_name == 'push' && github.ref == 'refs/heads/main') }}
     steps:
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Log in to Container Registry
         uses: docker/login-action@v4
