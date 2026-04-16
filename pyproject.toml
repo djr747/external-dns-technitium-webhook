@@ -34,7 +34,7 @@ dependencies = [
     "httpx==0.28.1",
     "pydantic==2.12.5",
     "pydantic-settings==2.13.1",
-    "prometheus-client==0.24.1",
+    "prometheus-client==0.25.0",
 ]
 
 [project.optional-dependencies]
@@ -53,7 +53,7 @@ dev = [
     "semgrep",
     "tox>=4.0",
     "types-urllib3",
-    "prometheus-client==0.24.1",
+    "prometheus-client==0.25.0",
 ]
 
 [project.urls]
