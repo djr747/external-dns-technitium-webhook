@@ -43,13 +43,6 @@ All notable changes to this project will be documented in this file.
   - Kubernetes probe timing guidance relative to `STARTUP_DELAY_SECONDS`
 - Updated `helm/values-webhook-example.yaml` comments to clarify probe inheritance and startup-delay tuning recommendations.
 
-**Quality:**
-
-- Full quality pipeline validated after changes:
-  - `make format`, `make lint`, and `make test` passing
-  - Unit tests at `396 passed`
-  - Coverage at `100%` across project modules
-
 ## [v1.0.5] - 2026-03-06
 
 **Changed:**

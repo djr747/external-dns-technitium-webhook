@@ -7,7 +7,7 @@ and how we maintain secure base images and dependencies.
 
 ## Supported versions
 
-We run continuous security scanning (CodeQL, Trivy, Snyk, Grype) in CI and aim
+We run continuous security scanning (CodeQL, Snyk, Grype) in CI and aim
 to keep the container base image minimal and up-to-date. The project uses a
 Chainguard Python base image for runtime to reduce OS-level CVEs.
 
@@ -39,7 +39,7 @@ also run daily dependency scans and will triage new findings in priority order.
 ## Security tools we run
 
 - CodeQL (code-scanning)
-- Trivy / Grype (container image scanning)
+- Snyk / Grype (container image scanning)
 - Snyk (dependency scanning)
 - bandit / semgrep (additional static analysis)
 

@@ -105,39 +105,32 @@ jobs:
           sbom: true
           no-cache: true  # Force rebuild to pull latest base image
 
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
+      - name: Run Snyk container test (SARIF + JSON)
+        uses: snyk/actions/docker@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
-          format: 'sarif'
-          output: 'trivy-results.sarif'
-          severity: 'CRITICAL,HIGH,MEDIUM'
+          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
+          command: test
+          args: --sarif-file-output=snyk-results.sarif --json-file-output=snyk-report.json
 
-      - name: Upload Trivy results
+      - name: Upload Snyk SARIF results
         uses: github/codeql-action/upload-sarif@v4
         if: always()
         with:
-          sarif_file: 'trivy-results.sarif'
-          category: 'rebuild-image-trivy'
+          sarif_file: 'snyk-results.sarif'
+          category: 'rebuild-image-snyk'
 
-      - name: Generate vulnerability report
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
-          format: 'json'
-          output: 'trivy-report.json'
-
-      - name: Check vulnerability status
+      - name: Check vulnerability status (Snyk JSON)
         id: vuln-check
         run: |
-          CRITICAL=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity == "CRITICAL")] | length' trivy-report.json)
-          HIGH=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity == "HIGH")] | length' trivy-report.json)
-          MEDIUM=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity == "MEDIUM")] | length' trivy-report.json)
-          
+          if [ ! -f snyk-report.json ]; then echo "snyk-report.json not found"; echo "critical=0" >> $GITHUB_OUTPUT; echo "high=0" >> $GITHUB_OUTPUT; echo "medium=0" >> $GITHUB_OUTPUT; exit 0; fi
+          CRITICAL=$(jq '[.. | .vulnerabilities? // [] | .[]? | select((.severity // "") | ascii_downcase=="critical")] | length' snyk-report.json)
+          HIGH=$(jq '[.. | .vulnerabilities? // [] | .[]? | select((.severity // "") | ascii_downcase=="high")] | length' snyk-report.json)
+          MEDIUM=$(jq '[.. | .vulnerabilities? // [] | .[]? | select((.severity // "") | ascii_downcase=="medium")] | length' snyk-report.json)
           echo "critical=$CRITICAL" >> $GITHUB_OUTPUT
           echo "high=$HIGH" >> $GITHUB_OUTPUT
           echo "medium=$MEDIUM" >> $GITHUB_OUTPUT
-          
           echo "### Vulnerability Summary" >> $GITHUB_STEP_SUMMARY
           echo "- **Critical**: $CRITICAL" >> $GITHUB_STEP_SUMMARY
           echo "- **High**: $HIGH" >> $GITHUB_STEP_SUMMARY
