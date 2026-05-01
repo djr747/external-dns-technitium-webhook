@@ -14,7 +14,7 @@ This repository uses a comprehensive CI/CD pipeline with security best practices
 - **Test**: Python 3.13 with 95% coverage requirement (actual coverage: 99%)
 - **Security Python**: Semgrep and pip-audit CVE scanning
 - **Snyk Security**: Vulnerability detection with Snyk
-- **Docker Build**: Container build and multi-scanner security check (Trivy + Snyk)
+  - **Docker Build**: Container build and multi-scanner security check (Snyk)
 
 **Key Features:**
 - Single version Python testing (3.13)
@@ -28,7 +28,7 @@ This repository uses a comprehensive CI/CD pipeline with security best practices
 
 **Jobs:**
 - **Build and Push**: Multi-arch (amd64, arm64) container builds
-- **Vulnerability Scan**: Trivy and Snyk container scanning
+ - **Vulnerability Scan**: Snyk container scanning
 - **Sign Image**: Cosign image signing for releases
 
 **Key Features:**
@@ -45,7 +45,7 @@ This repository uses a comprehensive CI/CD pipeline with security best practices
 
 **Jobs:**
 - **CodeQL Analysis**: GitHub's semantic code analysis
-- **Trivy Scan**: Container vulnerability scanning
+ - **Container Scan (Snyk)**: Container vulnerability scanning
 - **Dependency Scan**: pip-audit for Python CVEs
 - **Code Scan**: Bandit and Semgrep static analysis
 - **Snyk Security**: Multi-layer vulnerability detection
@@ -99,18 +99,17 @@ This repository uses a comprehensive CI/CD pipeline with security best practices
 
 ### CVE Scanning
 
-The pipeline includes **5 layers of CVE detection**:
+The pipeline includes multiple layers of CVE detection:
 
-1. **Trivy** - Container and filesystem vulnerability scanning
-2. **Snyk** - Code, dependency, and container scanning
-3. **pip-audit** - Python dependency CVE database
-4. **Grype** - SBOM-based vulnerability detection
-5. **GitHub Dependabot** - Automated dependency updates
+1. **Snyk** - Container, code, and dependency vulnerability scanning
+2. **pip-audit** - Python dependency CVE database
+3. **Grype** - SBOM-based vulnerability detection
+4. **GitHub Dependabot** - Automated dependency updates
 
 ### Secret Protection
 
 - **GitHub Secret Scanning**: Native GitHub protection
-- **Trivy Secrets**: Container image secret detection
+- **Snyk Secrets**: Container image secret detection
 
 ### Code Security
 
@@ -128,11 +127,10 @@ All security findings are uploaded to GitHub Security tab via SARIF:
 - View aggregated results from all scanners
 - Track remediation over time
 
-### Artifacts
 
 Security reports retained for 90 days:
-- Trivy JSON/SARIF reports
-- Snyk vulnerability reports
+### Artifacts
+- Snyk JSON/SARIF reports
 - pip-audit CVE lists
 - Bandit security findings
 - SBOM files (SPDX + CycloneDX)
@@ -260,6 +258,6 @@ Current project coverage: 99% (933/941 lines)
 
 - [GitHub Actions Documentation](https://docs.github.com/en/actions)
 - [Snyk Documentation](https://docs.snyk.io)
-- [Trivy Documentation](https://aquasecurity.github.io/trivy/)
+ 
 - [Cosign Documentation](https://docs.sigstore.dev/cosign/overview/)
 - [SBOM Standards](https://www.cisa.gov/sbom)

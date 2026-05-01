@@ -53,8 +53,8 @@ jobs:
         with:
           category: "/language:${{matrix.language}}"
 
-  trivy-scan:
-    name: Trivy Container Scan
+  container-scan:
+    name: Container Scan (Snyk)
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -65,41 +65,39 @@ jobs:
       - name: Build Docker image for scanning
         run: docker build -t external-dns-technitium-webhook:${{ github.sha }} .
 
-      - name: Run Trivy vulnerability scanner (SARIF)
-        uses: aquasecurity/trivy-action@master
+      - name: Run Snyk container scan (SARIF)
+        uses: snyk/actions/docker@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
-          image-ref: external-dns-technitium-webhook:${{ github.sha }}
-          format: 'sarif'
-          output: 'trivy-results.sarif'
-          severity: 'CRITICAL,HIGH,MEDIUM'
-          vuln-type: 'os,library'
-          scanners: 'vuln,secret,config'
+          image: external-dns-technitium-webhook:${{ github.sha }}
+          command: test
+          args: --sarif-file-output=snyk-container.sarif --json-file-output=snyk-container.json --severity-threshold=low
 
-      - name: Upload Trivy SARIF to GitHub Security
+      - name: Upload Snyk container SARIF to GitHub Security
         uses: github/codeql-action/upload-sarif@v4
         if: always()
         with:
-          sarif_file: 'trivy-results.sarif'
+          sarif_file: snyk-container.sarif
 
-      - name: Run Trivy vulnerability scanner (JSON)
-        uses: aquasecurity/trivy-action@master
+      - name: Upload Snyk JSON results
+        uses: actions/upload-artifact@v7
+        if: always()
         with:
-          image-ref: external-dns-technitium-webhook:${{ github.sha }}
-          format: 'json'
-          output: 'trivy-results.json'
-          severity: 'CRITICAL,HIGH,MEDIUM,LOW'
+          name: snyk-container-json
+          path: snyk-container.json
+          retention-days: 90
 
-      - name: Generate Trivy summary
+      - name: Generate Snyk container summary
         if: always()
         run: |
-          echo "### Trivy Vulnerability Scan Results" >> $GITHUB_STEP_SUMMARY
+          echo "### Snyk Container Vulnerability Scan Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          
-          CRITICAL=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity == "CRITICAL")] | length' trivy-results.json)
-          HIGH=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity == "HIGH")] | length' trivy-results.json)
-          MEDIUM=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity == "MEDIUM")] | length' trivy-results.json)
-          LOW=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity == "LOW")] | length' trivy-results.json)
-          
+          if [ ! -f snyk-container.json ]; then echo "No Snyk JSON output found" >> $GITHUB_STEP_SUMMARY; exit 0; fi
+          CRITICAL=$(jq '[.. | .vulnerabilities? // [] | .[]? | select((.severity // "") | ascii_downcase=="critical")] | length' snyk-container.json)
+          HIGH=$(jq '[.. | .vulnerabilities? // [] | .[]? | select((.severity // "") | ascii_downcase=="high")] | length' snyk-container.json)
+          MEDIUM=$(jq '[.. | .vulnerabilities? // [] | .[]? | select((.severity // "") | ascii_downcase=="medium")] | length' snyk-container.json)
+          LOW=$(jq '[.. | .vulnerabilities? // [] | .[]? | select((.severity // "") | ascii_downcase=="low")] | length' snyk-container.json)
           echo "| Severity | Count |" >> $GITHUB_STEP_SUMMARY
           echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
           echo "| 🔴 Critical | $CRITICAL |" >> $GITHUB_STEP_SUMMARY
@@ -107,13 +105,7 @@ jobs:
           echo "| 🟡 Medium | $MEDIUM |" >> $GITHUB_STEP_SUMMARY
           echo "| 🔵 Low | $LOW |" >> $GITHUB_STEP_SUMMARY
 
-      - name: Upload Trivy results artifact
-        uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: trivy-results
-          path: trivy-results.json
-          retention-days: 90
+      # Trivy artifact step removed; Snyk JSON is uploaded earlier as 'snyk-container-json'
 
   dependency-scan:
     name: Dependency Security Scan
@@ -362,7 +354,7 @@ jobs:
   security-summary:
     name: Security Summary Report
     runs-on: ubuntu-latest
-    needs: [trivy-scan, dependency-scan, code-scan, sbom-generation]
+    needs: [container-scan, dependency-scan, code-scan, sbom-generation]
     if: always()
     permissions:
       contents: read
@@ -375,7 +367,7 @@ jobs:
           echo "All security scans have completed. Check the Security tab for detailed results." >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Scans performed:**" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ Container vulnerability scan (Trivy)" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Container vulnerability scan (Snyk)" >> $GITHUB_STEP_SUMMARY
           echo "- ✅ Dependency CVE check (pip-audit)" >> $GITHUB_STEP_SUMMARY
           echo "- ✅ Code security analysis (Bandit, Semgrep)" >> $GITHUB_STEP_SUMMARY
           echo "- ✅ Snyk vulnerability detection" >> $GITHUB_STEP_SUMMARY
