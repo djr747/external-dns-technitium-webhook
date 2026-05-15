@@ -30,10 +30,10 @@ dependencies = [
     # are known to be compatible with CPython 3.14 when no upper bound
     # is present in their metadata.
     "fastapi==0.136.1",
-    "uvicorn[standard]==0.46.0",
+    "uvicorn[standard]==0.47.0",
     "httpx==0.28.1",
-    "pydantic==2.13.3",
-    "pydantic-settings==2.14.0",
+    "pydantic==2.13.4",
+    "pydantic-settings==2.14.1",
     "prometheus-client==0.25.0",
 ]
 
