@@ -19,7 +19,7 @@ provider:
     image:
       repository: ghcr.io/djr747/external-dns-technitium-webhook
       tag: 1 # Or replace with desired release tag
-      imagePullPolicy: Always
+      imagePullPolicy: IfNotPresent # Avoid cold-start pull delays that can race ExternalDNS webhook startup checks
     resources:
       requests:
         cpu: 100m
@@ -65,5 +65,8 @@ provider:
 #   secrets (valueFrom.secretKeyRef) or mount secrets via volumes and extraVolumeMounts.
 # - If you run the webhook as a sidecar (inside ExternalDNS pod), use the chart's
 #   `extraContainers` block instead of `webhook` and populate a container spec there.
+# - In sidecar mode, prefer `imagePullPolicy: IfNotPresent` on stable tags. `Always` can
+#   delay webhook container start long enough for ExternalDNS to fail its startup webhook
+#   negotiation (`failed to connect to webhook`).
 # - Health probes are inherited from the External DNS Helm chart defaults (/healthz endpoint).
 #   STARTUP_DELAY_SECONDS: Increase to 20-30 for slow/remote Technitium (WAN, high latency, self-signed SSL).

@@ -331,7 +331,7 @@ graph LR
     Push --> Actions["GitHub Actions"]
     
     Actions --> CI["ci.yml<br/>- Lint ruff<br/>- Type check mypy<br/>- Test pytest<br/>- Coverage ≥95%"]
-    Actions --> Security["security.yml<br/>- Trivy scan<br/>- Semgrep analysis<br/>- CodeQL<br/>- Grype"]
+    Actions --> Security["security.yml<br/>- Snyk scan<br/>- Semgrep analysis<br/>- CodeQL<br/>- Grype"]
     Actions --> Docker["docker.yml<br/>- Build image<br/>- Multi-arch AMD64/ARM64<br/>- Push to GHCR"]
     
     CI --> Test{Tests<br/>Pass?}
@@ -392,7 +392,7 @@ graph TB
         end
         
         subgraph DepSec["3. Dependency Security"]
-            Trivy["Trivy<br/>Container scanning"]
+            Snyk["Snyk<br/>Container scanning"]
             Grype["Grype<br/>CVE scanning"]
             PipAudit["pip-audit<br/>Package audit"]
             Snyk["Snyk<br/>Vulnerability DB"]

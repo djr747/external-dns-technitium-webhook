@@ -160,8 +160,9 @@ Thumbs.db
 *.sarif
 .codeql-db/
 .codeql-venv/
-# Trivy
-trivy-results.sarif
+# Historically Trivy outputs (replaced by Snyk)
+snyk-*.sarif
+snyk-*.json
 
 # SonarQube
 .sonarlint/
