@@ -49,7 +49,7 @@ dev = [
     "kubernetes==36.0.2",
     "ruff==0.15.15",
     "mypy==2.1.0",
-    "pyright==1.1.409",
+    "pyright==1.1.410",
     "semgrep",
     "tox>=4.0",
     "types-urllib3",
