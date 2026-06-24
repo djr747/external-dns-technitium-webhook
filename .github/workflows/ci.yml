@@ -22,7 +22,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -58,7 +58,7 @@ jobs:
         python-version: ['3.14']
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Verify matrix Python matches Chainguard base
         if: ${{ !(github.event_name == 'push' && github.ref == 'refs/heads/main') }}
@@ -133,7 +133,7 @@ jobs:
       image-tag: ${{ steps.image-tag.outputs.tag }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -176,7 +176,7 @@ jobs:
       image-tag: ${{ steps.image-tag.outputs.tag }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: Generate image tag
@@ -215,7 +215,7 @@ jobs:
       contents: read
     needs: [build-amd64]
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
