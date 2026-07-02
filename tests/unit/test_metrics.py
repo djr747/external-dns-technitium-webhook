@@ -3,6 +3,7 @@
 import contextlib
 from unittest.mock import AsyncMock, MagicMock, Mock
 
+import httpx2
 import pytest
 from fastapi.testclient import TestClient
 from prometheus_client import REGISTRY
@@ -468,15 +469,13 @@ class TestTechnitiumClientMetrics:
     @pytest.mark.asyncio
     async def test_timeout_increments_error_counter(self, mocker):
         """Test that timeout exception increments api_errors_total with timeout label."""
-        import httpx
-
         client = TechnitiumClient(base_url="http://localhost:5380")
         client.token = "test-token"
 
         mocker.patch.object(
             client._client,
             "post",
-            side_effect=httpx.TimeoutException("Connection timed out"),
+            side_effect=httpx2.TimeoutException("Connection timed out"),
         )
 
         # Patch api_errors_total at the technitium_client module level
@@ -495,15 +494,13 @@ class TestTechnitiumClientMetrics:
     @pytest.mark.asyncio
     async def test_connection_error_increments_error_counter(self, mocker):
         """Test that connection error increments api_errors_total with connection_error label."""
-        import httpx
-
         client = TechnitiumClient(base_url="http://localhost:5380")
         client.token = "test-token"
 
         mocker.patch.object(
             client._client,
             "post",
-            side_effect=httpx.ConnectError("Connection refused"),
+            side_effect=httpx2.ConnectError("Connection refused"),
         )
 
         # Patch api_errors_total at the technitium_client module level

@@ -7,7 +7,7 @@ import time
 from typing import Any, Self, cast
 from urllib.parse import urlencode
 
-import httpx
+import httpx2
 from pydantic import BaseModel
 
 from .metrics import api_errors_total, technitium_latency_seconds
@@ -165,11 +165,11 @@ class TechnitiumClient:
         else:
             logger.debug("Using system CA certificates for SSL verification")
 
-        logger.debug(f"Creating httpx.AsyncClient with verify={verify}")
-        # store the final value for testing/inspection; httpx may wrap SSL
+        logger.debug(f"Creating httpx2.AsyncClient with verify={verify}")
+        # store the final value for testing/inspection; httpx2 may wrap SSL
         # contexts internally and is harder to introspect later.
         self._verify = verify
-        self._client = httpx.AsyncClient(timeout=timeout, verify=verify)
+        self._client = httpx2.AsyncClient(timeout=timeout, verify=verify)
         self._records_cache_ttl_seconds = records_cache_ttl_seconds
         self._records_cache: dict[
             tuple[str, str | None, bool | None], tuple[float, GetRecordsResponse]
@@ -234,16 +234,16 @@ class TechnitiumClient:
         except CircuitBreakerOpenError:
             api_errors_total.labels(error_type="circuit_open").inc()
             raise
-        except httpx.TimeoutException as e:
+        except httpx2.TimeoutException as e:
             api_errors_total.labels(error_type="timeout").inc()
             # Include exception type name if the message is empty
             error_msg = str(e) if str(e) else type(e).__name__
             raise TechnitiumError(f"Request error: {error_msg}") from e
-        except httpx.HTTPStatusError as e:
+        except httpx2.HTTPStatusError as e:
             raise TechnitiumError(
                 f"Server responded with status code {e.response.status_code}"
             ) from e
-        except httpx.RequestError as e:
+        except httpx2.RequestError as e:
             api_errors_total.labels(error_type="connection_error").inc()
             # Include exception type name if the message is empty
             error_msg = str(e) if str(e) else type(e).__name__
@@ -251,7 +251,7 @@ class TechnitiumClient:
 
         return self._parse_response(response)
 
-    def _parse_response(self, response: httpx.Response) -> dict[str, Any]:
+    def _parse_response(self, response: httpx2.Response) -> dict[str, Any]:
         """Validate and extract JSON data from a Technitium API response.
 
         This method is factored out of ``_post_raw`` to reduce its cognitive

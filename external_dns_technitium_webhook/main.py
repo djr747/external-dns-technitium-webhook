@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Annotated, cast
 
-import httpx
+import httpx2
 from fastapi import Depends, FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -102,7 +102,7 @@ def _apply_structured_formatter_to_logger(name: str) -> None:
 # Configure external library loggers to use structured format
 _apply_structured_formatter_to_logger("uvicorn")
 _apply_structured_formatter_to_logger("uvicorn.access")
-_apply_structured_formatter_to_logger("httpx")
+_apply_structured_formatter_to_logger("httpx2")
 
 logger.debug("main.py imported")
 
@@ -535,7 +535,7 @@ async def auto_renew_technitium_token(state: AppState) -> None:
             sleep_for = DURATION_TOKEN_SUCCESS
         except (
             TechnitiumError,
-            httpx.HTTPError,
+            httpx2.HTTPError,
             OSError,
             CircuitBreakerOpenError,
             ValueError,
