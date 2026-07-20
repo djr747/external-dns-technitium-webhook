@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 - **pydantic-settings 2.14.2 security update**: Bumped pydantic-settings to 2.14.2 addressing upstream CVE-related fixes for secure deserialization and env-var handling.
 - **Immutable latest stable GitHub Action pins**: Pinned all GitHub Actions to their latest immutable versions (e.g. `@v5` → `@<commit-sha>`) to prevent supply-chain drift on tag reuse.
 - **Docker-tag ref-name shell hardening**: Replaced unquoted `${REF_NAME}` expansions in Docker tag logic with `set -euo pipefail` guards and explicit quoting to prevent word-splitting on hyphenated refs.
+- Correct Docker image tag sanitization in CI for branch names containing slashes.
 - **Kubernetes integration test dependency pinning**: CI integration job now installs pinned project dev dependencies via `pip install -e ".[dev]"` (including httpx2) instead of drifting unpinned `pytest pytest-asyncio httpx kubernetes` declarations, resolving collection failures caused by the integration test importing `httpx2==2.7.0`.
 - Update FastAPI, Uvicorn, Kubernetes client, Ruff, and Mypy to current Dependabot versions.
 

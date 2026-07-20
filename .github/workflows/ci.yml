@@ -504,7 +504,7 @@ jobs:
           REF_NAME: ${{ github.ref_name }}
         run: |
           # Convert to lowercase and replace slashes with hyphens
-          SAFE_TAG=$(echo "${REF_NAME}" | tr '[:upper:]' '[:lower:]' | sed 's/\\//-/g')
+          SAFE_TAG=$(echo "${REF_NAME}" | tr '[:upper:]' '[:lower:]' | sed 's/\//-/g')
           echo "tag=${SAFE_TAG}" >> $GITHUB_OUTPUT          
 
       - name: Load, Tag, and Push Images
