@@ -8,6 +8,8 @@ updates:
       interval: "daily" 
       time: "09:00"
     open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
     labels:
       - "dependencies"
       - "python"
@@ -43,6 +45,8 @@ updates:
     schedule:
       interval: "daily"
     open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
     labels:
       - "dependencies"
       - "docker"
@@ -58,6 +62,8 @@ updates:
       day: "wednesday"
       time: "09:00"
     open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
     labels:
       - "dependencies"
       - "github-actions"

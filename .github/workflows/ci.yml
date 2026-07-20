@@ -22,10 +22,10 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: '3.14'
           cache: 'pip'
@@ -58,7 +58,7 @@ jobs:
         python-version: ['3.14']
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Verify matrix Python matches Chainguard base
         if: ${{ !(github.event_name == 'push' && github.ref == 'refs/heads/main') }}
@@ -72,7 +72,7 @@ jobs:
           echo "Matrix Python version $matrix_version matches Chainguard base $chainguard_version"
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: ${{ matrix.python-version }}
           cache: 'pip'
@@ -96,7 +96,7 @@ jobs:
           test -f pytest-report.xml && ls -l pytest-report.xml || echo "pytest-report.xml not found"
 
       - name: Upload coverage to Codecov (branch coverage)
-        uses: codecov/codecov-action@v7
+        uses: codecov/codecov-action@e53489f4d376d79066609109e7a95a29eb3740b1 # v7.0.0
         with:
           files: coverage.xml
           verbose: true
@@ -107,7 +107,12 @@ jobs:
 
       - name: SonarCloud Scan
         if: ${{ github.ref == 'refs/heads/main' }}
-        uses: sonarsource/sonarcloud-github-action@v5
+# Scope: This annotation applies only to the SonarCloud action `uses:` line.
+# Rationale: Upstream semgrep-rules PR #3994 SHA-pin false positive — the action
+#   is pinned to a verified immutable 40-character SHA, not a mutable tag.
+# Expires/review: 2026-08-18
+# Compensating control: verified immutable 40-character SHA pin
+        uses: sonarsource/sonarcloud-github-action@ffc3010689be73b8e5ae0c57ce35968afd7909e8 # v5.0.0  # nosemgrep: generic.secrets.security.detected-sonarqube-docs-api-key.detected-sonarqube-docs-api-key
         with:
           projectBaseDir: .
           args: >
@@ -117,7 +122,7 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
       - name: Upload coverage report
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: coverage-report
           # tox generates HTML into "coverage_html" directory (see tox.ini)
@@ -133,7 +138,7 @@ jobs:
       image-tag: ${{ steps.image-tag.outputs.tag }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
 
@@ -145,10 +150,10 @@ jobs:
           echo "tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
 
       - name: Build Docker image for amd64
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         id: build-amd64
         with:
           context: .
@@ -161,7 +166,7 @@ jobs:
           provenance: false
 
       - name: Upload image artifact (for integration tests)
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: webhook-image-amd64
           path: /tmp/webhook-image-amd64.tar
@@ -176,7 +181,7 @@ jobs:
       image-tag: ${{ steps.image-tag.outputs.tag }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
       - name: Generate image tag
@@ -187,10 +192,10 @@ jobs:
           echo "tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
 
       - name: Build Docker image for arm64
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         id: build-arm64
         with:
           context: .
@@ -201,7 +206,7 @@ jobs:
           cache-to: type=gha,mode=max
           provenance: false
       - name: Upload image artifact (for integration tests)
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: webhook-image-arm64
           path: /tmp/webhook-image-arm64.tar
@@ -215,12 +220,12 @@ jobs:
       contents: read
     needs: [build-amd64]
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
 
       - name: Download webhook image
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: webhook-image-amd64
           path: /tmp
@@ -243,7 +248,7 @@ jobs:
           EOF
 
       - name: Set up Kind cluster
-        uses: helm/kind-action@v1
+        uses: helm/kind-action@ef37e7f390d99f746eb8b610417061a60e82a6cc # v1.14.0
         with:
           cluster_name: integration-test
           config: /tmp/kind-config.yaml
@@ -383,7 +388,7 @@ jobs:
           exit 1
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: '3.14'
           cache: 'pip'
@@ -473,31 +478,33 @@ jobs:
     if: ${{ success() &&!(github.event_name == 'push' && github.ref == 'refs/heads/main') }}
     steps:
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
 
       - name: Log in to Container Registry
-        uses: docker/login-action@v4
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download amd64 image artifact
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: webhook-image-amd64
           path: /tmp/amd64-image
       - name: Download arm64 image artifact
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: webhook-image-arm64
           path: /tmp/arm64-image
 
       - name: Sanitize ref name for Docker tag
         id: sanitize
+        env:
+          REF_NAME: ${{ github.ref_name }}
         run: |
           # Convert to lowercase and replace slashes with hyphens
-          SAFE_TAG=$(echo "${{ github.ref_name }}" | tr '[:upper:]' '[:lower:]' | sed 's/\//-/g')
+          SAFE_TAG=$(echo "${REF_NAME}" | tr '[:upper:]' '[:lower:]' | sed 's/\\//-/g')
           echo "tag=${SAFE_TAG}" >> $GITHUB_OUTPUT          
 
       - name: Load, Tag, and Push Images
