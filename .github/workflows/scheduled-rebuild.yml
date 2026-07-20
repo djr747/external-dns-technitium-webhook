@@ -106,7 +106,7 @@ jobs:
           no-cache: true  # Force rebuild to pull latest base image
 
       - name: Run Snyk container test (SARIF + JSON)
-        uses: snyk/actions/docker@de2dda699bf7276d103ed6a72a5bc5a1871ad658 # v0.5.0
+        uses: snyk/actions/docker@9adf32b1121593767fc3c057af55b55db032dc04 # v1.0.0
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
@@ -184,7 +184,7 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Monitor with Snyk
-        uses: snyk/actions/docker@de2dda699bf7276d103ed6a72a5bc5a1871ad658 # v0.5.0
+        uses: snyk/actions/docker@9adf32b1121593767fc3c057af55b55db032dc04 # v1.0.0
         continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
