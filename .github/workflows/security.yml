@@ -205,7 +205,6 @@ jobs:
     if: github.actor != 'dependabot[bot]'
     name: Snyk Security Analysis
     runs-on: ubuntu-latest
-    if: github.actor != 'dependabot[bot]'
     permissions:
       contents: read
       security-events: write
