@@ -49,7 +49,7 @@ jobs:
           pip install -e ".[dev]"
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@eec0bff2f6c15bf3f1e8a0152f94d17664a06a06 # v4
+        uses: github/codeql-action/analyze@7188fc363630916deb702c7fdcf4e481b751f97a # v4
         with:
           category: "/language:${{matrix.language}}"
 
@@ -77,7 +77,7 @@ jobs:
           args: --sarif-file-output=snyk-container.sarif --json-file-output=snyk-container.json --severity-threshold=low
 
       - name: Upload Snyk container SARIF to GitHub Security
-        uses: github/codeql-action/upload-sarif@eec0bff2f6c15bf3f1e8a0152f94d17664a06a06 # v4
+        uses: github/codeql-action/upload-sarif@7188fc363630916deb702c7fdcf4e481b751f97a # v4
         if: always()
         with:
           sarif_file: snyk-container.sarif
@@ -222,21 +222,21 @@ jobs:
           pip install -e .
 
       - name: Run Snyk to check for vulnerabilities
-        uses: snyk/actions/python@de2dda699bf7276d103ed6a72a5bc5a1871ad658 # v0.5.0
+        uses: snyk/actions/python@9adf32b1121593767fc3c057af55b55db032dc04 # v1.0.0
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
           args: --severity-threshold=medium --sarif-file-output=snyk-code.sarif
 
       - name: Upload Snyk results to GitHub Security
-        uses: github/codeql-action/upload-sarif@eec0bff2f6c15bf3f1e8a0152f94d17664a06a06 # v4
+        uses: github/codeql-action/upload-sarif@7188fc363630916deb702c7fdcf4e481b751f97a # v4
         if: always()
         with:
           sarif_file: snyk-code.sarif
 
       - name: Run Snyk monitor (track over time)
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: snyk/actions/python@de2dda699bf7276d103ed6a72a5bc5a1871ad658 # v0.5.0
+        uses: snyk/actions/python@9adf32b1121593767fc3c057af55b55db032dc04 # v1.0.0
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
@@ -256,7 +256,7 @@ jobs:
           args: --severity-threshold=high --sarif-file-output=snyk-container.sarif
 
       - name: Upload Snyk container SARIF to GitHub Security
-        uses: github/codeql-action/upload-sarif@eec0bff2f6c15bf3f1e8a0152f94d17664a06a06 # v4
+        uses: github/codeql-action/upload-sarif@7188fc363630916deb702c7fdcf4e481b751f97a # v4
         if: always()
         with:
           sarif_file: snyk-container.sarif
@@ -353,7 +353,7 @@ jobs:
           severity-cutoff: high
 
       - name: Upload Grype results
-        uses: github/codeql-action/upload-sarif@eec0bff2f6c15bf3f1e8a0152f94d17664a06a06 # v4
+        uses: github/codeql-action/upload-sarif@7188fc363630916deb702c7fdcf4e481b751f97a # v4
         if: always()
         with:
           sarif_file: ${{ steps.grype.outputs.sarif }}

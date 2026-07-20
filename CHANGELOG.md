@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v1.0.9] - 2026-07-20
+
+### Improved
+
+- Updated pinned Dependabot action revisions for Snyk Python (`v0.5.0` → `v1.0.0`), CodeQL upload-sarif (`v4`), CodeQL analyze (`v4`), and Codecov upload (`v7.0.0`) to current verified immutable SHAs.
+
 ## [v1.0.8] - 2026-07-20
 
 ### Fixed

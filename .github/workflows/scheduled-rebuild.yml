@@ -115,7 +115,7 @@ jobs:
           args: --sarif-file-output=snyk-results.sarif --json-file-output=snyk-report.json
 
       - name: Upload Snyk SARIF results
-        uses: github/codeql-action/upload-sarif@eec0bff2f6c15bf3f1e8a0152f94d17664a06a06 # v4
+        uses: github/codeql-action/upload-sarif@7188fc363630916deb702c7fdcf4e481b751f97a # v4
         if: always()
         with:
           sarif_file: 'snyk-results.sarif'
