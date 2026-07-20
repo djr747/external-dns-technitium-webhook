@@ -222,7 +222,7 @@ jobs:
           pip install -e .
 
       - name: Run Snyk to check for vulnerabilities
-        uses: snyk/actions/python@de2dda699bf7276d103ed6a72a5bc5a1871ad658 # v0.5.0
+        uses: snyk/actions/python@9adf32b1121593767fc3c057af55b55db032dc04 # v1.0.0
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
@@ -236,7 +236,7 @@ jobs:
 
       - name: Run Snyk monitor (track over time)
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: snyk/actions/python@de2dda699bf7276d103ed6a72a5bc5a1871ad658 # v0.5.0
+        uses: snyk/actions/python@9adf32b1121593767fc3c057af55b55db032dc04 # v1.0.0
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
