@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v1.0.8] - 2026-07-20
+
+### Fixed
+
+- Skip token-dependent Snyk jobs on Dependabot pull requests, where GitHub does not provide repository secrets.
+
+### Improved
+
+- Keep CodeQL, Semgrep, Grype, and SBOM checks enabled for Dependabot pull requests.
+
 ## [v1.0.7] - 2026-07-19
 
 ### Fixed & Improved
