@@ -12,7 +12,7 @@ import logging
 import os
 import time
 
-import httpx
+import httpx2
 import pytest
 from kubernetes import client, config
 
@@ -102,7 +102,7 @@ class TestWebhookIntegration:
         last_error = None
         while time.time() - reach_start < reach_timeout:
             try:
-                resp = httpx.get(f"{technitium_url}/api/user/login", timeout=5)
+                resp = httpx2.get(f"{technitium_url}/api/user/login", timeout=5)
                 if resp.status_code in [200, 400]:
                     reachable = True
                     break
@@ -121,7 +121,7 @@ class TestWebhookIntegration:
         """Get Technitium service URL"""
         return os.getenv("TECHNITIUM_URL", "http://technitium:5380")
 
-    def verify_compression(self, response: httpx.Response) -> tuple[bool, str]:
+    def verify_compression(self, response: httpx2.Response) -> tuple[bool, str]:
         """Verify if a response is compressed and return (is_compressed, encoding).
 
         Args:
@@ -168,7 +168,7 @@ class TestWebhookIntegration:
 
     def test_technitium_api_ready(self, technitium_url):
         """Verify Technitium API is accessible"""
-        response = httpx.get(f"{technitium_url}/api/user/login", timeout=10)
+        response = httpx2.get(f"{technitium_url}/api/user/login", timeout=10)
         assert response.status_code in [200, 400], (
             f"Technitium API unreachable: {response.status_code}"
         )
@@ -230,7 +230,7 @@ class TestWebhookIntegration:
                     if not compression_detected:
                         try:
                             token = technitium_client.token
-                            response = httpx.get(
+                            response = httpx2.get(
                                 f"{technitium_url}/api/zone/records",
                                 params={
                                     "token": token,
@@ -376,7 +376,7 @@ class TestWebhookIntegration:
     def test_technitium_zone_exists(self, technitium_url):
         """Verify test.local zone was created in Technitium"""
         # This would require authentication, but for now just verify Technitium is accessible
-        response = httpx.get(f"{technitium_url}/api/user/login", timeout=10)
+        response = httpx2.get(f"{technitium_url}/api/user/login", timeout=10)
         assert response.status_code in [200, 400], "Should be able to connect to Technitium API"
 
 
@@ -392,7 +392,7 @@ class TechnitiumTestClient:
     def _login(self):
         """Authenticate with Technitium API"""
         data = {"user": self.credentials["username"], "pass": self.credentials["password"]}
-        response = httpx.post(f"{self.base_url}/api/user/login", data=data, timeout=10)
+        response = httpx2.post(f"{self.base_url}/api/user/login", data=data, timeout=10)
         response.raise_for_status()
         result = response.json()
         self.token = result.get("token")
@@ -409,9 +409,9 @@ class TechnitiumTestClient:
             request_data.update(data)
 
         if method.upper() == "POST":
-            response = httpx.post(url, data=request_data, timeout=10)
+            response = httpx2.post(url, data=request_data, timeout=10)
         else:
-            response = httpx.get(url, params=request_data, timeout=10)
+            response = httpx2.get(url, params=request_data, timeout=10)
 
         response.raise_for_status()
         return response.json()

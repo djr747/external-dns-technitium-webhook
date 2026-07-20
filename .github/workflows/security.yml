@@ -29,16 +29,16 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v4
+        uses: github/codeql-action/init@eec0bff2f6c15bf3f1e8a0152f94d17664a06a06 # v4
         with:
           languages: ${{ matrix.language }}
           queries: security-extended,security-and-quality
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: '3.14'
           cache: 'pip'
@@ -49,7 +49,7 @@ jobs:
           pip install -e ".[dev]"
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v4
+        uses: github/codeql-action/analyze@eec0bff2f6c15bf3f1e8a0152f94d17664a06a06 # v4
         with:
           category: "/language:${{matrix.language}}"
 
@@ -60,13 +60,13 @@ jobs:
       contents: read
       security-events: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Build Docker image for scanning
         run: docker build -t external-dns-technitium-webhook:${{ github.sha }} .
 
       - name: Run Snyk container scan (SARIF)
-        uses: snyk/actions/docker@master
+        uses: snyk/actions/docker@de2dda699bf7276d103ed6a72a5bc5a1871ad658 # v0.5.0
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
@@ -75,13 +75,13 @@ jobs:
           args: --sarif-file-output=snyk-container.sarif --json-file-output=snyk-container.json --severity-threshold=low
 
       - name: Upload Snyk container SARIF to GitHub Security
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@eec0bff2f6c15bf3f1e8a0152f94d17664a06a06 # v4
         if: always()
         with:
           sarif_file: snyk-container.sarif
 
       - name: Upload Snyk JSON results
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: snyk-container-json
@@ -114,10 +114,10 @@ jobs:
       contents: read
       security-events: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: '3.14'
 
@@ -133,7 +133,7 @@ jobs:
           pip-audit --desc --format markdown --output pip-audit-report.md || true
 
       - name: Upload pip-audit results
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: pip-audit-report
@@ -157,10 +157,10 @@ jobs:
       contents: read
       security-events: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: '3.14'
 
@@ -177,7 +177,7 @@ jobs:
           bandit -r external_dns_technitium_webhook -f txt -o bandit-report.txt || true
 
       - name: Upload Bandit results
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: bandit-report
@@ -191,7 +191,7 @@ jobs:
           semgrep --config=auto --json --output=semgrep-report.json external_dns_technitium_webhook/ || true
 
       - name: Upload Semgrep results
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: semgrep-report
@@ -206,10 +206,10 @@ jobs:
       contents: read
       security-events: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: '3.14'
 
@@ -219,21 +219,21 @@ jobs:
           pip install -e .
 
       - name: Run Snyk to check for vulnerabilities
-        uses: snyk/actions/python@master
+        uses: snyk/actions/python@de2dda699bf7276d103ed6a72a5bc5a1871ad658 # v0.5.0
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
           args: --severity-threshold=medium --sarif-file-output=snyk-code.sarif
 
       - name: Upload Snyk results to GitHub Security
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@eec0bff2f6c15bf3f1e8a0152f94d17664a06a06 # v4
         if: always()
         with:
           sarif_file: snyk-code.sarif
 
       - name: Run Snyk monitor (track over time)
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: snyk/actions/python@master
+        uses: snyk/actions/python@de2dda699bf7276d103ed6a72a5bc5a1871ad658 # v0.5.0
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
@@ -245,7 +245,7 @@ jobs:
         run: docker build -t external-dns-technitium-webhook:${{ github.sha }} .
 
       - name: Run Snyk Container Scan (SARIF)
-        uses: snyk/actions/docker@master
+        uses: snyk/actions/docker@de2dda699bf7276d103ed6a72a5bc5a1871ad658 # v0.5.0
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
@@ -253,13 +253,13 @@ jobs:
           args: --severity-threshold=high --sarif-file-output=snyk-container.sarif
 
       - name: Upload Snyk container SARIF to GitHub Security
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@eec0bff2f6c15bf3f1e8a0152f94d17664a06a06 # v4
         if: always()
         with:
           sarif_file: snyk-container.sarif
 
       - name: Set up Node.js for Snyk CLI
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '18'
 
@@ -277,7 +277,7 @@ jobs:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
 
       - name: Upload Snyk JSON results
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: snyk-container-json
           path: snyk-container.json
@@ -294,7 +294,7 @@ jobs:
 
       - name: Run Snyk container monitor (track over time)
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: snyk/actions/docker@master
+        uses: snyk/actions/docker@de2dda699bf7276d103ed6a72a5bc5a1871ad658 # v0.5.0
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
@@ -309,27 +309,27 @@ jobs:
       contents: read
       security-events: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Build Docker image
         run: docker build -t external-dns-technitium-webhook:${{ github.sha }} .
 
       - name: Generate SBOM with Syft
-        uses: anchore/sbom-action@v0
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
         with:
           image: external-dns-technitium-webhook:${{ github.sha }}
           format: spdx-json
           output-file: sbom.spdx.json
 
       - name: Generate SBOM in CycloneDX format
-        uses: anchore/sbom-action@v0
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
         with:
           image: external-dns-technitium-webhook:${{ github.sha }}
           format: cyclonedx-json
           output-file: sbom.cyclonedx.json
 
       - name: Upload SBOM artifacts
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: sbom-reports
           path: |
@@ -338,7 +338,11 @@ jobs:
           retention-days: 90
 
       - name: Scan SBOM with Grype
-        uses: anchore/scan-action@v7
+# Scope: This annotation applies only to the Anchore scan-action `uses:` line.
+# Rationale: Latest v7.4.0 SHA pin and reversible v7.3.2 test isolates rule issue.
+# Expires/review: 2026-08-18
+# Compensating control: verified immutable 40-character SHA pin
+        uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2c # v7.4.0  # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag
         id: grype
         with:
           sbom: sbom.spdx.json
@@ -346,7 +350,7 @@ jobs:
           severity-cutoff: high
 
       - name: Upload Grype results
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@eec0bff2f6c15bf3f1e8a0152f94d17664a06a06 # v4
         if: always()
         with:
           sarif_file: ${{ steps.grype.outputs.sarif }}

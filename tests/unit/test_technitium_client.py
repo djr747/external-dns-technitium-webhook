@@ -6,7 +6,7 @@ import ssl
 from typing import Any
 from unittest.mock import AsyncMock
 
-import httpx
+import httpx2
 import pytest
 from pydantic import BaseModel
 from pytest_mock import MockerFixture
@@ -278,8 +278,6 @@ async def test_post_json_parse_error(client: TechnitiumClient, mocker: MockerFix
 @pytest.mark.asyncio
 async def test_post_http_status_error(client: TechnitiumClient, mocker: MockerFixture) -> None:
     """Test HTTP status error in _post method."""
-    import httpx
-
     mock_response = mocker.Mock(status_code=500)
     mocker.patch.object(
         client._client,
@@ -287,7 +285,7 @@ async def test_post_http_status_error(client: TechnitiumClient, mocker: MockerFi
         new_callable=AsyncMock,
         return_value=mocker.Mock(
             raise_for_status=mocker.Mock(
-                side_effect=httpx.HTTPStatusError(
+                side_effect=httpx2.HTTPStatusError(
                     "Server error", request=mocker.Mock(), response=mock_response
                 )
             ),
@@ -301,12 +299,11 @@ async def test_post_http_status_error(client: TechnitiumClient, mocker: MockerFi
 @pytest.mark.asyncio
 async def test_post_request_error(client: TechnitiumClient, mocker: MockerFixture) -> None:
     """Test request error in _post method."""
-    import httpx
 
     mocker.patch.object(
         client._client,
         "post",
-        side_effect=httpx.RequestError("Connection failed"),
+        side_effect=httpx2.RequestError("Connection failed"),
     )
 
     with pytest.raises(TechnitiumError, match="Request error"):
@@ -1306,7 +1303,7 @@ async def test_parse_response_malformed_json_raises(client: TechnitiumClient) ->
     """The low-level parser should wrap JSON errors in TechnitiumError."""
 
     with pytest.raises(TechnitiumError, match="Failed to parse JSON response"):
-        client._parse_response(httpx.Response(200, content=b"not json"))
+        client._parse_response(httpx2.Response(200, content=b"not json"))
 
 
 @pytest.mark.asyncio
@@ -1314,7 +1311,7 @@ async def test_parse_response_unexpected_format(client: TechnitiumClient) -> Non
     """A non-dict JSON body triggers an error."""
 
     with pytest.raises(TechnitiumError, match="Unexpected response format"):
-        client._parse_response(httpx.Response(200, json=[1, 2, 3]))
+        client._parse_response(httpx2.Response(200, json=[1, 2, 3]))
 
 
 @pytest.mark.asyncio
