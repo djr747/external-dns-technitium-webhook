@@ -54,6 +54,8 @@ jobs:
           category: "/language:${{matrix.language}}"
 
   container-scan:
+    # GitHub does not provide repository secrets to Dependabot-triggered workflows.
+    if: github.actor != 'dependabot[bot]'
     name: Container Scan (Snyk)
     runs-on: ubuntu-latest
     permissions:
@@ -199,9 +201,10 @@ jobs:
           retention-days: 90
 
   snyk-security:
+    # GitHub does not provide repository secrets to Dependabot-triggered workflows.
+    if: github.actor != 'dependabot[bot]'
     name: Snyk Security Analysis
     runs-on: ubuntu-latest
-    if: github.actor != 'dependabot[bot]'
     permissions:
       contents: read
       security-events: write
