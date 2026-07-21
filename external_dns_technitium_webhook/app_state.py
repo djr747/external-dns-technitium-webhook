@@ -60,7 +60,7 @@ class AppState:
         # Skip client construction when the primary endpoint is blank/empty.
         # This can occur in internal tests after Config initialization.
         primary = config.technitium_url
-        if primary is None or not primary.strip():
+        if not primary.strip():
             self._client = None
             self.active_endpoint = None
         else:
