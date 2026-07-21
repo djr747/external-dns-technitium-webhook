@@ -5,7 +5,7 @@ import logging
 import ssl
 import time
 from typing import Any, Self, cast
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 
 import httpx2
 from pydantic import BaseModel
@@ -138,6 +138,9 @@ class TechnitiumClient:
             circuit_breaker: Optional circuit breaker for protecting API calls
             records_cache_ttl_seconds: TTL for get_records cache entries (0 to disable)
         """
+        parsed = urlparse(base_url)
+        if parsed.scheme.lower() != "https" or not parsed.netloc:
+            raise ValueError("Technitium base_url must use an HTTPS URL.")
         self.base_url = base_url.rstrip("/")
         self.token = token
         self.timeout = timeout

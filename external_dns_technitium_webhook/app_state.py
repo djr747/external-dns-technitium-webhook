@@ -18,8 +18,8 @@ class AppState:
     """Global application state."""
 
     is_ready: bool
-    client: TechnitiumClient
-    active_endpoint: str
+    client: TechnitiumClient | None
+    active_endpoint: str | None
     is_writable: bool
     server_role: str | None
     catalog_membership: str | None
@@ -36,16 +36,23 @@ class AppState:
             failure_threshold=config.circuit_breaker_failure_threshold,
             timeout=config.circuit_breaker_timeout,
         )
-        self.client = TechnitiumClient(
-            base_url=config.technitium_url,
-            timeout=config.technitium_timeout,
-            verify_ssl=config.technitium_verify_ssl,
-            ca_bundle=config.technitium_ca_bundle_file,
-            enable_request_compression=config.technitium_enable_request_compression,
-            compression_threshold_bytes=config.technitium_compression_threshold_bytes,
-            circuit_breaker=self.circuit_breaker,
-            records_cache_ttl_seconds=config.records_cache_ttl_seconds,
-        )
+        # Skip client construction when the primary endpoint is blank/empty.
+        # This can occur in internal tests after Config initialization.
+        primary = config.technitium_url
+        if primary is None or not primary.strip():
+            self.client = None
+            self.active_endpoint = None
+        else:
+            self.client = TechnitiumClient(
+                base_url=config.technitium_url,
+                timeout=config.technitium_timeout,
+                verify_ssl=config.technitium_verify_ssl,
+                ca_bundle=config.technitium_ca_bundle_file,
+                enable_request_compression=config.technitium_enable_request_compression,
+                compression_threshold_bytes=config.technitium_compression_threshold_bytes,
+                circuit_breaker=self.circuit_breaker,
+                records_cache_ttl_seconds=config.records_cache_ttl_seconds,
+            )
         # Use provided helper to replace the module-level rate limiter.
         # This avoids a direct module-level assignment which some static
         # analysis tools may flag as an ineffectual statement.
@@ -58,7 +65,7 @@ class AppState:
         self._lock = asyncio.Lock()
         self._token_task: asyncio.Task[None] | None = None
         self._failback_task: asyncio.Task[None] | None = None
-        self.active_endpoint = self.client.base_url
+        self.active_endpoint = self.client.base_url if self.client else None
         self.is_writable = False
         self.server_role: str | None = None
         self.catalog_membership = None
@@ -96,10 +103,14 @@ class AppState:
             tasks_to_cancel.append(self._failback_task)
         if tasks_to_cancel:
             await asyncio.gather(*tasks_to_cancel, return_exceptions=True)
-        await self.client.close()
+        if self.client:
+            await self.client.close()
 
     async def set_active_endpoint(self, base_url: str) -> None:
         """Reconfigure the API client for a new Technitium endpoint."""
+
+        if self.client is None:
+            return
 
         normalized = base_url.rstrip("/")
         if self.client.base_url == normalized:
@@ -230,7 +241,7 @@ class AppState:
             is_writable value is undefined.
         """
         endpoints = self.config.technitium_endpoints
-        current_endpoint = self.client.base_url
+        current_endpoint = self.client.base_url if self.client else None
         failures: list[str] = []
 
         for endpoint in endpoints:
@@ -300,6 +311,10 @@ class AppState:
         """
         endpoints = self.config.technitium_endpoints
         if not endpoints:
+            return False
+
+        # Guard: no client means no failback possible
+        if self.client is None:
             return False
 
         primary_endpoint = endpoints[0]

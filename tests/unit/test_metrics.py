@@ -411,7 +411,7 @@ class TestTechnitiumClientMetrics:
     @pytest.mark.asyncio
     async def test_login_tracks_latency(self, mocker):
         """Test that login tracks latency via the histogram context manager."""
-        client = TechnitiumClient(base_url="http://localhost:5380")
+        client = TechnitiumClient(base_url="https://localhost:5380")
 
         mock_post_raw = mocker.patch.object(
             client,
@@ -440,7 +440,7 @@ class TestTechnitiumClientMetrics:
     @pytest.mark.asyncio
     async def test_invalid_token_increments_error_counter(self, mocker):
         """Test that invalid-token response increments api_errors_total."""
-        client = TechnitiumClient(base_url="http://localhost:5380")
+        client = TechnitiumClient(base_url="https://localhost:5380")
         client.token = "test-token"
 
         mocker.patch.object(
@@ -469,7 +469,7 @@ class TestTechnitiumClientMetrics:
     @pytest.mark.asyncio
     async def test_timeout_increments_error_counter(self, mocker):
         """Test that timeout exception increments api_errors_total with timeout label."""
-        client = TechnitiumClient(base_url="http://localhost:5380")
+        client = TechnitiumClient(base_url="https://localhost:5380")
         client.token = "test-token"
 
         mocker.patch.object(
@@ -494,7 +494,7 @@ class TestTechnitiumClientMetrics:
     @pytest.mark.asyncio
     async def test_connection_error_increments_error_counter(self, mocker):
         """Test that connection error increments api_errors_total with connection_error label."""
-        client = TechnitiumClient(base_url="http://localhost:5380")
+        client = TechnitiumClient(base_url="https://localhost:5380")
         client.token = "test-token"
 
         mocker.patch.object(

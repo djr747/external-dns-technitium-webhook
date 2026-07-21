@@ -50,27 +50,26 @@ kubectl create secret generic technitium-credentials \
   -n external-dns
 ```
 
-## Step 4: TLS Configuration (Optional)
+## TLS Configuration
 
-### Option 1: HTTPS with Self-Signed Certificate
+The webhook connects to Technitium only through an HTTPS endpoint. Certificate-chain and hostname verification are always enabled. HTTP Technitium endpoints and disabled verification are rejected during startup.
 
-For self-signed certificates, disable SSL verification:
+### Private or self-signed certificate authorities
+
+For a private or self-signed Technitium certificate, mount the issuing CA PEM file into the webhook Pod and configure:
 
 ```yaml
-provider:
-  webhook:
-    env:
-      - name: TECHNITIUM_URL
-        value: "https://technitium-dns.technitium.svc.cluster.local:53443"
-      - name: TECHNITIUM_VERIFY_SSL
-        value: "false"
+env:
+  - name: TECHNITIUM_URL
+    value: "https://dns.example.com:53443"
+  - name: TECHNITIUM_VERIFY_SSL
+    value: "true"
+  - name: TECHNITIUM_CA_BUNDLE_FILE
+    value: "/etc/technitium-ca/ca.crt"
 ```
 
-### Option 2: HTTPS with Private CA Certificate
+Create a ConfigMap from the public CA certificate and mount it read-only at `/etc/technitium-ca`. The CA bundle extends normal certificate trust; it does not disable certificate or hostname verification.
 
-For HTTPS with private CA certificates:
-
-```bash
 # Create ConfigMap with CA certificate
 kubectl create configmap technitium-ca-bundle \
   --from-file=ca.pem=/path/to/ca-certificate.pem \
@@ -117,7 +116,7 @@ volumes:
 | `TECHNITIUM_PASSWORD` | Yes | None | Password for authentication |
 | `ZONE` | Yes | None | Primary DNS zone for management |
 | `DOMAIN_FILTERS` | No | None | Semicolon-separated list of domains |
-| `TECHNITIUM_VERIFY_SSL` | No | `true` | Enable/disable SSL certificate verification (set to `false` for self-signed certs) |
+| `TECHNITIUM_VERIFY_SSL` | No | `true` | Enable TLS certificate verification using system CA store. Must remain `true`; use `TECHNITIUM_CA_BUNDLE_FILE` for private CAs. |
 | `TECHNITIUM_CA_BUNDLE_FILE` | No | None | Path to PEM file with CA certificate |
 | `TECHNITIUM_TIMEOUT` | No | `10.0` | HTTP client timeout in seconds |
 | `TECHNITIUM_FAILOVER_URLS` | No | None | Semicolon-separated list of failover Technitium URLs for HA |

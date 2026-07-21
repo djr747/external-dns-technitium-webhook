@@ -2,6 +2,7 @@
 
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -57,6 +58,15 @@ class Config(BaseSettings):
     def __init__(self, **values: Any) -> None:
         """Allow instantiation without explicit arguments for env loading."""
         super().__init__(**values)
+        if not self.technitium_verify_ssl:
+            raise ValueError(
+                "Disabling TLS certificate verification is not supported; "
+                "use TECHNITIUM_CA_BUNDLE_FILE to trust a private CA."
+            )
+        for endpoint in self.technitium_endpoints:
+            parsed = urlparse(endpoint)
+            if parsed.scheme.lower() != "https" or not parsed.netloc:
+                raise ValueError("TECHNITIUM_URL and TECHNITIUM_FAILOVER_URLS must use HTTPS URLs.")
         # Validate CA bundle after model initialization
         if self.technitium_verify_ssl and self.technitium_ca_bundle_file:
             path = Path(self.technitium_ca_bundle_file)

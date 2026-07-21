@@ -84,7 +84,7 @@ def test_app_creation(mocker: MockerFixture) -> None:
     mocker.patch(
         "external_dns_technitium_webhook.main.AppConfig",
         return_value=Config(
-            technitium_url="http://localhost:5380",
+            technitium_url="https://localhost:5380",
             technitium_username="admin",
             technitium_password="password",
             zone="example.com",
@@ -104,7 +104,7 @@ def test_app_has_middleware(mocker: MockerFixture) -> None:
     mocker.patch(
         "external_dns_technitium_webhook.main.AppConfig",
         return_value=Config(
-            technitium_url="http://localhost:5380",
+            technitium_url="https://localhost:5380",
             technitium_username="admin",
             technitium_password="password",
             zone="example.com",
@@ -123,7 +123,7 @@ def test_app_cors_enabled(mocker: MockerFixture) -> None:
     mocker.patch(
         "external_dns_technitium_webhook.main.AppConfig",
         return_value=Config(
-            technitium_url="http://localhost:5380",
+            technitium_url="https://localhost:5380",
             technitium_username="admin",
             technitium_password="password",
             zone="example.com",
@@ -143,7 +143,7 @@ async def test_ensure_zone_ready_existing_zone(mocker: MockerFixture) -> None:
     """Ensure existing zone returns writable status without creation."""
 
     config = Config(
-        technitium_url="http://localhost:5380",
+        technitium_url="https://localhost:5380",
         technitium_username="admin",
         technitium_password="password",
         zone="example.com",
@@ -173,7 +173,7 @@ async def test_ensure_zone_ready_creates_zone_when_missing(mocker: MockerFixture
     """Ensure zone is created when missing."""
 
     config = Config(
-        technitium_url="http://localhost:5380",
+        technitium_url="https://localhost:5380",
         technitium_username="admin",
         technitium_password="password",
         zone="example.com",
@@ -213,7 +213,7 @@ async def test_ensure_zone_ready_secondary_skips_catalog(mocker: MockerFixture) 
     """Read-only endpoints should not attempt catalog enrollment."""
 
     config = Config(
-        technitium_url="http://localhost:5380",
+        technitium_url="https://localhost:5380",
         technitium_username="admin",
         technitium_password="password",
         zone="example.com",
@@ -251,7 +251,7 @@ async def test_ensure_zone_ready_invokes_catalog_membership(mocker: MockerFixtur
     """Primary endpoints with catalog configured should enroll membership."""
 
     config = Config(
-        technitium_url="http://localhost:5380",
+        technitium_url="https://localhost:5380",
         technitium_username="admin",
         technitium_password="password",
         zone="example.com",
@@ -289,7 +289,7 @@ async def test_ensure_zone_ready_invokes_catalog_membership(mocker: MockerFixtur
 async def test_create_default_zone(mocker: MockerFixture) -> None:
     """Test creating default zone."""
     config = Config(
-        technitium_url="http://localhost:5380",
+        technitium_url="https://localhost:5380",
         technitium_username="admin",
         technitium_password="password",
         zone="example.com",
@@ -325,7 +325,7 @@ async def test_ensure_catalog_membership_skips_when_unavailable(
     """Do not enroll when desired catalog is not offered by endpoint."""
 
     config = Config(
-        technitium_url="http://localhost:5380",
+        technitium_url="https://localhost:5380",
         technitium_username="admin",
         technitium_password="password",
         zone="example.com",
@@ -358,7 +358,7 @@ async def test_ensure_catalog_membership_returns_existing_membership(
     """When already enrolled, ensure_catalog_membership should return current membership."""
 
     config = Config(
-        technitium_url="http://localhost:5380",
+        technitium_url="https://localhost:5380",
         technitium_username="admin",
         technitium_password="password",
         zone="example.com",
@@ -388,7 +388,7 @@ async def test_ensure_catalog_membership_enrolls_when_available(
     """Enroll zone when catalog is offered and server reports membership."""
 
     config = Config(
-        technitium_url="http://localhost:5380",
+        technitium_url="https://localhost:5380",
         technitium_username="admin",
         technitium_password="password",
         zone="example.com",
@@ -434,7 +434,7 @@ async def test_ensure_catalog_membership_enrolls_when_available(
 async def test_setup_technitium_connection_success(mocker: MockerFixture) -> None:
     """Test successful Technitium connection setup."""
     config = Config(
-        technitium_url="http://localhost:5380",
+        technitium_url="https://localhost:5380",
         technitium_username="admin",
         technitium_password="password",
         zone="example.com",
@@ -477,11 +477,11 @@ async def test_setup_technitium_connection_uses_failover(mocker: MockerFixture) 
     """Setup should try secondary endpoints when the first attempt fails."""
 
     config = Config(
-        technitium_url="http://primary:5380",
+        technitium_url="https://primary:5380",
         technitium_username="admin",
         technitium_password="password",
         zone="example.com",
-        technitium_failover_urls="http://failover:5380",
+        technitium_failover_urls="https://failover:5380",
     )
     state = AppState(config=config)
 
@@ -531,7 +531,7 @@ async def test_setup_connection_logs_creation_and_catalog(
     """Zone creation and catalog enrollment messages should be logged."""
 
     config = Config(
-        technitium_url="http://localhost:5380",
+        technitium_url="https://localhost:5380",
         technitium_username="admin",
         technitium_password="password",
         zone="example.com",
@@ -575,7 +575,7 @@ async def test_setup_connection_logs_read_only_warning(
     """Read-only endpoints should log a warning."""
 
     config = Config(
-        technitium_url="http://localhost:5380",
+        technitium_url="https://localhost:5380",
         technitium_username="admin",
         technitium_password="password",
         zone="example.com",
@@ -656,7 +656,7 @@ async def test_ensure_zone_ready_raises_when_zone_missing_after_create(
     """An error should be raised when zone options cannot be loaded after creation."""
 
     config = Config(
-        technitium_url="http://localhost:5380",
+        technitium_url="https://localhost:5380",
         technitium_username="admin",
         technitium_password="password",
         zone="example.com",
@@ -684,13 +684,13 @@ async def test_ensure_catalog_membership_logs_mismatch(
     """Ensure catalog membership warns when server reports a different membership."""
 
     config = Config(
-        technitium_url="http://localhost:5380",
+        technitium_url="https://localhost:5380",
         technitium_username="admin",
         technitium_password="password",
         zone="example.com",
     )
     state = AppState(config=config)
-    state.active_endpoint = "http://localhost:5380"
+    state.active_endpoint = "https://localhost:5380"
     caplog.set_level("INFO")
 
     options = GetZoneOptionsResponse(
@@ -758,7 +758,7 @@ async def test_setup_connection_starts_unhealthy_after_failures(
     """setup_technitium_connection should set not ready when all endpoints fail."""
 
     config = Config(
-        technitium_url="http://primary:5380",
+        technitium_url="https://primary:5380",
         technitium_username="admin",
         technitium_password="password",
         zone="example.com",
@@ -793,7 +793,7 @@ async def test_setup_connection_reraises_cancelled_error(
     """CancelledError during endpoint init must be reraised, not swallowed."""
 
     config = Config(
-        technitium_url="http://primary:5380",
+        technitium_url="https://primary:5380",
         technitium_username="admin",
         technitium_password="password",
         zone="example.com",
@@ -819,7 +819,7 @@ def _build_config() -> Config:
     """Helper to create a minimal configuration for tests."""
 
     return Config(
-        technitium_url="http://localhost:5380",
+        technitium_url="https://localhost:5380",
         technitium_username="admin",
         technitium_password="password",
         zone="example.com",
@@ -991,7 +991,7 @@ async def test_auto_renew_token_success_sets_token(mocker: MockerFixture) -> Non
     state = SimpleNamespace(
         config=config,
         client=client,
-        active_endpoint="http://localhost:5380",
+        active_endpoint="https://localhost:5380",
     )
 
     sleep_mock = mocker.patch(
@@ -1028,7 +1028,7 @@ async def test_auto_renew_token_failure_uses_failure_interval(mocker: MockerFixt
     state = SimpleNamespace(
         config=config,
         client=client,
-        active_endpoint="http://localhost:5380",
+        active_endpoint="https://localhost:5380",
     )
     # Mock the try_failback_to_primary method (won't be called on failure)
     state.try_failback_to_primary = AsyncMock(return_value=False)
@@ -1067,7 +1067,7 @@ async def test_auto_attempt_failback_skips_when_no_endpoints(mocker: MockerFixtu
     )
     state = SimpleNamespace(
         config=config,
-        client=SimpleNamespace(base_url="http://secondary:5380"),
+        client=SimpleNamespace(base_url="https://secondary:5380"),
         circuit_breaker=MagicMock(),
     )
 
@@ -1088,11 +1088,11 @@ async def test_auto_attempt_failback_primary_readonly_triggers_failover(
     """A readonly primary should trigger failover attempts during health polling."""
 
     config = Config(
-        technitium_url="http://primary:5380",
+        technitium_url="https://primary:5380",
         technitium_username="admin",
         technitium_password="password",
         zone="example.com",
-        technitium_failover_urls="http://secondary:5380",
+        technitium_failover_urls="https://secondary:5380",
     )
     zone_options = MagicMock()
     zone_options.is_read_only = True
@@ -1100,7 +1100,7 @@ async def test_auto_attempt_failback_primary_readonly_triggers_failover(
     state = SimpleNamespace(
         config=config,
         client=SimpleNamespace(
-            base_url="http://primary:5380",
+            base_url="https://primary:5380",
             get_zone_options=AsyncMock(return_value=zone_options),
         ),
         try_failover_endpoints=AsyncMock(return_value=(False, False)),
@@ -1127,11 +1127,11 @@ async def test_auto_attempt_failback_primary_stays_put_when_writable(
     """A healthy writable primary should not trigger failover."""
 
     config = Config(
-        technitium_url="http://primary:5380",
+        technitium_url="https://primary:5380",
         technitium_username="admin",
         technitium_password="password",
         zone="example.com",
-        technitium_failover_urls="http://secondary:5380",
+        technitium_failover_urls="https://secondary:5380",
     )
     zone_options = MagicMock()
     zone_options.is_read_only = False
@@ -1139,7 +1139,7 @@ async def test_auto_attempt_failback_primary_stays_put_when_writable(
     state = SimpleNamespace(
         config=config,
         client=SimpleNamespace(
-            base_url="http://primary:5380",
+            base_url="https://primary:5380",
             get_zone_options=AsyncMock(return_value=zone_options),
         ),
         try_failover_endpoints=AsyncMock(return_value=(False, False)),
@@ -1166,7 +1166,7 @@ async def test_auto_attempt_failback_primary_health_check_warning_branch(
     """A primary health-check exception should be logged and the loop should continue."""
 
     config = Config(
-        technitium_url="http://primary:5380",
+        technitium_url="https://primary:5380",
         technitium_username="admin",
         technitium_password="password",
         zone="example.com",
@@ -1174,7 +1174,7 @@ async def test_auto_attempt_failback_primary_health_check_warning_branch(
     state = SimpleNamespace(
         config=config,
         client=SimpleNamespace(
-            base_url="http://primary:5380",
+            base_url="https://primary:5380",
             get_zone_options=AsyncMock(side_effect=RuntimeError("health failed")),
         ),
         try_failover_endpoints=AsyncMock(),
@@ -1193,7 +1193,7 @@ async def test_auto_attempt_failback_primary_health_check_warning_branch(
 
     warning_mock.assert_any_call(
         "Health check failed on primary endpoint %s: %s",
-        "http://primary:5380",
+        "https://primary:5380",
         ANY,
     )
     state.try_failover_endpoints.assert_not_awaited()
@@ -1206,11 +1206,11 @@ async def test_auto_attempt_failback_primary_readonly_successful_failover(
     """A readonly primary should continue cleanly when failover succeeds to a writable node."""
 
     config = Config(
-        technitium_url="http://primary:5380",
+        technitium_url="https://primary:5380",
         technitium_username="admin",
         technitium_password="password",
         zone="example.com",
-        technitium_failover_urls="http://secondary:5380",
+        technitium_failover_urls="https://secondary:5380",
     )
     zone_options = MagicMock()
     zone_options.is_read_only = True
@@ -1218,7 +1218,7 @@ async def test_auto_attempt_failback_primary_readonly_successful_failover(
     state = SimpleNamespace(
         config=config,
         client=SimpleNamespace(
-            base_url="http://primary:5380",
+            base_url="https://primary:5380",
             get_zone_options=AsyncMock(return_value=zone_options),
         ),
         try_failover_endpoints=AsyncMock(return_value=(True, True)),
@@ -1244,7 +1244,7 @@ async def test_auto_attempt_failback_cancels_during_primary_health_check(
     """Cancellation during the polling body should propagate cleanly."""
 
     config = Config(
-        technitium_url="http://primary:5380",
+        technitium_url="https://primary:5380",
         technitium_username="admin",
         technitium_password="password",
         zone="example.com",
@@ -1252,7 +1252,7 @@ async def test_auto_attempt_failback_cancels_during_primary_health_check(
     state = SimpleNamespace(
         config=config,
         client=SimpleNamespace(
-            base_url="http://primary:5380",
+            base_url="https://primary:5380",
             get_zone_options=AsyncMock(side_effect=asyncio.CancelledError()),
         ),
         circuit_breaker=MagicMock(),
@@ -1277,11 +1277,11 @@ async def test_auto_attempt_failback_recovers_to_writable_primary(
     """Polling should fail back when the primary becomes reachable and writable."""
 
     config = Config(
-        technitium_url="http://primary:5380",
+        technitium_url="https://primary:5380",
         technitium_username="admin",
         technitium_password="password",
         zone="example.com",
-        technitium_failover_urls="http://secondary:5380",
+        technitium_failover_urls="https://secondary:5380",
     )
     login_response = SimpleNamespace(token="renewed-primary-token")
     zone_options = MagicMock()
@@ -1296,7 +1296,7 @@ async def test_auto_attempt_failback_recovers_to_writable_primary(
 
     state = SimpleNamespace(
         config=config,
-        client=SimpleNamespace(base_url="http://secondary:5380", token=None),
+        client=SimpleNamespace(base_url="https://secondary:5380", token=None),
         circuit_breaker=MagicMock(),
         set_active_endpoint=AsyncMock(),
         update_status=AsyncMock(),
@@ -1321,7 +1321,7 @@ async def test_auto_attempt_failback_recovers_to_writable_primary(
     )
     temp_client.get_zone_options.assert_awaited_once_with(config.zone, include_catalog_names=True)
     temp_client.close.assert_awaited_once_with()
-    state.set_active_endpoint.assert_awaited_once_with("http://primary:5380")
+    state.set_active_endpoint.assert_awaited_once_with("https://primary:5380")
     state.update_status.assert_awaited_once_with(
         ready=True,
         writable=True,
@@ -1338,11 +1338,11 @@ async def test_auto_attempt_failback_keeps_failover_when_primary_is_readonly(
     """A reachable but readonly primary should not trigger failback."""
 
     config = Config(
-        technitium_url="http://primary:5380",
+        technitium_url="https://primary:5380",
         technitium_username="admin",
         technitium_password="password",
         zone="example.com",
-        technitium_failover_urls="http://secondary:5380",
+        technitium_failover_urls="https://secondary:5380",
     )
     login_response = SimpleNamespace(token="unused-token")
     zone_options = MagicMock()
@@ -1357,7 +1357,7 @@ async def test_auto_attempt_failback_keeps_failover_when_primary_is_readonly(
 
     state = SimpleNamespace(
         config=config,
-        client=SimpleNamespace(base_url="http://secondary:5380", token=None),
+        client=SimpleNamespace(base_url="https://secondary:5380", token=None),
         circuit_breaker=MagicMock(),
         set_active_endpoint=AsyncMock(),
         update_status=AsyncMock(),
@@ -1388,11 +1388,11 @@ async def test_auto_attempt_failback_primary_check_exception_branch(
     """Primary recovery check failures should be logged at debug and not fail the loop."""
 
     config = Config(
-        technitium_url="http://primary:5380",
+        technitium_url="https://primary:5380",
         technitium_username="admin",
         technitium_password="password",
         zone="example.com",
-        technitium_failover_urls="http://secondary:5380",
+        technitium_failover_urls="https://secondary:5380",
     )
     temp_client = SimpleNamespace(
         login=AsyncMock(side_effect=RuntimeError("primary probe failed")),
@@ -1402,7 +1402,7 @@ async def test_auto_attempt_failback_primary_check_exception_branch(
 
     state = SimpleNamespace(
         config=config,
-        client=SimpleNamespace(base_url="http://secondary:5380", token=None),
+        client=SimpleNamespace(base_url="https://secondary:5380", token=None),
         circuit_breaker=MagicMock(),
         set_active_endpoint=AsyncMock(),
         update_status=AsyncMock(),
@@ -1446,7 +1446,7 @@ async def test_auto_attempt_failback_logs_outer_polling_errors(
 
     state = SimpleNamespace(
         config=BrokenConfig(),
-        client=SimpleNamespace(base_url="http://secondary:5380"),
+        client=SimpleNamespace(base_url="https://secondary:5380"),
         circuit_breaker=MagicMock(),
     )
 
@@ -1627,7 +1627,7 @@ def test_main_function(mocker: MockerFixture) -> None:
     mocker.patch(
         "external_dns_technitium_webhook.main.AppConfig",
         return_value=Config(
-            technitium_url="http://localhost:5380",
+            technitium_url="https://localhost:5380",
             technitium_username="admin",
             technitium_password="password",
             zone="example.com",
@@ -1652,7 +1652,7 @@ def test_main_function(mocker: MockerFixture) -> None:
 async def test_ensure_catalog_membership(mocker: MockerFixture) -> None:
     """Test ensure_catalog_membership behavior."""
     state = mocker.Mock()
-    state.active_endpoint = "http://localhost:5380"
+    state.active_endpoint = "https://localhost:5380"
     state.config.zone = "example.com"
 
     options = mocker.Mock()
@@ -1683,7 +1683,7 @@ async def test_ensure_catalog_membership(mocker: MockerFixture) -> None:
 async def test_ensure_catalog_membership_unavailable_zone(mocker: MockerFixture) -> None:
     """Test ensure_catalog_membership when the desired catalog zone is unavailable."""
     state = mocker.Mock()
-    state.active_endpoint = "http://localhost:5380"
+    state.active_endpoint = "https://localhost:5380"
     state.config.zone = "example.com"
 
     options = mocker.Mock()
@@ -1709,7 +1709,7 @@ async def test_ensure_catalog_membership_unavailable_zone(mocker: MockerFixture)
 async def test_ensure_catalog_membership_different_membership(mocker: MockerFixture) -> None:
     """Test ensure_catalog_membership when the server reports a different membership after enrollment."""
     state = mocker.Mock()
-    state.active_endpoint = "http://localhost:5380"
+    state.active_endpoint = "https://localhost:5380"
     state.config.zone = "example.com"
 
     options = mocker.Mock()
@@ -1742,7 +1742,7 @@ async def test_ensure_catalog_membership_creates_zone_and_enrolls(
 ) -> None:
     """Test successful catalog zone creation when not available, then enrollment."""
     config = Config(
-        technitium_url="http://localhost:5380",
+        technitium_url="https://localhost:5380",
         technitium_username="admin",
         technitium_password="password",
         zone="example.com",
@@ -1807,7 +1807,7 @@ async def test_ensure_catalog_membership_enroll_fails_with_404(
 ) -> None:
     """Test enrollment failure with 'not found' error - should return current membership."""
     config = Config(
-        technitium_url="http://localhost:5380",
+        technitium_url="https://localhost:5380",
         technitium_username="admin",
         technitium_password="password",
         zone="example.com",
@@ -1845,7 +1845,7 @@ async def test_ensure_catalog_membership_enroll_fails_with_does_not_exist(
 ) -> None:
     """Test enrollment failure with 'does not exist' error - should return current membership."""
     config = Config(
-        technitium_url="http://localhost:5380",
+        technitium_url="https://localhost:5380",
         technitium_username="admin",
         technitium_password="password",
         zone="example.com",
@@ -1883,7 +1883,7 @@ async def test_ensure_catalog_membership_enroll_fails_with_other_error(
 ) -> None:
     """Test enrollment failure with unexpected error - should re-raise."""
     config = Config(
-        technitium_url="http://localhost:5380",
+        technitium_url="https://localhost:5380",
         technitium_username="admin",
         technitium_password="password",
         zone="example.com",
@@ -1920,7 +1920,7 @@ async def test_ensure_catalog_membership_create_zone_fails(
 ) -> None:
     """Test catalog zone creation failure - should return current membership."""
     config = Config(
-        technitium_url="http://localhost:5380",
+        technitium_url="https://localhost:5380",
         technitium_username="admin",
         technitium_password="password",
         zone="example.com",
@@ -1958,7 +1958,7 @@ async def test_ensure_catalog_membership_zone_created_but_not_available(
 ) -> None:
     """Test when zone creation succeeds but zone is still not in available list."""
     config = Config(
-        technitium_url="http://localhost:5380",
+        technitium_url="https://localhost:5380",
         technitium_username="admin",
         technitium_password="password",
         zone="example.com",
@@ -2144,7 +2144,7 @@ def test_env_defaults_respect_existing_values(monkeypatch: pytest.MonkeyPatch) -
     assert os.environ["TECHNITIUM_PASSWORD"] == "custom_pass"
     assert os.environ["ZONE"] == "custom.zone"
     # Also verify defaults are NOT applied
-    assert os.environ["TECHNITIUM_URL"] != "http://localhost:5380"
+    assert os.environ["TECHNITIUM_URL"] != "https://localhost:5380"
     assert os.environ["TECHNITIUM_USERNAME"] != "admin"
     assert os.environ["TECHNITIUM_PASSWORD"] != "password"
     assert os.environ["ZONE"] != "example.com"
@@ -2606,7 +2606,7 @@ async def trigger_exception_group():
         import sys
 
         # Set environment variables so AppConfig can be constructed
-        monkeypatch.setenv("TECHNITIUM_URL", "http://localhost:5380")
+        monkeypatch.setenv("TECHNITIUM_URL", "https://localhost:5380")
         monkeypatch.setenv("TECHNITIUM_USERNAME", "admin")
         monkeypatch.setenv("TECHNITIUM_PASSWORD", "admin")
         monkeypatch.setenv("ZONE", "example.com")
