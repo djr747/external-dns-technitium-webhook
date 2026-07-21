@@ -18,11 +18,32 @@ class AppState:
     """Global application state."""
 
     is_ready: bool
-    client: TechnitiumClient | None
+    _client: TechnitiumClient | None
     active_endpoint: str | None
     is_writable: bool
     server_role: str | None
     catalog_membership: str | None
+
+    @property
+    def client(self) -> TechnitiumClient:
+        """Return the active Technitium client.
+
+        Returns:
+            The active TechnitiumClient. Raises RuntimeError if no client
+            is available (endpoint blank/unreachable).
+        """
+        if self._client is None:
+            raise RuntimeError("No Technitium client available")
+        return self._client
+
+    @client.setter
+    def client(self, value: TechnitiumClient | None) -> None:
+        """Set the active Technitium client.
+
+        Args:
+            value: The new TechnitiumClient, or None to clear.
+        """
+        self._client = value
 
     def __init__(self, config: Config) -> None:
         """Initialize application state.
@@ -40,10 +61,10 @@ class AppState:
         # This can occur in internal tests after Config initialization.
         primary = config.technitium_url
         if primary is None or not primary.strip():
-            self.client = None
+            self._client = None
             self.active_endpoint = None
         else:
-            self.client = TechnitiumClient(
+            self._client = TechnitiumClient(
                 base_url=config.technitium_url,
                 timeout=config.technitium_timeout,
                 verify_ssl=config.technitium_verify_ssl,
@@ -65,7 +86,7 @@ class AppState:
         self._lock = asyncio.Lock()
         self._token_task: asyncio.Task[None] | None = None
         self._failback_task: asyncio.Task[None] | None = None
-        self.active_endpoint = self.client.base_url if self.client else None
+        self.active_endpoint = self.client.base_url if self._client else None
         self.is_writable = False
         self.server_role: str | None = None
         self.catalog_membership = None
@@ -103,22 +124,22 @@ class AppState:
             tasks_to_cancel.append(self._failback_task)
         if tasks_to_cancel:
             await asyncio.gather(*tasks_to_cancel, return_exceptions=True)
-        if self.client:
-            await self.client.close()
+        if self._client:
+            await self._client.close()
 
     async def set_active_endpoint(self, base_url: str) -> None:
         """Reconfigure the API client for a new Technitium endpoint."""
 
-        if self.client is None:
+        if self._client is None:
             return
 
         normalized = base_url.rstrip("/")
-        if self.client.base_url == normalized:
+        if self._client.base_url == normalized:
             self.active_endpoint = normalized
             return
 
-        old_client = self.client
-        self.client = TechnitiumClient(
+        old_client = self._client
+        self._client = TechnitiumClient(
             base_url=normalized,
             timeout=self.config.technitium_timeout,
             verify_ssl=self.config.technitium_verify_ssl,
@@ -172,11 +193,13 @@ class AppState:
         Raises:
             Exception: If authentication fails
         """
-        login_response = await self.client.login(
+        if self._client is None:
+            return
+        login_response = await self._client.login(
             username=self.config.technitium_username,
             password=self.config.technitium_password,
         )
-        self.client.token = login_response.token
+        self._client.token = login_response.token
         logger.info("Successfully authenticated with failover endpoint %s", endpoint)
 
     async def _try_endpoint_failover(
@@ -191,6 +214,8 @@ class AppState:
         Returns:
             Tuple of (success, is_writable). If success is False, is_writable is undefined.
         """
+        if self._client is None:
+            return (False, False)
         try:
             logger.info(
                 "Attempting failover to endpoint %s (from %s)",
@@ -241,8 +266,12 @@ class AppState:
             is_writable value is undefined.
         """
         endpoints = self.config.technitium_endpoints
-        current_endpoint = self.client.base_url if self.client else None
+        current_endpoint = self._client.base_url if self._client else None
         failures: list[str] = []
+
+        # Guard: no client means no failover possible
+        if current_endpoint is None:
+            return (False, False)
 
         for endpoint in endpoints:
             if endpoint == current_endpoint:
@@ -278,8 +307,11 @@ class AppState:
         server_role = "primary"
         catalog_membership = None
 
+        if self._client is None:
+            return (is_writable, server_role, catalog_membership)
+
         try:
-            zone_options: GetZoneOptionsResponse | None = await self.client.get_zone_options(
+            zone_options: GetZoneOptionsResponse | None = await self._client.get_zone_options(
                 self.config.zone, include_catalog_names=True
             )
             if zone_options:
@@ -314,11 +346,11 @@ class AppState:
             return False
 
         # Guard: no client means no failback possible
-        if self.client is None:
+        if self._client is None:
             return False
 
         primary_endpoint = endpoints[0]
-        current_endpoint = self.client.base_url
+        current_endpoint = self._client.base_url
 
         # If already on primary, nothing to do
         if primary_endpoint == current_endpoint:
@@ -333,11 +365,11 @@ class AppState:
             await self.set_active_endpoint(primary_endpoint)
 
             # Test connectivity and authentication
-            login_response = await self.client.login(
+            login_response = await self._client.login(
                 username=self.config.technitium_username,
                 password=self.config.technitium_password,
             )
-            self.client.token = login_response.token
+            self._client.token = login_response.token
 
             # Check zone status to ensure primary is writable
             is_writable, server_role, catalog_membership = await self._check_zone_status(
@@ -355,11 +387,11 @@ class AppState:
                 await self.set_active_endpoint(current_endpoint)
                 # Re-authenticate with secondary
                 try:
-                    login_response = await self.client.login(
+                    login_response = await self._client.login(
                         username=self.config.technitium_username,
                         password=self.config.technitium_password,
                     )
-                    self.client.token = login_response.token
+                    self._client.token = login_response.token
                 except Exception:
                     pass  # Secondary should still work
                 return False
