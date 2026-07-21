@@ -23,7 +23,9 @@ def _endpoint() -> tuple[str, int, Path]:
 
 
 def _handshake(host: str, port: int, context: ssl.SSLContext, server_name: str) -> None:
-    with context.wrap_socket(socket.create_connection((host, port), timeout=10), server_hostname=server_name) as tls_socket:
+    with context.wrap_socket(
+        socket.create_connection((host, port), timeout=10), server_hostname=server_name
+    ) as tls_socket:
         assert tls_socket.version() is not None
 
 
