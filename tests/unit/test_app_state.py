@@ -611,3 +611,39 @@ async def test_try_failback_primary_login_failure_on_secondary_endpoint(
         assert result is False
     finally:
         await state.close()
+
+
+def test_init_with_none_technitium_url_skips_client(config: Config) -> None:
+    """Init must skip client construction when technitium_url is None."""
+    object.__setattr__(config, "technitium_url", None)
+    state = AppState(config)
+    assert state.active_endpoint is None
+    with pytest.raises(RuntimeError):
+        _ = state.client
+
+
+@pytest.mark.asyncio
+async def test_unavailable_client_operations_are_safe_noops(config: Config) -> None:
+    """All unavailable-client guards must behave as safe noops when _client is None."""
+    object.__setattr__(config, "technitium_url", None)
+    state = AppState(config)
+    try:
+        # set_active_endpoint: early return when _client is None
+        await state.set_active_endpoint("https://secondary.example.com:5380")
+        assert state.active_endpoint is None
+        # _authenticate_with_endpoint: early return when _client is None
+        await state._authenticate_with_endpoint("https://secondary.example.com:5380")
+        # _try_endpoint_failover: returns (False, False) when _client is None
+        assert await state._try_endpoint_failover(
+            "https://secondary.example.com:5380", "https://primary.example.com:5380"
+        ) == (False, False)
+        # try_failover_endpoints: returns (False, False) when no current endpoint
+        assert await state.try_failover_endpoints() == (False, False)
+        # _check_zone_status: returns defaults (True, "primary", None) when _client is None
+        assert await state._check_zone_status("https://secondary.example.com:5380") == (
+            True,
+            "primary",
+            None,
+        )
+    finally:
+        await state.close()
