@@ -31,9 +31,9 @@ def _handshake(host: str, port: int, context: ssl.SSLContext, server_name: str) 
 
 def test_private_ca_tls_succeeds_with_trusted_ca() -> None:
     host, port, ca_bundle = _endpoint()
-    connection = http.client.HTTPSConnection(
-        host, port, context=ssl.create_default_context(cafile=ca_bundle), timeout=10
-    )
+    ctx = ssl.create_default_context(cafile=ca_bundle)
+    ctx.minimum_version = ssl.TLSVersion.TLSv1_2
+    connection = http.client.HTTPSConnection(host, port, context=ctx, timeout=10)
     try:
         connection.request("GET", "/")
         response = connection.getresponse()
@@ -45,10 +45,14 @@ def test_private_ca_tls_succeeds_with_trusted_ca() -> None:
 def test_private_ca_tls_fails_without_trusted_ca() -> None:
     host, port, _ = _endpoint()
     with pytest.raises(ssl.SSLCertVerificationError):
-        _handshake(host, port, ssl.create_default_context(), "localhost")
+        ctx = ssl.create_default_context()
+        ctx.minimum_version = ssl.TLSVersion.TLSv1_2
+        _handshake(host, port, ctx, "localhost")
 
 
 def test_private_ca_tls_rejects_wrong_hostname() -> None:
     host, port, ca_bundle = _endpoint()
     with pytest.raises(ssl.SSLCertVerificationError):
-        _handshake(host, port, ssl.create_default_context(cafile=ca_bundle), "wrong.invalid")
+        ctx = ssl.create_default_context(cafile=ca_bundle)
+        ctx.minimum_version = ssl.TLSVersion.TLSv1_2
+        _handshake(host, port, ctx, "wrong.invalid")

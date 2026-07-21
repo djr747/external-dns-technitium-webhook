@@ -164,6 +164,7 @@ class TechnitiumClient:
             # Use ssl.create_default_context to load the CA bundle
             logger.debug(f"Using custom CA bundle: {ca_bundle}")
             verify = ssl.create_default_context(cafile=ca_bundle)
+            verify.minimum_version = ssl.TLSVersion.TLSv1_2
         else:
             logger.debug("Using system CA certificates for SSL verification")
 
