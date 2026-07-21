@@ -7,7 +7,6 @@ from datetime import UTC, datetime
 from fastapi import FastAPI, HTTPException, Response, status
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
-from . import __version__
 from .config import Config as AppConfig
 
 # Track when the health server started for startup delay logic
@@ -57,6 +56,9 @@ def is_main_server_ready() -> bool:
 
 
 def create_health_app() -> FastAPI:
+    # Resolve at app construction so a package-metadata refresh cannot leave a stale module value.
+    from . import __version__
+
     app = FastAPI(
         title="ExternalDNS Technitium Webhook - Health",
         description="Health check endpoint for ExternalDNS Technitium webhook",
