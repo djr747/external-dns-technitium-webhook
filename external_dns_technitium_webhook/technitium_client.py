@@ -151,14 +151,16 @@ class TechnitiumClient:
         # perform full certificate and hostname validation using the system
         # CA store (or a custom bundle if one is specified).  For unit and
         # integration tests we support an override via ``verify_ssl=False``
-        # which simply passes ``verify=False`` to httpx.  This disables all
-        # TLS checks and should never be enabled in production; keeping the
-        # override branch minimal ensures static analyzers do not complain.
-        verify: Any = verify_ssl
+        # which would disable TLS checks — but the code above raises an error
+        # to prevent that and force use of a custom CA bundle instead.
         if not verify_ssl:
-            logger.warning("SSL verification disabled; connections will be insecure")
-            verify = False
-        elif ca_bundle:
+            raise ValueError(
+                "Disabling TLS certificate verification is not supported; "
+                "use ca_bundle to trust a private CA."
+            )
+
+        verify: Any = verify_ssl
+        if ca_bundle:
             # Use ssl.create_default_context to load the CA bundle
             logger.debug(f"Using custom CA bundle: {ca_bundle}")
             verify = ssl.create_default_context(cafile=ca_bundle)

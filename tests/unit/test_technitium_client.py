@@ -982,47 +982,14 @@ async def test_set_zone_options_serializes_values(
     assert "description" not in payload
 
 
-def test_client_init_with_verify_ssl_false() -> None:
-    """Test client initialization with verify_ssl=False.
-
-    The override path builds an SSL context with both certificate
-    validation and hostname checking disabled.  This is only used in
-    testing – production must keep ``verify_ssl=True``.  SonarCloud
-    flags the hostname disable, which we suppress explicitly in the
-    implementation with a ``# NOSONAR`` comment.
-    """
-    client = TechnitiumClient(
-        base_url="http://localhost:5380",
-        token="test-token",
-        verify_ssl=False,
-    )
-    assert client.verify_ssl is False
-    # internal verify value should reflect our override
-    assert client._verify is False or (
-        isinstance(client._verify, ssl.SSLContext)
-        and client._verify.check_hostname is False
-        and client._verify.verify_mode == ssl.CERT_NONE
-    )
-
-
-def test_client_verify_ssl_false_skips_ssl_context(mocker: MockerFixture) -> None:
-    """When verify_ssl=False we should not touch ssl.create_default_context.
-
-    A static analyzer (SonarCloud rule S5527) flagged use of
-    ``context.check_hostname = False`` in earlier versions.  By avoiding any
-    SSLContext creation when the override is used we keep the insecure path
-    entirely opaque to static analysis and eliminate the warning.
-    """
-    create_patch = mocker.patch(
-        "external_dns_technitium_webhook.technitium_client.ssl.create_default_context"
-    )
-    client = TechnitiumClient(
-        base_url="http://localhost:5380",
-        token="test-token",
-        verify_ssl=False,
-    )
-    assert client.verify_ssl is False
-    create_patch.assert_not_called()
+def test_client_rejects_verify_ssl_false() -> None:
+    """TLS verification cannot be disabled; callers must use ca_bundle."""
+    with pytest.raises(ValueError, match="ca_bundle"):
+        TechnitiumClient(
+            base_url="https://localhost:5380",
+            token="test-token",
+            verify_ssl=False,
+        )
 
 
 def test_client_init_with_ca_bundle() -> None:
