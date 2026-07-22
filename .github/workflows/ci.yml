@@ -297,19 +297,6 @@ jobs:
             --timeout=300s \
             -n default
 
-      - name: Deploy native Technitium TLS
-        run: |
-          kubectl apply -f tests/integration/k8s/technitium-tls.yaml \
-            -n default
-
-      - name: Deploy native Technitium TLS
-        run: |
-          kubectl apply -f tests/integration/k8s/technitium.yaml
-          kubectl wait --for=condition=Ready certificate/technitium-test-ca --timeout=180s -n default
-          kubectl wait --for=condition=Ready certificate/technitium --timeout=180s -n default
-          kubectl rollout status deployment/technitium --timeout=180s -n default
-          kubectl get secret technitium-test-ca -n default -o jsonpath="{.data.tls\\.crt}" | base64 -d > /tmp/technitium-test-ca.crt
-
       - name: Run Technitium initialization script
         id: init
         env:
