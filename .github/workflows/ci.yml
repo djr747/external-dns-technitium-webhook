@@ -365,7 +365,7 @@ jobs:
       - name: Wait for External DNS deployment (loop with event logging)
         run: |
           set -x
-          set +e
+          set -o pipefail
           echo "Waiting for ExternalDNS pod to become ready (max 160s)..."
 
           for i in $(seq 1 8); do
@@ -418,10 +418,11 @@ jobs:
           ZONE: ${{ steps.init.outputs.technitium_zone }}
         run: |
           kubectl port-forward -n default svc/technitium 30443:53443 > /tmp/technitium-tls-port-forward.log 2>&1 &
+           set -o pipefail
           TLS_FORWARD_PID=$!
           trap "kill $TLS_FORWARD_PID 2>/dev/null || true" EXIT
           for _ in $(seq 1 30); do
-            if kill -0 $TLS_FORWARD_PID 2>/dev/null && curl -s --cacert /tmp/technitium-test-ca.crt https://localhost:30443 > /dev/null 2>&1; then break; fi
+            if kill -0 $TLS_FORWARD_PID 2>/dev/null && curl --fail-with-body --show-error --silent --cacert /tmp/technitium-test-ca.crt https://localhost:30443 > /dev/null 2>&1; then break; fi
             sleep 1
           done
           kill -0 $TLS_FORWARD_PID
@@ -438,10 +439,15 @@ jobs:
           sleep 2
           
           # Run tests
-          pytest tests/integration/test_webhook_integration.py \
+          pytest tests/integration/test_webhook_integration.py --junitxml=/tmp/integration-junit.xml \\\n -W error
             -v \
             --tb=short \
             -m "integration"
+            skipped=$(python -c 'import xml.etree.ElementTree as ET; print(sum(1 for node in ET.parse("/tmp/integration-junit.xml").getroot().iter("skipped")))')
+            if [ "$skipped" -ne 0 ]; then
+              echo "unexpected skipped integration test(s): $skipped"
+              exit 1
+            fi
           TEST_RESULT=$?
           
           # Stop log streams
