@@ -253,6 +253,10 @@ jobs:
           cluster_name: integration-test
           config: /tmp/kind-config.yaml
 
+      - name: Install cert-manager
+        run: |
+          kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.16.3/cert-manager.yaml
+
       - name: Load webhook image into Kind
         run: |
           kind load docker-image ${{ needs.build-amd64.outputs.image-tag }} --name integration-test
@@ -277,6 +281,13 @@ jobs:
 
       - name: Deploy Technitium DNS
         run: |
+          kubectl create secret generic technitium-pkcs12-password \
+            --from-literal=password="$(openssl rand -base64 32)" \
+            -n default \
+            --dry-run=client -o yaml | kubectl apply -f -
+          kubectl apply -f tests/integration/k8s/technitium-tls.yaml
+          kubectl wait --for=condition=Ready certificate/technitium-test-ca --timeout=180s -n default
+          kubectl wait --for=condition=Ready certificate/technitium-https --timeout=180s -n default
           kubectl apply -f tests/integration/k8s/technitium-deployment.yaml
 
       - name: Wait for Technitium deployment
@@ -285,6 +296,19 @@ jobs:
             -l app=technitium \
             --timeout=300s \
             -n default
+
+      - name: Deploy native Technitium TLS
+        run: |
+          kubectl apply -f tests/integration/k8s/technitium-tls.yaml \
+            -n default
+
+      - name: Deploy native Technitium TLS
+        run: |
+          kubectl apply -f tests/integration/k8s/technitium.yaml
+          kubectl wait --for=condition=Ready certificate/technitium-test-ca --timeout=180s -n default
+          kubectl wait --for=condition=Ready certificate/technitium --timeout=180s -n default
+          kubectl rollout status deployment/technitium --timeout=180s -n default
+          kubectl get secret technitium-test-ca -n default -o jsonpath="{.data.tls\\.crt}" | base64 -d > /tmp/technitium-test-ca.crt
 
       - name: Run Technitium initialization script
         id: init
@@ -400,11 +424,21 @@ jobs:
       - name: Run integration tests
         if: ${{ !(github.event_name == 'push' && github.ref == 'refs/heads/main') }}
         env:
-          TECHNITIUM_URL: http://localhost:30380
+          TECHNITIUM_URL: https://localhost:30443
+          TECHNITIUM_CA_BUNDLE_FILE: /tmp/technitium-test-ca.crt
           TECHNITIUM_USERNAME: ${{ steps.init.outputs.technitium_username }}
           TECHNITIUM_PASSWORD: ${{ steps.init.outputs.technitium_password }}
           ZONE: ${{ steps.init.outputs.technitium_zone }}
         run: |
+          kubectl port-forward -n default svc/technitium 30443:53443 > /tmp/technitium-tls-port-forward.log 2>&1 &
+          TLS_FORWARD_PID=$!
+          trap "kill $TLS_FORWARD_PID 2>/dev/null || true" EXIT
+          for _ in $(seq 1 30); do
+            if kill -0 $TLS_FORWARD_PID 2>/dev/null && curl -s --cacert /tmp/technitium-test-ca.crt https://localhost:30443 > /dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          kill -0 $TLS_FORWARD_PID
+
           # Start log streaming in background
           echo "Starting log streams for debugging..."
           kubectl logs -l app.kubernetes.io/name=external-dns -n default -c external-dns -f > /tmp/external-dns.log 2>&1 &

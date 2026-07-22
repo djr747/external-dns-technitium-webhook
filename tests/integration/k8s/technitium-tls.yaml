@@ -1,0 +1,48 @@
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: technitium-test-selfsigned
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: technitium-test-ca
+spec:
+  isCA: true
+  commonName: technitium-test-ca
+  secretName: technitium-test-ca
+  issuerRef:
+    name: technitium-test-selfsigned
+    kind: Issuer
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: technitium-test-ca
+spec:
+  ca:
+    secretName: technitium-test-ca
+---
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: technitium-https
+spec:
+  secretName: technitium-https-tls
+  dnsNames:
+    - localhost
+    - technitium.default.svc.cluster.local
+  ipAddresses:
+    - 127.0.0.1
+  issuerRef:
+    name: technitium-test-ca
+    kind: Issuer
+  keystores:
+    pkcs12:
+      create: true
+      passwordSecretRef:
+        name: technitium-pkcs12-password
+        key: password

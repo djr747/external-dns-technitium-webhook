@@ -15,7 +15,9 @@ provider:
     env:
       # Technitium configuration
       - name: TECHNITIUM_URL
-        value: "http://technitium.default.svc.cluster.local:5380"
+        value: "https://technitium.default.svc.cluster.local:53443"
+      - name: TECHNITIUM_CA_BUNDLE_FILE
+        value: "/etc/technitium/ca/ca.crt"
       - name: TECHNITIUM_USERNAME
         valueFrom:
           secretKeyRef:
@@ -35,6 +37,11 @@ provider:
       - name: LOG_LEVEL
         value: "DEBUG"
     
+    extraVolumeMounts:
+      - name: technitium-ca
+        mountPath: /etc/technitium/ca
+        readOnly: true
+
     # Resources for the webhook container
     resources:
       requests:
@@ -59,6 +66,14 @@ provider:
       capabilities:
         drop:
           - ALL
+
+extraVolumes:
+  - name: technitium-ca
+    secret:
+      secretName: technitium-test-ca
+      items:
+        - key: tls.crt
+          path: ca.crt
 
 # RBAC policies for External DNS
 policy: sync
