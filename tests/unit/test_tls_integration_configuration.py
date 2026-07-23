@@ -110,6 +110,9 @@ def test_ci_uses_native_technitium_tls_and_http_health() -> None:
     )
     assert "svc/technitium 30443:53443" in workflow
     assert "TECHNITIUM_URL=http://technitium.default.svc.cluster.local:5380" in workflow
+    assert "ADMIN_PASSWORD=$(kubectl get secret technitium-secret -n default" in workflow
+    assert "TECHNITIUM_PASSWORD=$(kubectl get secret technitium-secret -n default" in workflow
+    assert 'grep "^TECHNITIUM_PASSWORD="' not in workflow
     assert "technitium-tls-proxy" not in workflow
 
 

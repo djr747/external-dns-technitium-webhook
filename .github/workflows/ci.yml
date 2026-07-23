@@ -268,16 +268,10 @@ jobs:
           kind load docker-image technitium/dns-server:latest --name integration-test
 
       - name: Generate test credentials
-        id: creds
-        run: |
-          PASSWORD=$(openssl rand -base64 12)
-          echo "admin_password=$PASSWORD" >> $GITHUB_OUTPUT
-
-      - name: Create Technitium secret
         run: |
           kubectl create secret generic technitium-secret \
             --from-literal=username=admin \
-            --from-literal=password=${{ steps.creds.outputs.admin_password }} \
+            --from-literal=password="$(openssl rand -base64 12 | tr -d '\n')" \
             -n default
 
       - name: Deploy Technitium DNS
@@ -299,45 +293,19 @@ jobs:
             -n default
 
       - name: Run Technitium initialization script
-        id: init
-        env:
-          DNS_SERVER_ADMIN_PASSWORD: ${{ steps.creds.outputs.admin_password }}
         run: |
+          ADMIN_PASSWORD=$(kubectl get secret technitium-secret -n default -o jsonpath='{.data.password}' | base64 --decode)
           kubectl run technitium-init \
             --image=curlimages/curl:latest \
             --restart=Never \
             --attach=true \
             --quiet \
             --env="TECHNITIUM_URL=http://technitium.default.svc.cluster.local:5380" \
-            --env="ADMIN_PASSWORD=$DNS_SERVER_ADMIN_PASSWORD" \
+            --env="ADMIN_PASSWORD=$ADMIN_PASSWORD" \
             --env="ZONE=test.local" \
             --env="CATALOG_ZONE=catalog.invalid" \
             -- sh -c "$(cat tests/integration/fixtures/init-technitium.sh)"
-          
-          # Get logs and capture credentials
-          echo ""
-          echo "=== Technitium Init Pod Logs ==="
-          INIT_LOGS=$(kubectl logs technitium-init -n default 2>&1 || true)
-          echo "$INIT_LOGS"
-          
-          # Extract credentials from logs
-          TECH_USERNAME=$(echo "$INIT_LOGS" | grep "^TECHNITIUM_USERNAME=" | cut -d= -f2)
-          TECH_PASSWORD=$(echo "$INIT_LOGS" | grep "^TECHNITIUM_PASSWORD=" | cut -d= -f2)
-          TECH_ZONE=$(echo "$INIT_LOGS" | grep "^TECHNITIUM_ZONE=" | cut -d= -f2)
-          
-          echo "technitium_username=$TECH_USERNAME" >> $GITHUB_OUTPUT
-          echo "technitium_password=$TECH_PASSWORD" >> $GITHUB_OUTPUT
-          echo "technitium_zone=$TECH_ZONE" >> $GITHUB_OUTPUT
-          
-          # Clean up the pod - force delete if needed
           kubectl delete pod technitium-init -n default --force --grace-period=0 2>/dev/null || true
-          
-          # Check if initialization succeeded by verifying outputs
-          if [ -z "$TECH_PASSWORD" ] || [ -z "$TECH_USERNAME" ]; then
-            echo ""
-            echo "ERROR: Technitium initialization failed - could not extract credentials"
-            exit 1
-          fi
 
       - name: Add External DNS Helm repository
         run: |
@@ -414,13 +382,14 @@ jobs:
         env:
           TECHNITIUM_URL: https://localhost:30443
           TECHNITIUM_CA_BUNDLE_FILE: /tmp/technitium-test-ca.crt
-          TECHNITIUM_USERNAME: ${{ steps.init.outputs.technitium_username }}
-          TECHNITIUM_PASSWORD: ${{ steps.init.outputs.technitium_password }}
-          ZONE: ${{ steps.init.outputs.technitium_zone }}
+          ZONE: test.local
         run: |
           set -o pipefail
           kubectl get secret technitium-test-ca -n default -o jsonpath='{.data.ca\.crt}' | base64 --decode > /tmp/technitium-test-ca.crt
           test -s /tmp/technitium-test-ca.crt
+          TECHNITIUM_USERNAME=admin
+          TECHNITIUM_PASSWORD=$(kubectl get secret technitium-secret -n default -o jsonpath='{.data.password}' | base64 --decode)
+          export TECHNITIUM_USERNAME TECHNITIUM_PASSWORD
           kubectl port-forward -n default svc/technitium 30443:53443 > /tmp/technitium-tls-port-forward.log 2>&1 &
           TLS_FORWARD_PID=$!
           trap "kill $TLS_FORWARD_PID 2>/dev/null || true" EXIT
