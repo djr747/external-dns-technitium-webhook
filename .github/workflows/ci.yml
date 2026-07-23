@@ -256,6 +256,7 @@ jobs:
       - name: Install cert-manager
         run: |
           kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.16.3/cert-manager.yaml
+          kubectl wait --for=condition=Available deployment/cert-manager-webhook --timeout=180s -n cert-manager
 
       - name: Load webhook image into Kind
         run: |

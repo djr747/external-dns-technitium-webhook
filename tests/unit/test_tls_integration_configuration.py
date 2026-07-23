@@ -100,6 +100,10 @@ def test_ci_uses_native_technitium_tls_and_http_health() -> None:
 
     assert "technitium-pkcs12-password" in workflow
     assert "certificate/technitium-https" in workflow
+    assert (
+        "kubectl wait --for=condition=Available deployment/cert-manager-webhook "
+        "--timeout=180s -n cert-manager" in workflow
+    )
     assert "svc/technitium 30443:53443" in workflow
     assert "TECHNITIUM_URL=http://technitium.default.svc.cluster.local:5380" in workflow
     assert "technitium-tls-proxy" not in workflow
