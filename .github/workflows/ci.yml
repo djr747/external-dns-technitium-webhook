@@ -371,7 +371,7 @@ jobs:
           for i in $(seq 1 8); do
             POD=$(kubectl get pods -n default -l app.kubernetes.io/name=external-dns -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
             STATUS=$(kubectl get pods -n default -l app.kubernetes.io/name=external-dns -o jsonpath='{.items[0].status.phase}' 2>/dev/null)
-            CONTAINER_STATUSES=$(kubectl get pods $POD -n default -o json | jq -r '.status.containerStatuses[] | "\(.name):ready=\(.ready),state=\(.state),reason=\(.lastState.terminated.reason // .state.waiting.reason // .state.running.reason // \"\")"')
+            CONTAINER_STATUSES=$(kubectl get pods $POD -n default -o json | jq -r '.status.containerStatuses[] | "\(.name):ready=\(.ready),state=\(.state),reason=\(.lastState.terminated.reason // .state.waiting.reason // .state.running.reason // "")"')
             echo "[${i}/8] Pod: $POD status: $STATUS"
             echo "$CONTAINER_STATUSES"
             kubectl get pods -n default -l app.kubernetes.io/name=external-dns
