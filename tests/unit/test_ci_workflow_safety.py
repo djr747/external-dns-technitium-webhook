@@ -37,3 +37,12 @@ def test_integration_workflow_pytest_command_has_no_literal_newline_argument() -
 def test_dockerfile_does_not_use_root_user() -> None:
     dockerfile = Path(__file__).parents[2] / "Dockerfile"
     assert "USER root" not in dockerfile.read_text()
+
+
+def test_integration_workflow_pytest_invocation_has_no_shell_continuation() -> None:
+    integration = _integration_step()
+    pytest_lines = [
+        line for line in integration.splitlines() if "test_webhook_integration.py" in line
+    ]
+    assert len(pytest_lines) == 1
+    assert chr(92) not in pytest_lines[0]

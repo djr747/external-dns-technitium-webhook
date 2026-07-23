@@ -439,10 +439,7 @@ jobs:
           sleep 2
           
           # Run tests
-          pytest tests/integration/test_webhook_integration.py --junitxml=/tmp/integration-junit.xml \\ -W error
-            -v \
-            --tb=short \
-            -m "integration"
+          pytest tests/integration/test_webhook_integration.py --junitxml=/tmp/integration-junit.xml -W error -v --tb=short -m "integration"
             skipped=$(python -c 'import xml.etree.ElementTree as ET; print(sum(1 for node in ET.parse("/tmp/integration-junit.xml").getroot().iter("skipped")))')
             if [ "$skipped" -ne 0 ]; then
               echo "unexpected skipped integration test(s): $skipped"
