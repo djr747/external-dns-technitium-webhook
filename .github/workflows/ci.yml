@@ -337,6 +337,13 @@ jobs:
           set -o pipefail
           echo "Waiting for ExternalDNS pod to become ready (max 160s)..."
 
+          capture_external_dns_diagnostics() {
+            echo "--- ExternalDNS container logs (current) ---"
+            kubectl logs "$POD" -c external-dns -n default --tail=50 || true
+            echo "--- Webhook container logs (current) ---"
+            kubectl logs "$POD" -c webhook -n default --tail=50 || true
+          }
+
           for i in $(seq 1 8); do
             POD=$(kubectl get pods -n default -l app.kubernetes.io/name=external-dns -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
             STATUS=$(kubectl get pods -n default -l app.kubernetes.io/name=external-dns -o jsonpath='{.items[0].status.phase}' 2>/dev/null)
@@ -349,22 +356,21 @@ jobs:
             # If either container is in CrashLoopBackOff, print and exit
             if echo "$CONTAINER_STATUSES" | grep -q 'CrashLoopBackOff'; then
             echo "ERROR: At least one container is in CrashLoopBackOff."
-            echo "--- ExternalDNS container logs (current) ---"
-            kubectl logs $POD -c external-dns -n default --tail=50 || true
-            echo "--- Webhook container logs (current) ---"
-            kubectl logs $POD -c webhook -n default --tail=50 || true
+            capture_external_dns_diagnostics
               exit 1
             fi
             # If both containers are ready, continue
             # Check if all containers are ready instead of looking for specific names
             ALL_CONTAINERS_READY=$(kubectl get pods $POD -n default -o jsonpath='{.status.containerStatuses[*].ready}' | grep -q 'false' && echo false || echo true)
-            if [ "$ALL_CONTAINERS_READY" = "true" ]; then
+            POD_READY=$(kubectl get pod $POD -n default -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}')
+            if [ "$ALL_CONTAINERS_READY" = "true" ] && [ "$POD_READY" = "True" ]; then
               echo "All containers are ready!"
               exit 0
             fi
             sleep 20
           done
           echo "ERROR: ExternalDNS pod did not become ready after 160s."
+          capture_external_dns_diagnostics
           exit 1
 
       - name: Set up Python

@@ -51,3 +51,16 @@ def test_integration_workflow_pytest_invocation_has_no_shell_continuation() -> N
 def test_pending_pod_diagnostics_handles_missing_container_statuses() -> None:
     workflow = (Path(__file__).parents[2] / ".github" / "workflows" / "ci.yml").read_text()
     assert "(.status.containerStatuses // [])[]" in workflow
+
+
+def test_external_dns_readiness_requires_pod_ready_condition() -> None:
+    workflow = (Path(__file__).parents[2] / ".github" / "workflows" / "ci.yml").read_text()
+    assert "POD_READY=" in workflow
+    assert '[ "$POD_READY" = "True" ]' in workflow
+
+
+def test_external_dns_timeout_captures_per_container_logs() -> None:
+    workflow = (Path(__file__).parents[2] / ".github" / "workflows" / "ci.yml").read_text()
+    timeout = workflow.index("ERROR: ExternalDNS pod did not become ready after 160s.")
+    assert "capture_external_dns_diagnostics()" in workflow
+    assert "capture_external_dns_diagnostics" in workflow[timeout:]
