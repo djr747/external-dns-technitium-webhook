@@ -11,6 +11,7 @@ Tests the complete workflow:
 import logging
 import os
 import time
+from pathlib import Path
 
 import httpx2
 import pytest
@@ -40,7 +41,7 @@ class TestWebhookIntegration:
 
     @pytest.fixture(scope="class", autouse=True)
     @classmethod
-    def ensure_cluster_ready(cls, k8s_client, technitium_url):
+    def ensure_cluster_ready(cls, k8s_client, technitium_url, technitium_verify):
         """Ensure cluster resources (Technitium service/pod and ExternalDNS pod) are ready before tests run.
 
         This prevents race conditions where pods are 'Running' but endpoints are not yet accepting
@@ -104,7 +105,9 @@ class TestWebhookIntegration:
         last_error = None
         while time.time() - reach_start < reach_timeout:
             try:
-                resp = httpx2.get(f"{technitium_url}/api/user/login", timeout=5)
+                resp = httpx2.get(
+                    f"{technitium_url}/api/user/login", timeout=5, verify=technitium_verify
+                )
                 if resp.status_code in [200, 400]:
                     reachable = True
                     break
@@ -123,6 +126,15 @@ class TestWebhookIntegration:
     def technitium_url(cls):
         """Get Technitium service URL"""
         return os.getenv("TECHNITIUM_URL", "http://technitium:5380")
+
+    @pytest.fixture(scope="class")
+    @classmethod
+    def technitium_verify(cls):
+        """Return the required private CA bundle for Technitium HTTPS requests."""
+        ca_bundle = os.getenv("TECHNITIUM_CA_BUNDLE_FILE")
+        if not ca_bundle or not Path(ca_bundle).is_file():
+            pytest.skip("TECHNITIUM_CA_BUNDLE_FILE must name an available CA bundle")
+        return ca_bundle
 
     def verify_compression(self, response: httpx2.Response) -> tuple[bool, str]:
         """Verify if a response is compressed and return (is_compressed, encoding).
@@ -169,19 +181,21 @@ class TestWebhookIntegration:
 
     @pytest.fixture(scope="class")
     @classmethod
-    def technitium_client(cls, technitium_url, technitium_credentials):
+    def technitium_client(cls, technitium_url, technitium_credentials, technitium_verify):
         """Create authenticated Technitium client"""
-        return TechnitiumTestClient(technitium_url, technitium_credentials)
+        return TechnitiumTestClient(technitium_url, technitium_credentials, technitium_verify)
 
-    def test_technitium_api_ready(self, technitium_url):
+    def test_technitium_api_ready(self, technitium_url, technitium_verify):
         """Verify Technitium API is accessible"""
-        response = httpx2.get(f"{technitium_url}/api/user/login", timeout=10)
+        response = httpx2.get(
+            f"{technitium_url}/api/user/login", timeout=10, verify=technitium_verify
+        )
         assert response.status_code in [200, 400], (
             f"Technitium API unreachable: {response.status_code}"
         )
 
     def test_dns_record_creation_and_validation(
-        self, k8s_client, technitium_client, technitium_url, technitium_zone
+        self, k8s_client, technitium_client, technitium_url, technitium_verify, technitium_zone
     ):
         """Test complete DNS record lifecycle: create 20 services → verify records → cleanup
 
@@ -245,6 +259,7 @@ class TestWebhookIntegration:
                                     "listZone": "true",
                                 },
                                 timeout=10,
+                                verify=technitium_verify,
                             )
                             response.raise_for_status()
 
@@ -380,26 +395,31 @@ class TestWebhookIntegration:
             # This is acceptable for cleanup verification
             print(f"Note: Could not verify record deletion (may be expected): {e}")
 
-    def test_technitium_zone_exists(self, technitium_url):
+    def test_technitium_zone_exists(self, technitium_url, technitium_verify):
         """Verify test.local zone was created in Technitium"""
         # This would require authentication, but for now just verify Technitium is accessible
-        response = httpx2.get(f"{technitium_url}/api/user/login", timeout=10)
+        response = httpx2.get(
+            f"{technitium_url}/api/user/login", timeout=10, verify=technitium_verify
+        )
         assert response.status_code in [200, 400], "Should be able to connect to Technitium API"
 
 
 class TechnitiumTestClient:
     """Simple test client for Technitium API operations"""
 
-    def __init__(self, base_url: str, credentials: dict):
+    def __init__(self, base_url: str, credentials: dict, verify: str):
         self.base_url = base_url.rstrip("/")
         self.credentials = credentials
+        self.verify = verify
         self.token = None
         self._login()
 
     def _login(self):
         """Authenticate with Technitium API"""
         data = {"user": self.credentials["username"], "pass": self.credentials["password"]}
-        response = httpx2.post(f"{self.base_url}/api/user/login", data=data, timeout=10)
+        response = httpx2.post(
+            f"{self.base_url}/api/user/login", data=data, timeout=10, verify=self.verify
+        )
         response.raise_for_status()
         result = response.json()
         self.token = result.get("token")
@@ -416,9 +436,9 @@ class TechnitiumTestClient:
             request_data.update(data)
 
         if method.upper() == "POST":
-            response = httpx2.post(url, data=request_data, timeout=10)
+            response = httpx2.post(url, data=request_data, timeout=10, verify=self.verify)
         else:
-            response = httpx2.get(url, params=request_data, timeout=10)
+            response = httpx2.get(url, params=request_data, timeout=10, verify=self.verify)
 
         response.raise_for_status()
         return response.json()
