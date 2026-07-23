@@ -64,3 +64,13 @@ def test_external_dns_timeout_captures_per_container_logs() -> None:
     timeout = workflow.index("ERROR: ExternalDNS pod did not become ready after 160s.")
     assert "capture_external_dns_diagnostics()" in workflow
     assert "capture_external_dns_diagnostics" in workflow[timeout:]
+
+
+def test_integration_pytest_reports_skip_reasons() -> None:
+    workflow = (Path(__file__).parents[2] / ".github" / "workflows" / "ci.yml").read_text()
+    integration_command = next(
+        line
+        for line in workflow.splitlines()
+        if "pytest tests/integration/test_webhook_integration.py" in line
+    )
+    assert "-rs" in integration_command.split()
