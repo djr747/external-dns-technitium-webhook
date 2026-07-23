@@ -150,12 +150,13 @@ class TechnitiumClient:
         self.compression_threshold_bytes = compression_threshold_bytes
         self.circuit_breaker = circuit_breaker
 
-        # Configure TLS verification.  The default behavior is to let httpx
-        # perform full certificate and hostname validation using the system
-        # CA store (or a custom bundle if one is specified).  For unit and
-        # integration tests we support an override via ``verify_ssl=False``
-        # which would disable TLS checks — but the code above raises an error
-        # to prevent that and force use of a custom CA bundle instead.
+        # Configure TLS verification. httpx always performs full certificate
+        # and hostname validation using the system CA store by default. A
+        # custom CA bundle (ca_bundle / TECHNITIUM_CA_BUNDLE_FILE) is only
+        # needed when the Technitium endpoint uses a private/self-signed CA;
+        # it is optional otherwise. Disabling verification via
+        # verify_ssl=False is not supported and is rejected below by
+        # raising a ValueError.
         if not verify_ssl:
             raise ValueError(
                 "Disabling TLS certificate verification is not supported; "
