@@ -10,6 +10,7 @@ Tests the complete workflow:
 
 import logging
 import os
+import ssl
 import time
 from pathlib import Path
 
@@ -134,7 +135,7 @@ class TestWebhookIntegration:
         ca_bundle = os.getenv("TECHNITIUM_CA_BUNDLE_FILE")
         if not ca_bundle or not Path(ca_bundle).is_file():
             pytest.skip("TECHNITIUM_CA_BUNDLE_FILE must name an available CA bundle")
-        return ca_bundle
+        return ssl.create_default_context(cafile=ca_bundle)
 
     def verify_compression(self, response: httpx2.Response) -> tuple[bool, str]:
         """Verify if a response is compressed and return (is_compressed, encoding).

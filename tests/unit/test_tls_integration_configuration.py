@@ -136,3 +136,10 @@ def test_native_technitium_certificate_supplies_pkcs12() -> None:
     )
     assert "localhost" in certificate["spec"]["dnsNames"]
     assert "technitium.default.svc.cluster.local" in certificate["spec"]["dnsNames"]
+
+
+def test_technitium_client_uses_ssl_context_for_ca_bundle() -> None:
+    source = (
+        Path(__file__).parents[2] / "tests" / "integration" / "test_webhook_integration.py"
+    ).read_text()
+    assert "ssl.create_default_context(cafile=" in source
