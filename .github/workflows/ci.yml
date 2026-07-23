@@ -398,7 +398,16 @@ jobs:
           export TECHNITIUM_USERNAME TECHNITIUM_PASSWORD
           kubectl port-forward -n default svc/technitium 30443:53443 > /tmp/technitium-tls-port-forward.log 2>&1 &
           TLS_FORWARD_PID=$!
-          trap "kill $TLS_FORWARD_PID 2>/dev/null || true" EXIT
+          emit_integration_failure_diagnostics() {
+            echo "--- Technitium TLS port-forward log (last 200 lines) ---"
+            tail -n 200 /tmp/technitium-tls-port-forward.log || true
+            echo "--- ExternalDNS container log stream (last 200 lines) ---"
+            tail -n 200 /tmp/external-dns.log || true
+            echo "--- Webhook container log stream (last 200 lines) ---"
+            tail -n 200 /tmp/webhook.log || true
+          }
+
+          trap 'status=$?; if [ "$status" -ne 0 ]; then emit_integration_failure_diagnostics; fi; kill $TLS_FORWARD_PID 2>/dev/null || true; exit "$status"' EXIT
           for _ in $(seq 1 30); do
             if kill -0 $TLS_FORWARD_PID 2>/dev/null && curl --fail-with-body --show-error --silent --cacert /tmp/technitium-test-ca.crt https://localhost:30443 > /dev/null 2>&1; then break; fi
             sleep 1
