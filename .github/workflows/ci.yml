@@ -439,7 +439,7 @@ jobs:
           sleep 2
           
           # Run tests
-          pytest tests/integration/test_webhook_integration.py --junitxml=/tmp/integration-junit.xml \\\n -W error
+          pytest tests/integration/test_webhook_integration.py --junitxml=/tmp/integration-junit.xml \\ -W error
             -v \
             --tb=short \
             -m "integration"
