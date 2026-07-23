@@ -418,8 +418,10 @@ jobs:
           TECHNITIUM_PASSWORD: ${{ steps.init.outputs.technitium_password }}
           ZONE: ${{ steps.init.outputs.technitium_zone }}
         run: |
+          set -o pipefail
+          kubectl get secret technitium-test-ca -n default -o jsonpath='{.data.ca\.crt}' | base64 --decode > /tmp/technitium-test-ca.crt
+          test -s /tmp/technitium-test-ca.crt
           kubectl port-forward -n default svc/technitium 30443:53443 > /tmp/technitium-tls-port-forward.log 2>&1 &
-           set -o pipefail
           TLS_FORWARD_PID=$!
           trap "kill $TLS_FORWARD_PID 2>/dev/null || true" EXIT
           for _ in $(seq 1 30); do

@@ -104,6 +104,10 @@ def test_ci_uses_native_technitium_tls_and_http_health() -> None:
         "kubectl wait --for=condition=Available deployment/cert-manager-webhook "
         "--timeout=180s -n cert-manager" in workflow
     )
+    assert (
+        "kubectl get secret technitium-test-ca -n default -o "
+        "jsonpath='{.data.ca\\.crt}' | base64 --decode > /tmp/technitium-test-ca.crt" in workflow
+    )
     assert "svc/technitium 30443:53443" in workflow
     assert "TECHNITIUM_URL=http://technitium.default.svc.cluster.local:5380" in workflow
     assert "technitium-tls-proxy" not in workflow
