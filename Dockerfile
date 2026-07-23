@@ -12,7 +12,6 @@ COPY pyproject.toml ./
 # Install dependencies (production only, no dev deps)
 # Chainguard images have no shell - use exec form (JSON array) for RUN
 RUN ["python", "-m", "pip", "install", "--no-cache-dir", "--upgrade", "pip", "setuptools", "wheel"]
-USER root
 RUN ["python", "-m", "pip", "install", "--no-cache-dir", "."]
 
 # Final stage - Chainguard Python (minimal runtime, non-root by default)

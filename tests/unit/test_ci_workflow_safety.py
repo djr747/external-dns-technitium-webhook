@@ -34,9 +34,6 @@ def test_integration_workflow_pytest_command_has_no_literal_newline_argument() -
     assert literal_newline_escape not in integration
 
 
-def test_dockerfile_local_project_install_runs_as_root_in_builder() -> None:
+def test_dockerfile_does_not_use_root_user() -> None:
     dockerfile = Path(__file__).parents[2] / "Dockerfile"
-    source = dockerfile.read_text()
-    local_install = source.rfind("pip")
-    assert local_install >= 0
-    assert "USER root" in source[:local_install]
+    assert "USER root" not in dockerfile.read_text()
