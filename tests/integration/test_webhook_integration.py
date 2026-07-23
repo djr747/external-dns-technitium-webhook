@@ -25,7 +25,8 @@ class TestWebhookIntegration:
     """Test webhook integration with Technitium in Kubernetes"""
 
     @pytest.fixture(scope="class")
-    def k8s_client(self):
+    @classmethod
+    def k8s_client(cls):
         """Initialize Kubernetes client"""
         try:
             config.load_incluster_config()
@@ -38,7 +39,8 @@ class TestWebhookIntegration:
         return client.CoreV1Api()
 
     @pytest.fixture(scope="class", autouse=True)
-    def ensure_cluster_ready(self, k8s_client, technitium_url):
+    @classmethod
+    def ensure_cluster_ready(cls, k8s_client, technitium_url):
         """Ensure cluster resources (Technitium service/pod and ExternalDNS pod) are ready before tests run.
 
         This prevents race conditions where pods are 'Running' but endpoints are not yet accepting
@@ -117,7 +119,8 @@ class TestWebhookIntegration:
             pytest.skip(error_msg)
 
     @pytest.fixture(scope="class")
-    def technitium_url(self):
+    @classmethod
+    def technitium_url(cls):
         """Get Technitium service URL"""
         return os.getenv("TECHNITIUM_URL", "http://technitium:5380")
 
@@ -135,7 +138,8 @@ class TestWebhookIntegration:
         return is_compressed, content_encoding
 
     @pytest.fixture(scope="class")
-    def technitium_credentials(self):
+    @classmethod
+    def technitium_credentials(cls):
         """Get Technitium authentication credentials"""
         username = os.getenv("TECHNITIUM_USERNAME")
         password = os.getenv("TECHNITIUM_PASSWORD")
@@ -146,7 +150,8 @@ class TestWebhookIntegration:
         return {"username": username, "password": password}
 
     @pytest.fixture(scope="class")
-    def technitium_zone(self):
+    @classmethod
+    def technitium_zone(cls):
         """Get the primary DNS zone"""
         zone = os.getenv("ZONE")
         if not zone:
@@ -154,7 +159,8 @@ class TestWebhookIntegration:
         return zone
 
     @pytest.fixture(scope="class")
-    def webhook_url(self):
+    @classmethod
+    def webhook_url(cls):
         """Get the webhook service URL"""
         webhook_url = os.getenv("WEBHOOK_URL")
         if not webhook_url:
@@ -162,7 +168,8 @@ class TestWebhookIntegration:
         return webhook_url
 
     @pytest.fixture(scope="class")
-    def technitium_client(self, technitium_url, technitium_credentials):
+    @classmethod
+    def technitium_client(cls, technitium_url, technitium_credentials):
         """Create authenticated Technitium client"""
         return TechnitiumTestClient(technitium_url, technitium_credentials)
 
