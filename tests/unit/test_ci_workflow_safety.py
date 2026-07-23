@@ -46,3 +46,8 @@ def test_integration_workflow_pytest_invocation_has_no_shell_continuation() -> N
     ]
     assert len(pytest_lines) == 1
     assert chr(92) not in pytest_lines[0]
+
+
+def test_pending_pod_diagnostics_handles_missing_container_statuses() -> None:
+    workflow = (Path(__file__).parents[2] / ".github" / "workflows" / "ci.yml").read_text()
+    assert "(.status.containerStatuses // [])[]" in workflow
