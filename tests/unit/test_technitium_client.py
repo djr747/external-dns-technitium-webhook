@@ -1268,17 +1268,21 @@ async def test_add_record_with_optional_parameters(
 @pytest.mark.asyncio
 async def test_parse_response_malformed_json_raises(client: TechnitiumClient) -> None:
     """The low-level parser should wrap JSON errors in TechnitiumError."""
-
+    response = httpx2.Response(200, content=b"not json")
     with pytest.raises(TechnitiumError, match="Failed to parse JSON response"):
-        client._parse_response(httpx2.Response(200, content=b"not json"))
+        client._parse_response(response)
+    with pytest.raises(TechnitiumError, match="Failed to parse JSON response"):
+         client._parse_response(response)
 
 
 @pytest.mark.asyncio
 async def test_parse_response_unexpected_format(client: TechnitiumClient) -> None:
     """A non-dict JSON body triggers an error."""
-
+    response = httpx2.Response(200, json=[1, 2, 3])
     with pytest.raises(TechnitiumError, match="Unexpected response format"):
-        client._parse_response(httpx2.Response(200, json=[1, 2, 3]))
+        client._parse_response(response)
+    with pytest.raises(TechnitiumError, match="Unexpected response format"):
+         client._parse_response(response)
 
 
 @pytest.mark.asyncio

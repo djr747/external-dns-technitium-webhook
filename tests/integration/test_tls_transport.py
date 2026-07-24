@@ -44,15 +44,15 @@ def test_private_ca_tls_succeeds_with_trusted_ca() -> None:
 
 def test_private_ca_tls_fails_without_trusted_ca() -> None:
     host, port, _ = _endpoint()
+    ctx = ssl.create_default_context()
+    ctx.minimum_version = ssl.TLSVersion.TLSv1_2
     with pytest.raises(ssl.SSLCertVerificationError):
-        ctx = ssl.create_default_context()
-        ctx.minimum_version = ssl.TLSVersion.TLSv1_2
         _handshake(host, port, ctx, "localhost")
 
 
 def test_private_ca_tls_rejects_wrong_hostname() -> None:
     host, port, ca_bundle = _endpoint()
+    ctx = ssl.create_default_context(cafile=ca_bundle)
+    ctx.minimum_version = ssl.TLSVersion.TLSv1_2
     with pytest.raises(ssl.SSLCertVerificationError):
-        ctx = ssl.create_default_context(cafile=ca_bundle)
-        ctx.minimum_version = ssl.TLSVersion.TLSv1_2
         _handshake(host, port, ctx, "wrong.invalid")

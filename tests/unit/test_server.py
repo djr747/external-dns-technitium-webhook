@@ -488,7 +488,7 @@ def test_run_servers_with_uvicorn_stub(mocker, config, monkeypatch):
     monkeypatch.setitem(sys.modules, "uvicorn", dummy_uvicorn)
 
     # Ensure module-level Server is None so the function imports UvicornServer
-    server_mod.Server = None
+    monkeypatch.setattr(server_mod, "Server", None)
 
     # Patch thread and events to avoid starting real threads
     mock_thread = MagicMock()
@@ -539,7 +539,7 @@ def test_run_servers_real_thread_health_start_and_main_run(mocker, config, monke
         types.SimpleNamespace(Config=lambda *a, **k: None, Server=DummyServer),
     )
     # Ensure module-level Server is None so run_servers uses the imported class
-    server_mod.Server = None
+    monkeypatch.setattr(server_mod, "Server", None)
 
     # Patch signal handlers to no-op
     mocker.patch("external_dns_technitium_webhook.server.signal.signal")
@@ -571,7 +571,7 @@ def test_run_servers_health_serve_raises_logs_error(mocker, config, monkeypatch)
         "uvicorn",
         types.SimpleNamespace(Config=lambda *a, **k: None, Server=DummyServerError),
     )
-    server_mod.Server = None
+    monkeypatch.setattr(server_mod, "Server", None)
 
     mocker.patch("external_dns_technitium_webhook.server.signal.signal")
     mock_err = mocker.patch("external_dns_technitium_webhook.server.logging.error")
@@ -601,7 +601,7 @@ def test_run_servers_health_loop_creation_fails(mocker, config, monkeypatch):
         "uvicorn",
         types.SimpleNamespace(Config=lambda *a, **k: None, Server=DummyServer),
     )
-    server_mod.Server = None
+    monkeypatch.setattr(server_mod, "Server", None)
 
     # Make new_event_loop raise to hit the health_server_error branch
     mocker.patch(

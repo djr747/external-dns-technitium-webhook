@@ -26,6 +26,17 @@ async def _fail(exc: Exception | None = None) -> None:
     raise exc or RuntimeError("simulated failure")
 
 
+async def _assert_raises(exc_type, coro, **kwargs):
+    """Assert that an async coroutine raises an exception.
+
+    Replaces ``with pytest.raises(...) as exc_info: await ...`` so that
+    Sonar rule python:S5778 is satisfied (body is a single callable
+    invocation).
+    """
+    with pytest.raises(exc_type, **kwargs):
+        await coro
+
+
 # ---------------------------------------------------------------------------
 # Constructor validation
 # ---------------------------------------------------------------------------
@@ -70,8 +81,7 @@ async def test_closed_state_resets_count_on_success() -> None:
     cb = CircuitBreaker(failure_threshold=5)
     # Cause a couple of failures but not enough to open the circuit
     for _ in range(3):
-        with pytest.raises(RuntimeError):
-            await cb.call(_fail())
+        await _assert_raises(RuntimeError, cb.call(_fail()))
     assert cb.failure_count == 3
 
     # A successful call should reset the counter
@@ -90,8 +100,7 @@ async def test_failure_threshold_opens_circuit() -> None:
     """Reaching the failure threshold transitions CLOSED → OPEN."""
     cb = CircuitBreaker(failure_threshold=3, timeout=60.0)
     for _ in range(3):
-        with pytest.raises(RuntimeError):
-            await cb.call(_fail())
+        await _assert_raises(RuntimeError, cb.call(_fail()))
 
     assert cb.state == CircuitState.OPEN
     assert cb.failure_count == 3
