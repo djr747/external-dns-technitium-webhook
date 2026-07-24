@@ -16,7 +16,7 @@ from external_dns_technitium_webhook.config import Config as AppConfig
 def config():
     """Provide a test configuration."""
     return AppConfig(
-        technitium_url="http://localhost:5380",
+        technitium_url="https://localhost:5380",
         technitium_username="admin",
         technitium_password="password",
         zone="example.com",

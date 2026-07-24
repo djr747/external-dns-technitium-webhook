@@ -9,7 +9,7 @@ from external_dns_technitium_webhook.config import Config
 def test_config_defaults() -> None:
     """Test default configuration values."""
     config = Config(
-        technitium_url="http://localhost:5380",
+        technitium_url="https://localhost:5380",
         technitium_username="admin",
         technitium_password="admin",
         zone="example.com",
@@ -32,7 +32,7 @@ def test_config_required_fields() -> None:
 def test_domain_filter_list() -> None:
     """Test domain filter parsing."""
     config = Config(
-        technitium_url="http://localhost:5380",
+        technitium_url="https://localhost:5380",
         technitium_username="admin",
         technitium_password="admin",
         zone="example.com",
@@ -45,7 +45,7 @@ def test_domain_filter_list() -> None:
 def test_domain_filter_list_empty() -> None:
     """Test empty domain filter."""
     config = Config(
-        technitium_url="http://localhost:5380",
+        technitium_url="https://localhost:5380",
         technitium_username="admin",
         technitium_password="admin",
         zone="example.com",
@@ -57,23 +57,23 @@ def test_domain_filter_list_empty() -> None:
 def test_technitium_endpoints_normalization() -> None:
     """Technitium endpoints should be normalized and deduplicated."""
     config = Config(
-        technitium_url="  http://primary:5380/  ",
+        technitium_url="  https://primary:5380/  ",
         technitium_username="admin",
         technitium_password="admin",
         zone="example.com",
-        technitium_failover_urls=" http://primary:5380/ ; http://secondary:5380/// ",
+        technitium_failover_urls=" https://primary:5380/ ; https://secondary:5380/// ",
     )
 
     assert config.technitium_endpoints == [
-        "http://primary:5380",
-        "http://secondary:5380",
+        "https://primary:5380",
+        "https://secondary:5380",
     ]
 
 
 def test_technitium_endpoints_skip_blank_entries() -> None:
     """Whitespace-only failover entries should be ignored."""
     config = Config(
-        technitium_url="http://primary.example.com",
+        technitium_url="https://primary.example.com",
         technitium_failover_urls=";   ; https://backup.example.com ",
         technitium_username="admin",
         technitium_password="password",
@@ -83,7 +83,7 @@ def test_technitium_endpoints_skip_blank_entries() -> None:
     endpoints = config.technitium_endpoints
 
     assert endpoints == [
-        "http://primary.example.com",
+        "https://primary.example.com",
         "https://backup.example.com",
     ]
 
@@ -108,7 +108,7 @@ def test_technitium_endpoints_ignore_blank_primary() -> None:
 def test_bind_address() -> None:
     """Test bind address property."""
     config = Config(
-        technitium_url="http://localhost:5380",
+        technitium_url="https://localhost:5380",
         technitium_username="admin",
         technitium_password="admin",
         zone="example.com",
@@ -122,7 +122,7 @@ def test_bind_address() -> None:
 def test_password_redaction_in_repr() -> None:
     """Test that password is redacted in __repr__."""
     config = Config(
-        technitium_url="http://localhost:5380",
+        technitium_url="https://localhost:5380",
         technitium_username="admin",
         technitium_password="supersecret",
         zone="example.com",
@@ -136,7 +136,7 @@ def test_password_redaction_in_repr() -> None:
 def test_password_redaction_in_model_dump() -> None:
     """Test that password is redacted in model_dump()."""
     config = Config(
-        technitium_url="http://localhost:5380",
+        technitium_url="https://localhost:5380",
         technitium_username="admin",
         technitium_password="supersecret",
         zone="example.com",
@@ -155,7 +155,7 @@ def test_ca_bundle_validation_missing_file() -> None:
     nonexistent_ca = "/nonexistent/path/to/ca.pem"
     with pytest.raises(ValueError, match="does not exist"):
         Config(
-            technitium_url="http://localhost:5380",
+            technitium_url="https://localhost:5380",
             technitium_username="admin",
             technitium_password="admin",
             zone="example.com",
@@ -194,7 +194,7 @@ def test_ca_bundle_validation_with_valid_file() -> None:
         )
 
         config = Config(
-            technitium_url="http://localhost:5380",
+            technitium_url="https://localhost:5380",
             technitium_username="admin",
             technitium_password="admin",
             zone="example.com",
@@ -204,19 +204,20 @@ def test_ca_bundle_validation_with_valid_file() -> None:
         assert config.technitium_ca_bundle_file == ca_file
 
 
-def test_ca_bundle_not_required_when_verify_ssl_false() -> None:
-    """Test that CA bundle is optional when verify_ssl is False."""
-    config = Config(
-        technitium_url="http://localhost:5380",
-        technitium_username="admin",
-        technitium_password="admin",
-        zone="example.com",
-        technitium_verify_ssl=False,
-        technitium_ca_bundle_file="/nonexistent/path.pem",
-    )
-    # Should not raise even though the file does not exist
-    assert config.technitium_verify_ssl is False
-    assert config.technitium_ca_bundle_file == "/nonexistent/path.pem"
+def test_verify_ssl_false_is_rejected() -> None:
+    """TLS verification cannot be disabled through configuration."""
+    with pytest.raises(
+        ValueError,
+        match="Disabling TLS certificate verification is not supported",
+    ):
+        Config(
+            technitium_url="https://dns.example.com",
+            technitium_username="user",
+            technitium_password="pass",
+            zone="example.com",
+            technitium_verify_ssl=False,
+            technitium_ca_bundle_file="/nonexistent/path.pem",
+        )
 
 
 def test_ca_bundle_validation_unreadable_file() -> None:
@@ -233,7 +234,7 @@ def test_ca_bundle_validation_unreadable_file() -> None:
         try:
             with pytest.raises(ValueError) as exc_info:
                 Config(
-                    technitium_url="http://localhost:5380",
+                    technitium_url="https://localhost:5380",
                     technitium_username="admin",
                     technitium_password="admin",
                     zone="example.com",
@@ -252,7 +253,7 @@ def test_config_model_dump_password_redacted() -> None:
     This covers the branch where technitium_password IS in the dumped data.
     """
     config = Config(
-        technitium_url="http://localhost:5380",
+        technitium_url="https://localhost:5380",
         technitium_username="admin",
         technitium_password="secret123",
         zone="example.com",
@@ -269,7 +270,7 @@ def test_config_model_dump_password_excluded() -> None:
     (e.g., when exclude parameter is used).
     """
     config = Config(
-        technitium_url="http://localhost:5380",
+        technitium_url="https://localhost:5380",
         technitium_username="admin",
         technitium_password="secret123",
         zone="example.com",
@@ -278,3 +279,24 @@ def test_config_model_dump_password_excluded() -> None:
     # Dump excluding the password field
     dump = config.model_dump(exclude={"technitium_password"})
     assert "technitium_password" not in dump
+
+
+@pytest.mark.parametrize(
+    ("technitium_url", "technitium_failover_urls"),
+    [
+        ("http://dns.example.test:5380", None),
+        ("https://dns.example.test:53443", "http://failover.example.test:5380"),
+    ],
+)
+def test_config_rejects_non_https_technitium_endpoints(
+    technitium_url: str, technitium_failover_urls: str | None
+) -> None:
+    """Technitium endpoints must use HTTPS."""
+    with pytest.raises(ValueError, match="must use HTTPS URLs"):
+        Config(
+            technitium_url=technitium_url,
+            technitium_username="test-user",
+            technitium_password="test-password",
+            zone="example.test",
+            technitium_failover_urls=technitium_failover_urls,
+        )

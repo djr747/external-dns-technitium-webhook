@@ -20,40 +20,39 @@ else
     PYTEST_BIN="pytest"
 fi
 
-CLUSTER_NAME="local-integration-test"
-KIND_CONTEXT="kind-${CLUSTER_NAME}"
-FORWARD_PORT=30380
+CLUSTER_NAME="${CLUSTER_NAME:-local-integration-test}"
+KIND_CONTEXT="${KIND_CONTEXT:-kind-${CLUSTER_NAME}}"
+HEALTH_FORWARD_PORT=30380
+TLS_FORWARD_PORT="${TLS_FORWARD_PORT:-30443}"
+CA_BUNDLE="$(mktemp)"
 
-# Check if cluster exists
-if ! kind get clusters | grep -q "^${CLUSTER_NAME}$"; then
-    echo "ERROR: Cluster '$CLUSTER_NAME' not found."
-    echo "Please run './local-ci-setup/setup.sh' first to create the cluster."
+# Verify the requested context without changing global kubectl state.
+if ! kubectl --context "${KIND_CONTEXT}" get --raw=/readyz >/dev/null; then
+    echo "ERROR: Kubernetes context '${KIND_CONTEXT}' is not reachable."
     exit 1
 fi
 
-# Switch to the kind context
-kubectl config use-context "${KIND_CONTEXT}"
-
 echo "--- Setting up port forwarding ---"
-echo "Forwarding localhost:${FORWARD_PORT} to technitium-external:5380..."
-
-# Kill any existing port-forward processes on these ports
-pkill -f "kubectl port-forward.*${FORWARD_PORT}" || true
-sleep 1
+kubectl --context "${KIND_CONTEXT}" get secret technitium-test-ca -n default -o jsonpath='{.data.tls\.crt}' | base64 -d > "${CA_BUNDLE}"
+echo "Forwarding localhost:${HEALTH_FORWARD_PORT} to technitium:5380 and localhost:${TLS_FORWARD_PORT} to technitium:53443..."
 
 # Start port forwarding in the background
-
-kubectl --context "${KIND_CONTEXT}" port-forward svc/technitium-external ${FORWARD_PORT}:5380 -n default &
+kubectl --context "${KIND_CONTEXT}" port-forward svc/technitium ${HEALTH_FORWARD_PORT}:5380 -n default &
+HEALTH_FORWARD_PID=$!
+kubectl --context "${KIND_CONTEXT}" port-forward svc/technitium ${TLS_FORWARD_PORT}:53443 -n default &
 TECHNITIUM_FORWARD_PID=$!
+EXTERNAL_DNS_LOG_PID=""
 
 # Give port-forward time to establish
 sleep 2
 
 # Verify port is accessible
 
-if ! curl -s http://localhost:${FORWARD_PORT}/api/user/login > /dev/null 2>&1; then
-    echo "ERROR: Could not reach Technitium at localhost:${FORWARD_PORT}"
-    kill $FORWARD_PID 2>/dev/null || true
+if ! curl -s http://localhost:${HEALTH_FORWARD_PORT}/api/user/login > /dev/null 2>&1 || ! curl -s --cacert "${CA_BUNDLE}" https://localhost:${TLS_FORWARD_PORT}/api/user/login > /dev/null 2>&1; then
+    echo "ERROR: Could not reach Technitium HTTP health endpoint or native TLS endpoint"
+    kill "${HEALTH_FORWARD_PID}" 2>/dev/null || true
+    kill "${TECHNITIUM_FORWARD_PID}" 2>/dev/null || true
+    rm -f "${CA_BUNDLE}"
     exit 1
 fi
 
@@ -66,21 +65,23 @@ TECHNITIUM_PASSWORD=$(kubectl --context "${KIND_CONTEXT}" get secret technitium-
 ZONE="test.local"
 
 echo "✓ Credentials extracted"
-echo "  Username: $TECHNITIUM_USERNAME"
 echo "  Zone: $ZONE"
 
 # Export environment variables for pytest
-export TECHNITIUM_URL="http://localhost:${FORWARD_PORT}"
+export TECHNITIUM_URL="https://localhost:${TLS_FORWARD_PORT}"
+export TECHNITIUM_CA_BUNDLE_FILE="${CA_BUNDLE}"
 export TECHNITIUM_USERNAME
 export TECHNITIUM_PASSWORD
 export ZONE
 
 # Clean up trap
 cleanup() {
+    rm -f "${CA_BUNDLE}"
     echo ""
     echo "--- Cleaning up ---"
-    kill $TECHNITIUM_FORWARD_PID 2>/dev/null || true
-    kill $WEBHOOK_FORWARD_PID 2>/dev/null || true
+    kill "${HEALTH_FORWARD_PID}" 2>/dev/null || true
+    kill "${TECHNITIUM_FORWARD_PID}" 2>/dev/null || true
+    kill "${EXTERNAL_DNS_LOG_PID}" 2>/dev/null || true
     echo "Port forwarding stopped"
 }
 trap cleanup EXIT
@@ -89,7 +90,6 @@ trap cleanup EXIT
 echo ""
 echo "--- Running integration tests ---"
 echo "TECHNITIUM_URL=$TECHNITIUM_URL"
-echo "TECHNITIUM_USERNAME=$TECHNITIUM_USERNAME"
 echo "ZONE=$ZONE"
 echo ""
 

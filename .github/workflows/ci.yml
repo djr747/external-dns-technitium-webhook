@@ -253,6 +253,11 @@ jobs:
           cluster_name: integration-test
           config: /tmp/kind-config.yaml
 
+      - name: Install cert-manager
+        run: |
+          kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.16.3/cert-manager.yaml
+          kubectl wait --for=condition=Available deployment/cert-manager-webhook --timeout=180s -n cert-manager
+
       - name: Load webhook image into Kind
         run: |
           kind load docker-image ${{ needs.build-amd64.outputs.image-tag }} --name integration-test
@@ -263,20 +268,21 @@ jobs:
           kind load docker-image technitium/dns-server:latest --name integration-test
 
       - name: Generate test credentials
-        id: creds
-        run: |
-          PASSWORD=$(openssl rand -base64 12)
-          echo "admin_password=$PASSWORD" >> $GITHUB_OUTPUT
-
-      - name: Create Technitium secret
         run: |
           kubectl create secret generic technitium-secret \
             --from-literal=username=admin \
-            --from-literal=password=${{ steps.creds.outputs.admin_password }} \
+            --from-literal=password="$(openssl rand -base64 12 | tr -d '\n')" \
             -n default
 
       - name: Deploy Technitium DNS
         run: |
+          kubectl create secret generic technitium-pkcs12-password \
+            --from-literal=password="$(openssl rand -base64 32)" \
+            -n default \
+            --dry-run=client -o yaml | kubectl apply -f -
+          kubectl apply -f tests/integration/k8s/technitium-tls.yaml
+          kubectl wait --for=condition=Ready certificate/technitium-test-ca --timeout=180s -n default
+          kubectl wait --for=condition=Ready certificate/technitium-https --timeout=180s -n default
           kubectl apply -f tests/integration/k8s/technitium-deployment.yaml
 
       - name: Wait for Technitium deployment
@@ -287,45 +293,19 @@ jobs:
             -n default
 
       - name: Run Technitium initialization script
-        id: init
-        env:
-          DNS_SERVER_ADMIN_PASSWORD: ${{ steps.creds.outputs.admin_password }}
         run: |
+          ADMIN_PASSWORD=$(kubectl get secret technitium-secret -n default -o jsonpath='{.data.password}' | base64 --decode)
           kubectl run technitium-init \
             --image=curlimages/curl:latest \
             --restart=Never \
             --attach=true \
             --quiet \
             --env="TECHNITIUM_URL=http://technitium.default.svc.cluster.local:5380" \
-            --env="ADMIN_PASSWORD=$DNS_SERVER_ADMIN_PASSWORD" \
+            --env="ADMIN_PASSWORD=$ADMIN_PASSWORD" \
             --env="ZONE=test.local" \
             --env="CATALOG_ZONE=catalog.invalid" \
             -- sh -c "$(cat tests/integration/fixtures/init-technitium.sh)"
-          
-          # Get logs and capture credentials
-          echo ""
-          echo "=== Technitium Init Pod Logs ==="
-          INIT_LOGS=$(kubectl logs technitium-init -n default 2>&1 || true)
-          echo "$INIT_LOGS"
-          
-          # Extract credentials from logs
-          TECH_USERNAME=$(echo "$INIT_LOGS" | grep "^TECHNITIUM_USERNAME=" | cut -d= -f2)
-          TECH_PASSWORD=$(echo "$INIT_LOGS" | grep "^TECHNITIUM_PASSWORD=" | cut -d= -f2)
-          TECH_ZONE=$(echo "$INIT_LOGS" | grep "^TECHNITIUM_ZONE=" | cut -d= -f2)
-          
-          echo "technitium_username=$TECH_USERNAME" >> $GITHUB_OUTPUT
-          echo "technitium_password=$TECH_PASSWORD" >> $GITHUB_OUTPUT
-          echo "technitium_zone=$TECH_ZONE" >> $GITHUB_OUTPUT
-          
-          # Clean up the pod - force delete if needed
           kubectl delete pod technitium-init -n default --force --grace-period=0 2>/dev/null || true
-          
-          # Check if initialization succeeded by verifying outputs
-          if [ -z "$TECH_PASSWORD" ] || [ -z "$TECH_USERNAME" ]; then
-            echo ""
-            echo "ERROR: Technitium initialization failed - could not extract credentials"
-            exit 1
-          fi
 
       - name: Add External DNS Helm repository
         run: |
@@ -354,13 +334,20 @@ jobs:
       - name: Wait for External DNS deployment (loop with event logging)
         run: |
           set -x
-          set +e
+          set -o pipefail
           echo "Waiting for ExternalDNS pod to become ready (max 160s)..."
+
+          capture_external_dns_diagnostics() {
+            echo "--- ExternalDNS container logs (current) ---"
+            kubectl logs "$POD" -c external-dns -n default --tail=50 || true
+            echo "--- Webhook container logs (current) ---"
+            kubectl logs "$POD" -c webhook -n default --tail=50 || true
+          }
 
           for i in $(seq 1 8); do
             POD=$(kubectl get pods -n default -l app.kubernetes.io/name=external-dns -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
             STATUS=$(kubectl get pods -n default -l app.kubernetes.io/name=external-dns -o jsonpath='{.items[0].status.phase}' 2>/dev/null)
-            CONTAINER_STATUSES=$(kubectl get pods $POD -n default -o json | jq -r '.status.containerStatuses[] | "\(.name):ready=\(.ready),state=\(.state),reason=\(.lastState.terminated.reason // .state.waiting.reason // .state.running.reason // \"\")"')
+            CONTAINER_STATUSES=$(kubectl get pods $POD -n default -o json | jq -r '(.status.containerStatuses // [])[] | "\(.name):ready=\(.ready),state=\(.state),reason=\(.lastState.terminated.reason // .state.waiting.reason // .state.running.reason // "")"')
             echo "[${i}/8] Pod: $POD status: $STATUS"
             echo "$CONTAINER_STATUSES"
             kubectl get pods -n default -l app.kubernetes.io/name=external-dns
@@ -369,22 +356,21 @@ jobs:
             # If either container is in CrashLoopBackOff, print and exit
             if echo "$CONTAINER_STATUSES" | grep -q 'CrashLoopBackOff'; then
             echo "ERROR: At least one container is in CrashLoopBackOff."
-            echo "--- ExternalDNS container logs (current) ---"
-            kubectl logs $POD -c external-dns -n default --tail=50 || true
-            echo "--- Webhook container logs (current) ---"
-            kubectl logs $POD -c webhook -n default --tail=50 || true
+            capture_external_dns_diagnostics
               exit 1
             fi
             # If both containers are ready, continue
             # Check if all containers are ready instead of looking for specific names
             ALL_CONTAINERS_READY=$(kubectl get pods $POD -n default -o jsonpath='{.status.containerStatuses[*].ready}' | grep -q 'false' && echo false || echo true)
-            if [ "$ALL_CONTAINERS_READY" = "true" ]; then
+            POD_READY=$(kubectl get pod $POD -n default -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}')
+            if [ "$ALL_CONTAINERS_READY" = "true" ] && [ "$POD_READY" = "True" ]; then
               echo "All containers are ready!"
               exit 0
             fi
             sleep 20
           done
           echo "ERROR: ExternalDNS pod did not become ready after 160s."
+          capture_external_dns_diagnostics
           exit 1
 
       - name: Set up Python
@@ -400,11 +386,34 @@ jobs:
       - name: Run integration tests
         if: ${{ !(github.event_name == 'push' && github.ref == 'refs/heads/main') }}
         env:
-          TECHNITIUM_URL: http://localhost:30380
-          TECHNITIUM_USERNAME: ${{ steps.init.outputs.technitium_username }}
-          TECHNITIUM_PASSWORD: ${{ steps.init.outputs.technitium_password }}
-          ZONE: ${{ steps.init.outputs.technitium_zone }}
+          TECHNITIUM_URL: https://localhost:30443
+          TECHNITIUM_CA_BUNDLE_FILE: /tmp/technitium-test-ca.crt
+          ZONE: test.local
         run: |
+          set -o pipefail
+          kubectl get secret technitium-test-ca -n default -o jsonpath='{.data.ca\.crt}' | base64 --decode > /tmp/technitium-test-ca.crt
+          test -s /tmp/technitium-test-ca.crt
+          TECHNITIUM_USERNAME=admin
+          TECHNITIUM_PASSWORD=$(kubectl get secret technitium-secret -n default -o jsonpath='{.data.password}' | base64 --decode)
+          export TECHNITIUM_USERNAME TECHNITIUM_PASSWORD
+          kubectl port-forward -n default svc/technitium 30443:53443 > /tmp/technitium-tls-port-forward.log 2>&1 &
+          TLS_FORWARD_PID=$!
+          emit_integration_failure_diagnostics() {
+            echo "--- Technitium TLS port-forward log (last 200 lines) ---"
+            tail -n 200 /tmp/technitium-tls-port-forward.log || true
+            echo "--- ExternalDNS container log stream (last 200 lines) ---"
+            tail -n 200 /tmp/external-dns.log || true
+            echo "--- Webhook container log stream (last 200 lines) ---"
+            tail -n 200 /tmp/webhook.log || true
+          }
+
+          trap 'status=$?; if [ "$status" -ne 0 ]; then emit_integration_failure_diagnostics; fi; kill $TLS_FORWARD_PID 2>/dev/null || true; exit "$status"' EXIT
+          for _ in $(seq 1 30); do
+            if kill -0 $TLS_FORWARD_PID 2>/dev/null && curl --fail-with-body --show-error --silent --cacert /tmp/technitium-test-ca.crt https://localhost:30443 > /dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          kill -0 $TLS_FORWARD_PID
+
           # Start log streaming in background
           echo "Starting log streams for debugging..."
           kubectl logs -l app.kubernetes.io/name=external-dns -n default -c external-dns -f > /tmp/external-dns.log 2>&1 &
@@ -417,11 +426,13 @@ jobs:
           sleep 2
           
           # Run tests
-          pytest tests/integration/test_webhook_integration.py \
-            -v \
-            --tb=short \
-            -m "integration"
+          pytest tests/integration/test_webhook_integration.py --junitxml=/tmp/integration-junit.xml -W error -v -rs --tb=short -m "integration"
           TEST_RESULT=$?
+          skipped=$(python -c 'import xml.etree.ElementTree as ET; print(sum(1 for node in ET.parse("/tmp/integration-junit.xml").getroot().iter("skipped")))')
+          if [ "$skipped" -ne 0 ]; then
+            echo "unexpected skipped integration test(s): $skipped"
+            TEST_RESULT=1
+          fi
           
           # Stop log streams
           kill $EXTERNAL_DNS_LOG_PID $WEBHOOK_LOG_PID 2>/dev/null || true

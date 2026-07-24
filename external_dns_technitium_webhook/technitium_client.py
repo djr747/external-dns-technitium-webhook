@@ -5,7 +5,7 @@ import logging
 import ssl
 import time
 from typing import Any, Self, cast
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 
 import httpx2
 from pydantic import BaseModel
@@ -138,6 +138,9 @@ class TechnitiumClient:
             circuit_breaker: Optional circuit breaker for protecting API calls
             records_cache_ttl_seconds: TTL for get_records cache entries (0 to disable)
         """
+        parsed = urlparse(base_url)
+        if parsed.scheme.lower() != "https" or not parsed.netloc:
+            raise ValueError("Technitium base_url must use an HTTPS URL.")
         self.base_url = base_url.rstrip("/")
         self.token = token
         self.timeout = timeout
@@ -147,21 +150,25 @@ class TechnitiumClient:
         self.compression_threshold_bytes = compression_threshold_bytes
         self.circuit_breaker = circuit_breaker
 
-        # Configure TLS verification.  The default behavior is to let httpx
-        # perform full certificate and hostname validation using the system
-        # CA store (or a custom bundle if one is specified).  For unit and
-        # integration tests we support an override via ``verify_ssl=False``
-        # which simply passes ``verify=False`` to httpx.  This disables all
-        # TLS checks and should never be enabled in production; keeping the
-        # override branch minimal ensures static analyzers do not complain.
-        verify: Any = verify_ssl
+        # Configure TLS verification. httpx always performs full certificate
+        # and hostname validation using the system CA store by default. A
+        # custom CA bundle (ca_bundle / TECHNITIUM_CA_BUNDLE_FILE) is only
+        # needed when the Technitium endpoint uses a private/self-signed CA;
+        # it is optional otherwise. Disabling verification via
+        # verify_ssl=False is not supported and is rejected below by
+        # raising a ValueError.
         if not verify_ssl:
-            logger.warning("SSL verification disabled; connections will be insecure")
-            verify = False
-        elif ca_bundle:
+            raise ValueError(
+                "Disabling TLS certificate verification is not supported; "
+                "use ca_bundle to trust a private CA."
+            )
+
+        verify: Any = verify_ssl
+        if ca_bundle:
             # Use ssl.create_default_context to load the CA bundle
             logger.debug(f"Using custom CA bundle: {ca_bundle}")
             verify = ssl.create_default_context(cafile=ca_bundle)
+            verify.minimum_version = ssl.TLSVersion.TLSv1_2
         else:
             logger.debug("Using system CA certificates for SSL verification")
 

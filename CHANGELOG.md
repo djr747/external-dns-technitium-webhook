@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v1.0.10] - 2026-07-21
+
+### Security
+
+- Require HTTPS for all webhook-to-Technitium primary and failover endpoints, preserve certificate-chain and hostname validation, and require TLS 1.2 or newer.
+- Reject attempts to disable TLS verification at configuration and client initialization; private and self-signed CAs are supported through `TECHNITIUM_CA_BUNDLE_FILE`.
+
+### Improved
+
+- Document the HTTPS-only Technitium connection requirement and private-CA deployment path.
+
 ## [v1.0.9] - 2026-07-20
 
 ### Improved

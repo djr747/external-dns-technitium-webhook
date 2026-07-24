@@ -73,6 +73,18 @@ kubectl --context "${KIND_CONTEXT}" create secret generic technitium-secret \
   --from-literal=password="${ADMIN_PASSWORD}" \
   -n default
 
+if ! kubectl --context "${KIND_CONTEXT}" get crd certificates.cert-manager.io >/dev/null 2>&1; then
+    kubectl --context "${KIND_CONTEXT}" apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.16.3/cert-manager.yaml
+fi
+kubectl --context "${KIND_CONTEXT}" wait --for=condition=Available deployment --all --namespace cert-manager --timeout=300s
+
+kubectl --context "${KIND_CONTEXT}" create secret generic technitium-pkcs12-password \
+  --from-literal=password="$(openssl rand -base64 32)" \
+  -n default \
+  --dry-run=client -o yaml | kubectl --context "${KIND_CONTEXT}" apply -f -
+kubectl --context "${KIND_CONTEXT}" apply -f tests/integration/k8s/technitium-tls.yaml
+kubectl --context "${KIND_CONTEXT}" wait --for=condition=Ready certificate/technitium-test-ca --timeout=180s -n default
+kubectl --context "${KIND_CONTEXT}" wait --for=condition=Ready certificate/technitium-https --timeout=180s -n default
 kubectl --context "${KIND_CONTEXT}" apply -f tests/integration/k8s/technitium-deployment.yaml
 kubectl --context "${KIND_CONTEXT}" wait --for=condition=ready pod \
   -l app=technitium \

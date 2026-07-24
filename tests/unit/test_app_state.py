@@ -15,7 +15,7 @@ from external_dns_technitium_webhook.config import Config
 def config() -> Config:
     """Return a minimal configuration for AppState tests."""
     return Config(
-        technitium_url="http://primary:5380",
+        technitium_url="https://primary:5380",
         technitium_username="admin",
         technitium_password="password",
         zone="example.com",
@@ -45,10 +45,10 @@ async def test_set_active_endpoint_switches_client(config: Config, mocker: Mocke
         shutdown_mock = mocker.AsyncMock()
         mocker.patch.object(state.client, "close", shutdown_mock)
 
-        await state.set_active_endpoint("http://failover:5380")
+        await state.set_active_endpoint("https://failover:5380")
 
-        assert state.active_endpoint == "http://failover:5380"
-        assert state.client.base_url == "http://failover:5380"
+        assert state.active_endpoint == "https://failover:5380"
+        assert state.client.base_url == "https://failover:5380"
         shutdown_mock.assert_awaited_once()
     finally:
         await state.close()
@@ -167,11 +167,11 @@ async def test_close_cancels_token_task(config: Config, mocker: MockerFixture) -
 async def test_try_failover_endpoints_success(mocker: MockerFixture) -> None:
     """Test successful failover to alternate endpoint."""
     config = Config(
-        technitium_url="http://primary.example.com:5380",
+        technitium_url="https://primary.example.com:5380",
         technitium_username="admin",
         technitium_password="password",
         zone="example.com",
-        technitium_failover_urls="http://secondary.example.com:5380",
+        technitium_failover_urls="https://secondary.example.com:5380",
     )
 
     state = AppState(config)
@@ -208,7 +208,7 @@ async def test_try_failover_endpoints_success(mocker: MockerFixture) -> None:
 
         assert result == (True, True)  # (failover_ok, is_writable)
         assert state.client.token == "new_token_123"
-        assert state.active_endpoint == "http://secondary.example.com:5380"
+        assert state.active_endpoint == "https://secondary.example.com:5380"
         cast(MagicMock, state.client.login).assert_called_once_with(
             username="admin",
             password="password",
@@ -239,11 +239,11 @@ async def test_try_failover_endpoints_all_fail(mocker: MockerFixture) -> None:
     from external_dns_technitium_webhook.technitium_client import TechnitiumError
 
     config = Config(
-        technitium_url="http://primary.example.com:5380",
+        technitium_url="https://primary.example.com:5380",
         technitium_username="admin",
         technitium_password="password",
         zone="example.com",
-        technitium_failover_urls="http://secondary.example.com:5380;http://tertiary.example.com:5380",
+        technitium_failover_urls="https://secondary.example.com:5380;https://tertiary.example.com:5380",
     )
 
     state = AppState(config)
@@ -279,7 +279,7 @@ async def test_check_zone_status_defaults_when_zone_options_missing(
             return_value=None,
         )
 
-        result = await state._check_zone_status("http://primary:5380")
+        result = await state._check_zone_status("https://primary:5380")
 
         assert result == (True, "primary", None)
     finally:
@@ -305,7 +305,7 @@ async def test_check_zone_status_normalizes_root_catalog_membership(
             return_value=zone_options,
         )
 
-        result = await state._check_zone_status("http://primary:5380")
+        result = await state._check_zone_status("https://primary:5380")
 
         assert result == (True, "primary", None)
     finally:
@@ -318,11 +318,11 @@ async def test_try_failback_to_primary_success(mocker: MockerFixture) -> None:
     from unittest.mock import AsyncMock
 
     config = Config(
-        technitium_url="http://primary.example.com:5380",
+        technitium_url="https://primary.example.com:5380",
         technitium_username="admin",
         technitium_password="password",
         zone="example.com",
-        technitium_failover_urls="http://secondary.example.com:5380",
+        technitium_failover_urls="https://secondary.example.com:5380",
     )
 
     state = AppState(config)
@@ -338,8 +338,8 @@ async def test_try_failback_to_primary_success(mocker: MockerFixture) -> None:
         zone_options.catalog_zone_name = None
 
         # Simulate being on secondary endpoint
-        state.active_endpoint = "http://secondary.example.com:5380"
-        state.client.base_url = "http://secondary.example.com:5380"
+        state.active_endpoint = "https://secondary.example.com:5380"
+        state.client.base_url = "https://secondary.example.com:5380"
         state.is_writable = True
         state.server_role = "secondary"
 
@@ -363,7 +363,7 @@ async def test_try_failback_to_primary_success(mocker: MockerFixture) -> None:
         result = await state.try_failback_to_primary()
 
         assert result is True
-        assert state.active_endpoint == "http://primary.example.com:5380"
+        assert state.active_endpoint == "https://primary.example.com:5380"
         assert state.server_role == "primary"
     finally:
         await state.close()
@@ -377,18 +377,18 @@ async def test_try_failback_to_primary_not_yet_ready(mocker: MockerFixture) -> N
     from external_dns_technitium_webhook.technitium_client import TechnitiumError
 
     config = Config(
-        technitium_url="http://primary.example.com:5380",
+        technitium_url="https://primary.example.com:5380",
         technitium_username="admin",
         technitium_password="password",
         zone="example.com",
-        technitium_failover_urls="http://secondary.example.com:5380",
+        technitium_failover_urls="https://secondary.example.com:5380",
     )
 
     state = AppState(config)
 
     try:
         # Simulate being on secondary endpoint
-        state.active_endpoint = "http://secondary.example.com:5380"
+        state.active_endpoint = "https://secondary.example.com:5380"
 
         # Mock set_active_endpoint and login to fail
         mocker.patch.object(state, "set_active_endpoint", new_callable=AsyncMock)
@@ -400,7 +400,7 @@ async def test_try_failback_to_primary_not_yet_ready(mocker: MockerFixture) -> N
 
         assert result is False
         # Should stay on secondary
-        assert state.active_endpoint == "http://secondary.example.com:5380"
+        assert state.active_endpoint == "https://secondary.example.com:5380"
     finally:
         await state.close()
 
@@ -440,16 +440,46 @@ async def test_try_failback_returns_false_with_no_configured_endpoints(
 
 
 @pytest.mark.asyncio
+async def test_try_failback_client_is_none(mocker: MockerFixture) -> None:
+    """Regression: failback must return False when client is None,
+    without raising or dereferencing a missing base_url."""
+
+    config = Config(
+        technitium_url="https://primary.example.com:5380",
+        technitium_username="admin",
+        technitium_password="password",
+        zone="example.com",
+        technitium_failover_urls="https://secondary.example.com:5380",
+    )
+
+    state = AppState(config)
+
+    try:
+        # Force client to None (as can happen after construction skip)
+        state.client = None
+
+        # Call failback — must return False, never raise
+        result = await state.try_failback_to_primary()
+
+        assert result is False
+        # Must not have attempted any network call, and state must be
+        # preserved as it was before the call (no failover routing).
+        assert state.active_endpoint == "https://primary.example.com:5380"
+    finally:
+        await state.close()
+
+
+@pytest.mark.asyncio
 async def test_try_failback_primary_is_readonly(mocker: MockerFixture) -> None:
     """Test failback when primary is read-only (secondary)."""
     from unittest.mock import AsyncMock
 
     config = Config(
-        technitium_url="http://primary.example.com:5380",
+        technitium_url="https://primary.example.com:5380",
         technitium_username="admin",
         technitium_password="password",
         zone="example.com",
-        technitium_failover_urls="http://secondary.example.com:5380",
+        technitium_failover_urls="https://secondary.example.com:5380",
     )
 
     state = AppState(config)
@@ -465,8 +495,8 @@ async def test_try_failback_primary_is_readonly(mocker: MockerFixture) -> None:
         zone_options.catalog_zone_name = None
 
         # Simulate being on secondary endpoint
-        state.active_endpoint = "http://secondary.example.com:5380"
-        state.client.base_url = "http://secondary.example.com:5380"
+        state.active_endpoint = "https://secondary.example.com:5380"
+        state.client.base_url = "https://secondary.example.com:5380"
         state.is_writable = True
 
         # Mock set_active_endpoint
@@ -490,7 +520,7 @@ async def test_try_failback_primary_is_readonly(mocker: MockerFixture) -> None:
 
         assert result is False
         # Should stay on secondary
-        assert state.active_endpoint == "http://secondary.example.com:5380"
+        assert state.active_endpoint == "https://secondary.example.com:5380"
     finally:
         await state.close()
 
@@ -502,11 +532,11 @@ async def test_try_failback_primary_readonly_ignores_secondary_reauth_failure(
     """Readonly primary should fall back even if secondary re-authentication fails."""
 
     config = Config(
-        technitium_url="http://primary.example.com:5380",
+        technitium_url="https://primary.example.com:5380",
         technitium_username="admin",
         technitium_password="password",
         zone="example.com",
-        technitium_failover_urls="http://secondary.example.com:5380",
+        technitium_failover_urls="https://secondary.example.com:5380",
     )
 
     state = AppState(config)
@@ -519,8 +549,8 @@ async def test_try_failback_primary_readonly_ignores_secondary_reauth_failure(
         zone_options.is_read_only = True
         zone_options.catalog_zone_name = None
 
-        state.active_endpoint = "http://secondary.example.com:5380"
-        state.client.base_url = "http://secondary.example.com:5380"
+        state.active_endpoint = "https://secondary.example.com:5380"
+        state.client.base_url = "https://secondary.example.com:5380"
 
         async def mock_set_active_endpoint(url: str) -> None:
             state.active_endpoint = url
@@ -543,7 +573,7 @@ async def test_try_failback_primary_readonly_ignores_secondary_reauth_failure(
         result = await state.try_failback_to_primary()
 
         assert result is False
-        assert state.active_endpoint == "http://secondary.example.com:5380"
+        assert state.active_endpoint == "https://secondary.example.com:5380"
     finally:
         await state.close()
 
@@ -555,18 +585,18 @@ async def test_try_failback_primary_login_failure_on_secondary_endpoint(
     """Failback should return False when the primary cannot be reached from a secondary."""
 
     config = Config(
-        technitium_url="http://primary.example.com:5380",
+        technitium_url="https://primary.example.com:5380",
         technitium_username="admin",
         technitium_password="password",
         zone="example.com",
-        technitium_failover_urls="http://secondary.example.com:5380",
+        technitium_failover_urls="https://secondary.example.com:5380",
     )
 
     state = AppState(config)
 
     try:
-        state.active_endpoint = "http://secondary.example.com:5380"
-        state.client.base_url = "http://secondary.example.com:5380"
+        state.active_endpoint = "https://secondary.example.com:5380"
+        state.client.base_url = "https://secondary.example.com:5380"
 
         mocker.patch.object(state, "set_active_endpoint", new_callable=mocker.AsyncMock)
         mocker.patch.object(
@@ -579,5 +609,41 @@ async def test_try_failback_primary_login_failure_on_secondary_endpoint(
         result = await state.try_failback_to_primary()
 
         assert result is False
+    finally:
+        await state.close()
+
+
+def test_init_with_none_technitium_url_skips_client(config: Config) -> None:
+    """Init must skip client construction when technitium_url is None."""
+    object.__setattr__(config, "technitium_url", None)
+    state = AppState(config)
+    assert state.active_endpoint is None
+    with pytest.raises(RuntimeError):
+        _ = state.client
+
+
+@pytest.mark.asyncio
+async def test_unavailable_client_operations_are_safe_noops(config: Config) -> None:
+    """All unavailable-client guards must behave as safe noops when _client is None."""
+    object.__setattr__(config, "technitium_url", None)
+    state = AppState(config)
+    try:
+        # set_active_endpoint: early return when _client is None
+        await state.set_active_endpoint("https://secondary.example.com:5380")
+        assert state.active_endpoint is None
+        # _authenticate_with_endpoint: early return when _client is None
+        await state._authenticate_with_endpoint("https://secondary.example.com:5380")
+        # _try_endpoint_failover: returns (False, False) when _client is None
+        assert await state._try_endpoint_failover(
+            "https://secondary.example.com:5380", "https://primary.example.com:5380"
+        ) == (False, False)
+        # try_failover_endpoints: returns (False, False) when no current endpoint
+        assert await state.try_failover_endpoints() == (False, False)
+        # _check_zone_status: returns defaults (True, "primary", None) when _client is None
+        assert await state._check_zone_status("https://secondary.example.com:5380") == (
+            True,
+            "primary",
+            None,
+        )
     finally:
         await state.close()

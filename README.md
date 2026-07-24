@@ -51,6 +51,11 @@ python -m external_dns_technitium_webhook.main
 
 Interactive API docs live at `http://127.0.0.1:3000/docs` while the server runs.
 
+> **Important:** The webhook-to-Technitium connection must use HTTPS (port 53443). The
+> `TECHNITIUM_URL` environment variable must be an `https://` URL. Upstream Kubernetes
+> proxy traffic between ExternalDNS and the webhook container may use plain HTTP on port
+> 8888; the webhook itself enforces HTTPS when connecting to Technitium.
+
 ## Configuration
 
 *⚠️ Ports are controlled by ExternalDNS and the sidecar container; users cannot change them when the webhook is deployed alongside ExternalDNS. The environment variables `LISTEN_PORT` and `HEALTH_PORT` exist for local development and tests only (see `.env.example`).*
@@ -59,15 +64,15 @@ Environment variables map directly to `external_dns_technitium_webhook.config.Co
 
 | Variable | Required | Default | Notes |
 | --- | --- | --- | --- |
-| `TECHNITIUM_URL` | ✅ | — | Primary Technitium API endpoint (port 5380 for HTTP, 53443 for HTTPS) |
+| `TECHNITIUM_URL` | ✅ | — | Primary Technitium API endpoint. Must use HTTPS (typically port 53443). | |
 | `TECHNITIUM_USERNAME` | ✅ | — | Service account for the webhook |
 | `TECHNITIUM_PASSWORD` | ✅ | — | Password for the service account |
 | `ZONE` | ✅ | — | Forward zone managed through ExternalDNS |
 | `DOMAIN_FILTERS` | ❌ | — | Semicolon-separated allowlist for ExternalDNS |
 | `TECHNITIUM_FAILOVER_URLS` | ❌ | — | Semicolon-separated fallback endpoints; automatic read-only replica detection with intelligent primary failback |
 | `CATALOG_ZONE` | ❌ | — | Catalog zone joined when the endpoint is writable |
-| `TECHNITIUM_VERIFY_SSL` | ❌ | `true` | Verify TLS certificates; set to `false` for self-signed certs **only in dev/tests**. Disabling this skips hostname validation and is insecure in production. |
-| `TECHNITIUM_CA_BUNDLE_FILE` | ❌ | — | Path to PEM file with CA cert(s) for private CAs; mounted via ConfigMap |
+| `TECHNITIUM_VERIFY_SSL` | ❌ | `true` | Verify TLS certificates using system CA store. Must remain `true`; use `TECHNITIUM_CA_BUNDLE_FILE` for private CAs. |
+| `TECHNITIUM_CA_BUNDLE_FILE` | ❌ | — | PEM CA bundle for private or self-signed certificates; verification stays enabled. | for private CAs; mounted via ConfigMap |
 | `LISTEN_ADDRESS` | ❌ | `0.0.0.0` | Bind address for the FastAPI server |
 | `LOG_LEVEL` | ❌ | `INFO` | Python logging level |
 | `TECHNITIUM_TIMEOUT` | ❌ | `10.0` | HTTP timeout (seconds) for Technitium calls |
@@ -82,6 +87,10 @@ Environment variables map directly to `external_dns_technitium_webhook.config.Co
 | `STARTUP_DELAY_SECONDS` | ❌ | `10.0` | Grace period (seconds) during startup before health checks report ready; allows Technitium connection initialization to complete |
 | `LISTEN_PORT` | ❌ | `8888` | **Fixed** by ExternalDNS; not configurable in production (used only by local tests) |
 | `HEALTH_PORT` | ❌ | `8080` | **Fixed** by ExternalDNS; Kubernetes probes target this port |
+
+### Technitium transport security
+
+The webhook connects to Technitium only over HTTPS with certificate-chain and hostname verification enabled. HTTP endpoints and disabled verification are rejected at startup. For private or self-signed certificates, mount the issuing CA PEM file and set `TECHNITIUM_CA_BUNDLE_FILE`; do not disable verification.
 
 ### Startup Behavior
 

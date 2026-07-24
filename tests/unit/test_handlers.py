@@ -131,7 +131,7 @@ async def collect_streaming_response(response) -> bytes:
 def config() -> Config:
     """Create test configuration."""
     return Config(
-        technitium_url="http://localhost:5380",
+        technitium_url="https://localhost:5380",
         technitium_username="admin",
         technitium_password="admin",
         zone="example.com",
@@ -718,7 +718,7 @@ async def test_sanitize_error_message() -> None:
     assert "password=***" in result or "***" in result
     assert "token=***" in result or "***" in result
 
-    error = Exception("Auth failed: http://example.com/auth?api_key=12345&secret=mysecret")
+    error = Exception("Auth failed: https://example.com/auth?api_key=12345&secret=mysecret")
     result = sanitize_error_message(error)
     assert "api_key=12345" not in result
     assert "secret=mysecret" not in result
@@ -1100,7 +1100,7 @@ async def test_get_records_with_uri_record(app_state: AppState, mocker: MockerFi
                 name="test.example.com",
                 type="URI",
                 ttl=3600,
-                rData={"uriPriority": 10, "uriWeight": 5, "uri": "http://example.com"},
+                rData={"uriPriority": 10, "uriWeight": 5, "uri": "https://example.com"},
             )
         ],
     )

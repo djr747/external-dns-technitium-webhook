@@ -32,7 +32,7 @@ from external_dns_technitium_webhook.technitium_client import (
 @pytest.fixture
 def client() -> TechnitiumClient:
     """Create a test client."""
-    return TechnitiumClient(base_url="http://localhost:5380", token="test-token")
+    return TechnitiumClient(base_url="https://localhost:5380", token="test-token")
 
 
 @pytest.mark.asyncio
@@ -251,7 +251,7 @@ async def test_client_add_caa_record(client: TechnitiumClient, mocker: MockerFix
 @pytest.mark.asyncio
 async def test_client_context_manager(mocker: MockerFixture) -> None:
     """Test client as context manager."""
-    async with TechnitiumClient(base_url="http://localhost:5380", token="test-token") as client:
+    async with TechnitiumClient(base_url="https://localhost:5380", token="test-token") as client:
         assert client is not None
 
     # Client should be closed after exiting context
@@ -567,7 +567,7 @@ async def test_get_records_uses_cache_when_enabled(
 ) -> None:
     """get_records should return cached results when cache TTL > 0."""
     client = TechnitiumClient(
-        base_url="http://localhost:5380",
+        base_url="https://localhost:5380",
         token="test-token",
         records_cache_ttl_seconds=30.0,
     )
@@ -590,7 +590,7 @@ async def test_get_records_cache_miss_for_different_request(
 ) -> None:
     """get_records should call the API for different cache keys."""
     client = TechnitiumClient(
-        base_url="http://localhost:5380",
+        base_url="https://localhost:5380",
         token="test-token",
         records_cache_ttl_seconds=30.0,
     )
@@ -612,7 +612,7 @@ async def test_get_records_cache_expires_after_ttl(
 ) -> None:
     """get_records should refresh cache when TTL expires."""
     client = TechnitiumClient(
-        base_url="http://localhost:5380",
+        base_url="https://localhost:5380",
         token="test-token",
         records_cache_ttl_seconds=0.01,
     )
@@ -640,7 +640,7 @@ async def test_add_record_invalidates_get_records_cache(
 ) -> None:
     """add_record should clear cached record responses."""
     client = TechnitiumClient(
-        base_url="http://localhost:5380",
+        base_url="https://localhost:5380",
         token="test-token",
         records_cache_ttl_seconds=30.0,
     )
@@ -682,7 +682,7 @@ async def test_delete_record_invalidates_get_records_cache(
 ) -> None:
     """delete_record should clear cached record responses."""
     client = TechnitiumClient(
-        base_url="http://localhost:5380",
+        base_url="https://localhost:5380",
         token="test-token",
         records_cache_ttl_seconds=30.0,
     )
@@ -715,7 +715,7 @@ async def test_delete_record_error_still_invalidates_get_records_cache(
 ) -> None:
     """delete_record should invalidate cache even when the delete operation fails."""
     client = TechnitiumClient(
-        base_url="http://localhost:5380",
+        base_url="https://localhost:5380",
         token="test-token",
         records_cache_ttl_seconds=30.0,
     )
@@ -982,47 +982,14 @@ async def test_set_zone_options_serializes_values(
     assert "description" not in payload
 
 
-def test_client_init_with_verify_ssl_false() -> None:
-    """Test client initialization with verify_ssl=False.
-
-    The override path builds an SSL context with both certificate
-    validation and hostname checking disabled.  This is only used in
-    testing – production must keep ``verify_ssl=True``.  SonarCloud
-    flags the hostname disable, which we suppress explicitly in the
-    implementation with a ``# NOSONAR`` comment.
-    """
-    client = TechnitiumClient(
-        base_url="http://localhost:5380",
-        token="test-token",
-        verify_ssl=False,
-    )
-    assert client.verify_ssl is False
-    # internal verify value should reflect our override
-    assert client._verify is False or (
-        isinstance(client._verify, ssl.SSLContext)
-        and client._verify.check_hostname is False
-        and client._verify.verify_mode == ssl.CERT_NONE
-    )
-
-
-def test_client_verify_ssl_false_skips_ssl_context(mocker: MockerFixture) -> None:
-    """When verify_ssl=False we should not touch ssl.create_default_context.
-
-    A static analyzer (SonarCloud rule S5527) flagged use of
-    ``context.check_hostname = False`` in earlier versions.  By avoiding any
-    SSLContext creation when the override is used we keep the insecure path
-    entirely opaque to static analysis and eliminate the warning.
-    """
-    create_patch = mocker.patch(
-        "external_dns_technitium_webhook.technitium_client.ssl.create_default_context"
-    )
-    client = TechnitiumClient(
-        base_url="http://localhost:5380",
-        token="test-token",
-        verify_ssl=False,
-    )
-    assert client.verify_ssl is False
-    create_patch.assert_not_called()
+def test_client_rejects_verify_ssl_false() -> None:
+    """TLS verification cannot be disabled; callers must use ca_bundle."""
+    with pytest.raises(ValueError, match="ca_bundle"):
+        TechnitiumClient(
+            base_url="https://localhost:5380",
+            token="test-token",
+            verify_ssl=False,
+        )
 
 
 def test_client_init_with_ca_bundle() -> None:
@@ -1054,7 +1021,7 @@ def test_client_init_with_ca_bundle() -> None:
         )
 
         client = TechnitiumClient(
-            base_url="http://localhost:5380",
+            base_url="https://localhost:5380",
             token="test-token",
             verify_ssl=True,
             ca_bundle=ca_file,
@@ -1066,7 +1033,7 @@ def test_client_init_with_ca_bundle() -> None:
 def test_client_init_default_verify_ssl() -> None:
     """Test client initialization with default verify_ssl (True)."""
     client = TechnitiumClient(
-        base_url="http://localhost:5380",
+        base_url="https://localhost:5380",
         token="test-token",
     )
     assert client.verify_ssl is True
@@ -1178,7 +1145,7 @@ async def test_create_zone_omits_none_values(
 
 @pytest.mark.asyncio
 async def test_close_calls_aclose(mocker: MockerFixture) -> None:
-    client = TechnitiumClient(base_url="http://localhost:5380", token="t")
+    client = TechnitiumClient(base_url="https://localhost:5380", token="t")
     # Patch the underlying httpx AsyncClient aclose method
     mock_aclose = AsyncMock()
     client._client.aclose = mock_aclose
@@ -1195,7 +1162,7 @@ def test_technitium_error_str():
 
 @pytest.mark.asyncio
 async def test_post_raw_circuit_open_propagates(mocker):
-    client = TechnitiumClient(base_url="http://localhost:5380", token="t")
+    client = TechnitiumClient(base_url="https://localhost:5380", token="t")
 
     class FakeBreaker(CircuitBreaker):
         def __init__(self) -> None:
@@ -1222,7 +1189,7 @@ async def test_post_raw_circuit_open_propagates(mocker):
 @pytest.mark.asyncio
 async def test_context_manager_calls_close(mocker: MockerFixture) -> None:
     # Patch the instance close method to ensure __aexit__ calls it
-    client = TechnitiumClient(base_url="http://localhost:5380", token="t")
+    client = TechnitiumClient(base_url="https://localhost:5380", token="t")
     client.close = AsyncMock()
 
     async with client as tc:
@@ -1493,3 +1460,12 @@ async def test_get_zone_options_without_catalog_names(
     call_args = mock_post.call_args
     payload = call_args[1]["data"]
     assert "includeAvailableCatalogZoneNames" not in payload
+
+
+def test_client_rejects_non_https_base_url() -> None:
+    """The Technitium API must be reached over HTTPS."""
+    with pytest.raises(ValueError, match="must use an HTTPS URL"):
+        TechnitiumClient(
+            base_url="http://localhost:5380",
+            token="test-token",
+        )

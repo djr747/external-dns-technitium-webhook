@@ -222,7 +222,7 @@ All responses use custom media type: `application/external.dns.webhook+json;vers
   - HTTP: `curl -X POST http://<server>:5380/api/user/login`
   - HTTPS: `curl -X POST https://<server>:53443/api/user/login` (use `-k` for self-signed certs)
 - Technitium DNS uses port 5380 for HTTP and port 53443 for HTTPS
-- For self-signed certificates, set `TECHNITIUM_VERIFY_SSL=false`
+- For self-signed certificates, provide `TECHNITIUM_CA_BUNDLE_FILE` and keep TLS verification enabled
 - Rate limiting: default 1000 req/min with burst of 10; override via `REQUESTS_PER_MINUTE` and `RATE_LIMIT_BURST`
 - Request size limit: 1MB default (adjust via `RequestSizeLimitMiddleware`)
 
