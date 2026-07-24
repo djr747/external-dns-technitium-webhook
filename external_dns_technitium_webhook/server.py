@@ -79,14 +79,14 @@ def run_health_server(health_app: FastAPI, config: AppConfig) -> None:
             raise
         except Exception as e:
             # Log unexpected exceptions at ERROR level with stack trace
-            logging.error(f"[HEALTH] Health server serve error: {e}", exc_info=True)
+            logging.exception(f"[HEALTH] Health server serve error: {e}", exc_info=True)
             sys.stderr.write(f"[HEALTH] Error: {e}\n")
             sys.stderr.flush()
         finally:
             loop.close()
             logging.info("[HEALTH] Health server loop closed")
     except Exception as e:
-        logging.error(f"[HEALTH] Health server error: {e}", exc_info=True)
+        logging.exception(f"[HEALTH] Health server error: {e}", exc_info=True)
         sys.stderr.write(f"[HEALTH] Fatal error: {e}\n")
         sys.stderr.flush()
 
@@ -178,7 +178,7 @@ def run_servers(app: FastAPI, health_app: FastAPI, config: AppConfig) -> None:
                 try:
                     await server_task
                 except Exception as serve_error:
-                    logging.error(f"Health server serve error: {serve_error}", exc_info=True)
+                    logging.exception(f"Health server serve error: {serve_error}", exc_info=True)
 
             loop.run_until_complete(serve_and_signal())
         except Exception as e:
@@ -188,7 +188,7 @@ def run_servers(app: FastAPI, health_app: FastAPI, config: AppConfig) -> None:
             health_server_error = e
             sys.stderr.write(f"[HEALTH] Error: {e}\n")
             sys.stderr.flush()
-            logging.error(f"Health server error: {e}", exc_info=True)
+            logging.exception(f"Health server error: {e}", exc_info=True)
         finally:
             health_server_ready.set()  # Signal even on error to unblock main thread
             sys.stderr.write("[HEALTH] Health server thread ending\n")
@@ -213,7 +213,7 @@ def run_servers(app: FastAPI, health_app: FastAPI, config: AppConfig) -> None:
     try:
         asyncio.run(main_server.serve())
     except Exception as e:
-        logging.error(f"Main server error: {e}")
+        logging.exception(f"Main server error: {e}")
     finally:
         shutdown_event.set()
         health_thread.join(timeout=5)

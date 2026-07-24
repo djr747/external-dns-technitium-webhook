@@ -324,7 +324,7 @@ async def setup_technitium_connection(state: AppState) -> None:
         except Exception as exc:
             # Note: asyncio.CancelledError and KeyboardInterrupt inherit from
             # BaseException, so they are NOT caught here and propagate naturally.
-            logger.error(
+            logger.exception(
                 "Failed to initialize Technitium endpoint %s: %s",
                 endpoint,
                 exc,
@@ -541,7 +541,7 @@ async def auto_renew_technitium_token(state: AppState) -> None:
             ValueError,
             RuntimeError,
         ) as exc:
-            logger.error("Technitium DNS server renewal failed: %s", exc)
+            logger.exception("Technitium DNS server renewal failed: %s", exc)
             sleep_for = DURATION_TOKEN_FAILURE
 
 
@@ -874,7 +874,7 @@ async def exception_logging_middleware(request: Request, call_next: Callable) ->
         if is_group:
             logger.exception("Unhandled exception group: %s", e)
         else:
-            logger.error("Unhandled exception: %s", e, exc_info=True)
+            logger.exception("Unhandled exception: %s", e, exc_info=True)
 
         # Return 503 for service not ready errors
         if "Service not ready yet" in str(e):
