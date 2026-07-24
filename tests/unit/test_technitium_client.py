@@ -1272,7 +1272,7 @@ async def test_parse_response_malformed_json_raises(client: TechnitiumClient) ->
     with pytest.raises(TechnitiumError, match="Failed to parse JSON response"):
         client._parse_response(response)
     with pytest.raises(TechnitiumError, match="Failed to parse JSON response"):
-         client._parse_response(response)
+        client._parse_response(response)
 
 
 @pytest.mark.asyncio
@@ -1282,7 +1282,7 @@ async def test_parse_response_unexpected_format(client: TechnitiumClient) -> Non
     with pytest.raises(TechnitiumError, match="Unexpected response format"):
         client._parse_response(response)
     with pytest.raises(TechnitiumError, match="Unexpected response format"):
-         client._parse_response(response)
+        client._parse_response(response)
 
 
 @pytest.mark.asyncio

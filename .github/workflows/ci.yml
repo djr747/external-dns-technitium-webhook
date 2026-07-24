@@ -255,7 +255,7 @@ jobs:
 
       - name: Install cert-manager
         run: |
-          kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.16.3/cert-manager.yaml
+          kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.21.0/cert-manager.yaml
           kubectl wait --for=condition=Available deployment/cert-manager-webhook --timeout=180s -n cert-manager
 
       - name: Load webhook image into Kind
@@ -264,8 +264,8 @@ jobs:
 
       - name: Pull and load Technitium image into Kind
         run: |
-          docker pull technitium/dns-server:latest
-          kind load docker-image technitium/dns-server:latest --name integration-test
+          docker pull technitium/dns-server:15.4.0
+          kind load docker-image technitium/dns-server:15.4.0 --name integration-test
 
       - name: Generate test credentials
         run: |
@@ -324,7 +324,7 @@ jobs:
           echo "Using image repository: $REPO"
           echo "Using image tag: $TAG"
 
-            helm install external-dns external-dns/external-dns \
+            helm install external-dns external-dns/external-dns --version 1.21.1 \
             -f tests/integration/helm/external-dns-values.yaml \
             --set provider.webhook.image.repository="${REPO}" \
             --set provider.webhook.image.tag="${TAG}" \
