@@ -328,7 +328,6 @@ async def setup_technitium_connection(state: AppState) -> None:
                 "Failed to initialize Technitium endpoint %s: %s",
                 endpoint,
                 exc,
-                exc_info=True,
             )
             failures.append(f"{endpoint}: {exc}")
 
