@@ -642,11 +642,11 @@ async def test_fetch_zone_options_reraises_other_errors(mocker: MockerFixture) -
         side_effect=TechnitiumError("server unavailable"),
     )
 
-    with pytest.raises(TechnitiumError):
-        try:
+    try:
+        with pytest.raises(TechnitiumError):
             await _fetch_zone_options(state, "example.com")
-        finally:
-            await state.close()
+    finally:
+        await state.close()
 
 
 @pytest.mark.asyncio
@@ -2401,20 +2401,16 @@ class TestMainMiddlewareFunctions:
         app.dependency_overrides[get_app_state] = get_state_override
         client = TestClient(app)
 
-        # Trigger ExceptionGroup if available in Python 3.11+
-        try:
-            exec(
-                """
+        # Python 3.14 always provides ExceptionGroup.
+        exec(
+            """
 @app.get("/test-group")
 async def trigger_exception_group():
     raise ExceptionGroup("test", [ValueError("test")])
 """
-            )
-            response = client.get("/test-group")
-            assert response.status_code == 500
-        except Exception:
-            # Skip if ExceptionGroup not available
-            pytest.skip("ExceptionGroup not available in this Python version")
+        )
+        response = client.get("/test-group")
+        assert response.status_code == 500
 
     def test_runtime_error_handler_not_ready_message_case_insensitive(self, mocker):
         """Test runtime error handler detects various not-ready messages (case-insensitive)."""

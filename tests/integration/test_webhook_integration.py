@@ -406,14 +406,15 @@ class TestWebhookIntegration:
             remaining_test_records = [
                 r for r in all_records if r.get("name", "").startswith("test-dns-service-")
             ]
-            assert len(remaining_test_records) == 0, (
-                f"{len(remaining_test_records)} DNS records were not removed after service deletion"
-            )
-            print("✓ All DNS records successfully removed")
         except Exception as e:
             # If the API call fails, it might mean the records were successfully deleted
             # This is acceptable for cleanup verification
             print(f"Note: Could not verify record deletion (may be expected): {e}")
+        else:
+            assert len(remaining_test_records) == 0, (
+                f"{len(remaining_test_records)} DNS records were not removed after service deletion"
+            )
+            print("✓ All DNS records successfully removed")
 
     def test_technitium_zone_exists(self, technitium_url, technitium_verify):
         """Verify test.local zone was created in Technitium"""
