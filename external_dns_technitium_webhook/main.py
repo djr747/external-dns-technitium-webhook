@@ -52,6 +52,8 @@ class StructuredFormatter(logging.Formatter):
 
         # Prepare message: escape double quotes and collapse newlines
         raw_msg = record.getMessage()
+        if record.exc_info:
+            raw_msg = f"{raw_msg}\n{self.formatException(record.exc_info)}"
         safe_msg = str(raw_msg).replace('"', '\\"').replace("\n", "\\n")
 
         # Format: time="..." level=info module=handlers msg="..."
@@ -96,7 +98,9 @@ def _apply_structured_formatter_to_logger(name: str) -> None:
     formatter = StructuredFormatter()
     for handler in lib_logger.handlers:
         handler.setFormatter(formatter)
-    lib_logger.propagate = True
+    # Uvicorn retains its own handlers, so propagation would emit each event
+    # twice through the root handler.
+    lib_logger.propagate = False
 
 
 # Configure external library loggers to use structured format
@@ -478,7 +482,7 @@ async def ensure_catalog_membership(
             catalog_zone=catalog_zone,
         )
     except TechnitiumError as exc:
-        logger.error(
+        logger.exception(
             "Failed to register zone %s with catalog zone %s on endpoint %s: %s",
             state.config.zone,
             catalog_zone,

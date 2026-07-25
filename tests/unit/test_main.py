@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import os
+import sys
 from collections.abc import Callable
 from contextlib import asynccontextmanager, suppress
 from types import SimpleNamespace
@@ -2153,7 +2154,7 @@ class TestStructuredFormatterApplication:
 
         assert isinstance(logger.handlers[0].formatter, StructuredFormatter)
 
-    def test_apply_formatter_sets_propagate_true(self):
+    def test_apply_formatter_disables_propagation(self):
         logger_name = "test_propagate"
         logger = logging.getLogger(logger_name)
         logger.propagate = False  # Set to False initially
@@ -2163,7 +2164,7 @@ class TestStructuredFormatterApplication:
 
         _apply_structured_formatter_to_logger(logger_name)
 
-        assert logger.propagate is True
+        assert logger.propagate is False
 
     def test_structured_formatter_escapes_quotes_and_newlines(self):
         formatter = StructuredFormatter()
@@ -2183,6 +2184,26 @@ class TestStructuredFormatterApplication:
         # Message should have newlines escaped and internal quotes escaped
         assert "\\n" in formatted
         assert '\\"' in formatted
+
+    def test_structured_formatter_includes_exception_traceback(self):
+        formatter = StructuredFormatter()
+        try:
+            raise ValueError("boom")
+        except ValueError:
+            record = logging.LogRecord(
+                name="test_logger",
+                level=logging.ERROR,
+                pathname=__file__,
+                lineno=123,
+                msg="request failed",
+                args=(),
+                exc_info=sys.exc_info(),
+            )
+
+        formatted = formatter.format(record)
+
+        assert "ValueError: boom" in formatted
+        assert "Traceback" in formatted
 
 
 class TestNormalizeZoneName:
