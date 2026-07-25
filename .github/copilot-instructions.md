@@ -10,7 +10,8 @@ K8s Resources → ExternalDNS → Webhook (FastAPI) → Technitium DNS Server
 
 Key components in `external_dns_technitium_webhook/`:
 - **`main.py`** - FastAPI app with lifecycle management, signal handling, and async context
-- **`handlers.py`** - ExternalDNS webhook endpoints (`/health`, `/`, `/records`, `/adjustendpoints`)
+- **`handlers.py`** - ExternalDNS webhook endpoints (`/`, `/records`, `/adjustendpoints`)
+- **`health.py`** - Health and Prometheus metrics endpoints (`/health`, `/healthz`, `/metrics`)
 - **`technitium_client.py`** - Async HTTP client with auto-authentication and zone management
 - **`models.py`** - Pydantic models for ExternalDNS protocol and DNS record types
 - **`config.py`** - Environment-based configuration with Pydantic Settings
@@ -21,7 +22,7 @@ Key components in `external_dns_technitium_webhook/`:
 > **Note for Copilot:** always ensure the project's Python virtual environment is activated (`source .venv/bin/activate` or via auto‑activation) before running any `make` targets or Python commands. This prevents "command not found" errors for ruff, mypy, etc.
 
 ```bash
-# Setup (Python 3.13)
+# Setup (Python 3.14)
 make install-dev          # Install with dev dependencies
 
 # Development cycle
@@ -128,7 +129,7 @@ The webhook provides high-availability support for Technitium DNS clusters with 
 
 **Configuration:**
 - `TECHNITIUM_URL` - Primary endpoint
-- `TECHNITIUM_FAILOVER_URLS` - Semicolon-separated secondary endpoints (e.g., `http://backup1:5380;http://backup2:5380`)
+- `TECHNITIUM_FAILOVER_URLS` - Semicolon-separated HTTPS secondary endpoints (for example, `https://backup1:53443;https://backup2:53443`)
 
 **Testing Failover:**
 - Mock `try_failover_endpoints()` to return `(True, False)` for secondary node scenarios
@@ -219,9 +220,8 @@ All responses use custom media type: `application/external.dns.webhook+json;vers
 - Validate required env vars: `TECHNITIUM_URL`, `TECHNITIUM_USERNAME`, `TECHNITIUM_PASSWORD`, `ZONE`
 - Use `make test` to verify code changes before deployment
 - Check Technitium API connectivity with curl: 
-  - HTTP: `curl -X POST http://<server>:5380/api/user/login`
-  - HTTPS: `curl -X POST https://<server>:53443/api/user/login` (use `-k` for self-signed certs)
-- Technitium DNS uses port 5380 for HTTP and port 53443 for HTTPS
+  - HTTPS: `curl -X POST https://<server>:53443/api/user/login`
+- The webhook requires an HTTPS Technitium endpoint, normally on port 53443; configure `TECHNITIUM_CA_BUNDLE_FILE` for a private CA.
 - For self-signed certificates, provide `TECHNITIUM_CA_BUNDLE_FILE` and keep TLS verification enabled
 - Rate limiting: default 1000 req/min with burst of 10; override via `REQUESTS_PER_MINUTE` and `RATE_LIMIT_BURST`
 - Request size limit: 1MB default (adjust via `RequestSizeLimitMiddleware`)
@@ -231,7 +231,7 @@ All responses use custom media type: `application/external.dns.webhook+json;vers
 - **Sanitize errors**: Use `sanitize_error_message()` to strip sensitive patterns before client response
 - **Token renewal**: Client handles auth token refresh transparently on 401 errors
 - **Middleware protection**: Rate limiting and request size validation prevent abuse
-- **Container security**: Runs as non-root user (UID 1000), read-only filesystem recommended
+- **Container security**: Runs as non-root user (UID 65532), read-only filesystem recommended
 
 ## Code Quality Standards
 - **Type safety**: Strict mypy configuration enforced (`disallow_untyped_defs`, `check_untyped_defs`)
@@ -239,7 +239,7 @@ All responses use custom media type: `application/external.dns.webhook+json;vers
 - **Test coverage**: pytest with asyncio support, mock external HTTP calls with pytest-mock
 - **Security scanning**: semgrep for code analysis
 - **Formatting**: Ruff format (black-compatible, 100 char line length)
-- **Python version**: 3.13+ required (uses modern type hints like `dict[str, Any]`)
+- **Python version**: 3.14 required
 
 ## Provider-Specific Properties
 Advanced Technitium features via `providerSpecific` in Endpoint model:

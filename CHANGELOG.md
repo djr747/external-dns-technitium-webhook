@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v1.0.12] - 2026-07-25
+
+### Security
+
+- TLS certificate and hostname verification are now mandatory for Technitium connections. The unsupported `TECHNITIUM_VERIFY_SSL` setting is rejected; private CAs remain supported through `TECHNITIUM_CA_BUNDLE_FILE`.
+
+### Fixed
+
+- Register catalog membership through Technitium's documented zone-options API and read the documented `catalog` response field.
+- Refuse to move a managed zone that already belongs to a different catalog, and fail initialization when the requested membership cannot be applied or verified.
+- Verify catalog membership explicitly in the Kubernetes integration test after the Helm deployment starts.
+- Refactor exception and integration-cleanup tests to satisfy SonarCloud rules without weakening their assertions or swallowing assertion failures.
+
+### Changed
+
+- Correct and consolidate deployment, TLS, API, workflow, image-tag, and monitoring documentation to match the implementation.
+
 ## [v1.0.11] - 2026-07-24
 
 ### Changed

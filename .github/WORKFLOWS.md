@@ -9,35 +9,15 @@ This repository uses a comprehensive CI/CD pipeline with security best practices
 **Triggers:** Pushes to branches without an open PR, and pull requests targeting any branch
 
 **Jobs:**
-- **Lint**: Code quality checks with Ruff and pyright
-- **Type Check**: Type checking with mypy (strict mode) and pyright
-- **Test**: Python 3.13 with 95% coverage requirement (actual coverage: 99%)
-- **Security Python**: Semgrep and pip-audit CVE scanning
-- **Snyk Security**: Vulnerability detection with Snyk
-  - **Docker Build**: Container build and multi-scanner security check (Snyk)
+- **Open PR check**: Skips duplicate push jobs when the source branch has an open PR
+- **Lint and type checking**: Ruff, mypy, and pyright on Python 3.14
+- **Unit tests**: tox coverage gate (95%) and Codecov upload
+- **Image build and integration**: amd64 and arm64 builds plus Kind integration tests
 
 **Key Features:**
-- Single version Python testing (3.13)
+- Single version Python testing (3.14)
 - Coverage artifact upload for manual inspection
-- SARIF upload to GitHub Security tab
-- Parallel security scanning
-
-### 🐳 Docker Build (`docker.yml`)
-
-**Triggers:** Push to main, tags, PR, manual dispatch
-
-**Jobs:**
-- **Build and Push**: Multi-arch (amd64, arm64) container builds
- - **Vulnerability Scan**: Snyk container scanning
-- **Sign Image**: Cosign image signing for releases
-
-**Key Features:**
-- Multi-platform builds (AMD64, ARM64)
-- SBOM generation (SPDX format)
-- Provenance attestation
-- Image signing with Cosign
-- Semantic versioning tags
-- GitHub Container Registry (ghcr.io)
+- Multi-platform image builds (AMD64 and ARM64)
 
 ### 🔒 Security Scanning (`security.yml`)
 
@@ -79,17 +59,16 @@ This repository uses a comprehensive CI/CD pipeline with security best practices
 
 ### 🚀 Release (`release.yml`)
 
-**Triggers:** Version tags (v*.*.*), manual dispatch
+**Triggers:** Pushes to `main` that change `pyproject.toml`, and manual dispatch
 
 **Jobs:**
 - **Validate Version**: Semantic version validation
 - **Create Release**: GitHub release with changelog
 - **Build Container**: Multi-arch container release with signing
-- **Update Changelog**: Automatic CHANGELOG.md updates
 
 **Key Features:**
 - Semantic versioning enforcement
-- Automated changelog generation
+- Release notes generated from commits since the previous tag
 - SBOM attached to releases
 - Image signing for released versions
 - Multi-platform container images
@@ -109,7 +88,6 @@ The pipeline includes multiple layers of CVE detection:
 ### Secret Protection
 
 - **GitHub Secret Scanning**: Native GitHub protection
-- **Snyk Secrets**: Container image secret detection
 
 ### Code Security
 
@@ -199,15 +177,15 @@ You can add these badges to your README:
 ## 🎯 Best Practices Implemented
 
 ### Testing
-- ✅ Python 3.13 testing
-- ✅ Minimum 95% code coverage requirement (actual coverage: 99%)
+- ✅ Python 3.14 testing
+- ✅ Minimum 95% code coverage requirement
 - ✅ Type checking with mypy (strict mode) and pyright
 - ✅ Code formatting and linting with Ruff
 
 ### Security
 - ✅ Multiple CVE scanners for redundancy
 - ✅ SARIF upload to GitHub Security
-- ✅ Weekly security audits
+- ✅ Daily security audits
 - ✅ Automatic base image patching
 - ✅ Secret scanning in git history
 - ✅ SBOM generation and analysis

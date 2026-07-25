@@ -899,7 +899,7 @@ async def test_list_catalog_zones(client: TechnitiumClient, mocker: MockerFixtur
     mock_response = {
         "status": "ok",
         "response": {
-            "catalogZones": ["catalog.example.com", "other.example.com"],
+            "catalogZoneNames": ["catalog.example.com", "other.example.com"],
         },
     }
 
@@ -931,7 +931,7 @@ async def test_get_zone_options_with_catalog_names(
             "zone": "example.com",
             "isCatalogZone": False,
             "isReadOnly": False,
-            "catalogZoneName": None,
+            "catalog": "catalog.example.com",
             "availableCatalogZoneNames": ["catalog.example.com"],
         },
     }
@@ -947,10 +947,11 @@ async def test_get_zone_options_with_catalog_names(
         ),
     )
 
-    await client.get_zone_options("example.com", include_catalog_names=True)
+    response = await client.get_zone_options("example.com", include_catalog_names=True)
 
     payload = mock_post.call_args[1]["data"]
     assert payload["includeAvailableCatalogZoneNames"] == "true"
+    assert response.catalog_zone_name == "catalog.example.com"
 
 
 @pytest.mark.asyncio
@@ -980,16 +981,6 @@ async def test_set_zone_options_serializes_values(
     assert payload["maxTransfers"] == 5
     assert payload["allowedIpRanges"] == "192.0.2.1,2001:db8::1"
     assert "description" not in payload
-
-
-def test_client_rejects_verify_ssl_false() -> None:
-    """TLS verification cannot be disabled; callers must use ca_bundle."""
-    with pytest.raises(ValueError, match="ca_bundle"):
-        TechnitiumClient(
-            base_url="https://localhost:5380",
-            token="test-token",
-            verify_ssl=False,
-        )
 
 
 def test_client_init_with_ca_bundle() -> None:
@@ -1023,22 +1014,20 @@ def test_client_init_with_ca_bundle() -> None:
         client = TechnitiumClient(
             base_url="https://localhost:5380",
             token="test-token",
-            verify_ssl=True,
             ca_bundle=ca_file,
         )
         # When ca_bundle is provided, it should be stored
         assert client.ca_bundle == ca_file
 
 
-def test_client_init_default_verify_ssl() -> None:
-    """Test client initialization with default verify_ssl (True)."""
+def test_client_initialization_always_enables_tls_verification() -> None:
+    """The client always uses certificate and hostname verification."""
     client = TechnitiumClient(
         base_url="https://localhost:5380",
         token="test-token",
     )
-    assert client.verify_ssl is True
     assert client.ca_bundle is None
-    # verify preserved, it may be a bool or a context object
+    # Verification is enabled directly or through a custom SSL context.
     assert client._verify is True or isinstance(client._verify, ssl.SSLContext)
 
 
@@ -1104,22 +1093,16 @@ async def test_request_compression_disabled(
 
 
 @pytest.mark.asyncio
-async def test_enroll_catalog_calls_post_raw(
+async def test_enroll_catalog_sets_zone_catalog_option(
     client: TechnitiumClient, mocker: MockerFixture
 ) -> None:
-    post_raw = mocker.patch.object(client, "_post_raw", new_callable=AsyncMock)
+    set_options = mocker.patch.object(client, "set_zone_options", new_callable=AsyncMock)
 
     await client.enroll_catalog(
         member_zone="member.example.com", catalog_zone="catalog.example.com"
     )
 
-    assert post_raw.await_count == 1
-    call = post_raw.await_args
-    assert call is not None
-    endpoint, payload = call.args
-    assert endpoint == client.ENDPOINT_ENROLL_CATALOG
-    assert payload["zone"] == "member.example.com"
-    assert payload["catalogZone"] == "catalog.example.com"
+    set_options.assert_awaited_once_with("member.example.com", catalog="catalog.example.com")
 
 
 @pytest.mark.asyncio

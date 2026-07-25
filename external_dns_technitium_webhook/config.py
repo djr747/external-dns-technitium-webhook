@@ -1,5 +1,6 @@
 """Configuration management for the application."""
 
+import os
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -33,17 +34,9 @@ class Config(BaseSettings):
     rate_limit_burst: int = 10
     technitium_failover_urls: str | None = None
     catalog_zone: str | None = None
-    # When set to False we disable *all* TLS verification (certificates and
-    # hostname checks).  This is useful when talking to a local or self‑signed
-    # Technitium instance in development/testing, but it is **insecure** and
-    # should never be used in production environments.  There is also no way to
-    # selectively disable only hostname validation.  Refer to the README, docs,
-    # and unit tests for examples of how the client behaves when this flag is
-    # toggled.
-    technitium_verify_ssl: bool = True
     # Optional path to a PEM file containing one or more CA certificates.
     # Intended to be mounted via ConfigMap (like username/password secrets).
-    # When verify_ssl is True and ca_bundle_file is set, the file must exist and be readable.
+    # When set, the file must exist and be readable.
     technitium_ca_bundle_file: str | None = None
     technitium_enable_request_compression: bool = False
     technitium_compression_threshold_bytes: int = 32768
@@ -57,18 +50,18 @@ class Config(BaseSettings):
 
     def __init__(self, **values: Any) -> None:
         """Allow instantiation without explicit arguments for env loading."""
-        super().__init__(**values)
-        if not self.technitium_verify_ssl:
+        if "TECHNITIUM_VERIFY_SSL" in os.environ:
             raise ValueError(
-                "Disabling TLS certificate verification is not supported; "
-                "use TECHNITIUM_CA_BUNDLE_FILE to trust a private CA."
+                "TECHNITIUM_VERIFY_SSL is no longer supported; remove it. "
+                "TLS certificate and hostname verification are always enabled."
             )
+        super().__init__(**values)
         for endpoint in self.technitium_endpoints:
             parsed = urlparse(endpoint)
             if parsed.scheme.lower() != "https" or not parsed.netloc:
                 raise ValueError("TECHNITIUM_URL and TECHNITIUM_FAILOVER_URLS must use HTTPS URLs.")
         # Validate CA bundle after model initialization
-        if self.technitium_verify_ssl and self.technitium_ca_bundle_file:
+        if self.technitium_ca_bundle_file:
             path = Path(self.technitium_ca_bundle_file)
             if not path.exists() or not path.is_file():
                 raise ValueError(

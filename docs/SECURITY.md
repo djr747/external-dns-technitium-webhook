@@ -6,7 +6,7 @@ We release patches for security vulnerabilities for the following versions:
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 0.3.x   | :white_check_mark: |
+| 1.0.x   | :white_check_mark: |
 
 ## Reporting a Vulnerability
 
@@ -35,7 +35,7 @@ This project implements several security measures:
 - **Semgrep**: Pattern-based security vulnerability detection
 - **CodeQL**: Advanced semantic code analysis
 
--### Container Security
+### Container Security
 
 - **Snyk**: Container image vulnerability scanning
 - **Chainguard Python**: Ultra-minimal base image with zero CVEs, daily security updates, SLSA Level 3 provenance
@@ -51,11 +51,8 @@ This project implements several security measures:
 
 ### TLS/SSL Security
 
-- **Strong cipher enforcement**: All TLS connections use OpenSSL SECLEVEL=2, requiring:
-  - RSA keys: 2048 bits or larger
-  - Modern, strong cipher suites
-  - TLS 1.2 or higher
-- Certificate verification can be disabled for development (`TECHNITIUM_VERIFY_SSL=false`), but cipher strength remains enforced
+- **HTTPS-only Technitium connections**: HTTP endpoints are rejected at startup
+- Certificate-chain and hostname verification are always required; configure `TECHNITIUM_CA_BUNDLE_FILE` for a private CA
 - Support for custom CA certificates via `TECHNITIUM_CA_BUNDLE_FILE`
 
 ### GitHub Actions Security
@@ -70,7 +67,7 @@ This project implements several security measures:
 ### Best Practices
 
 - Secrets management via environment variables (passwords automatically redacted)
-- HTTPS for all external communications (enforced strong ciphers)
+- HTTPS for Technitium API communications
 - Input validation and sanitization
 - Principle of least privilege (pod security, GitHub Actions permissions, RBAC)
 
@@ -85,9 +82,8 @@ This project implements several security measures:
 
 ### Cryptography
 
-- All TLS connections enforce strong ciphers (SECLEVEL=2: 2048-bit+ RSA, strong suites, TLS 1.2+)
-- Independent from certificate verification toggle
-- Protects against downgrade attacks and weak cipher negotiation
+- Certificate-chain and hostname verification remain enabled
+- Private certificate authorities are supported through `TECHNITIUM_CA_BUNDLE_FILE`
 
 ### Network Security
 

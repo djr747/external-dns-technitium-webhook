@@ -26,15 +26,16 @@ async def _fail(exc: Exception | None = None) -> None:
     raise exc or RuntimeError("simulated failure")
 
 
-async def _assert_raises(exc_type, coro, **kwargs):
+async def _assert_raises(exc_type, coro_factory, **kwargs):
     """Assert that an async coroutine raises an exception.
 
     Replaces ``with pytest.raises(...) as exc_info: await ...`` so that
     Sonar rule python:S5778 is satisfied (body is a single callable
     invocation).
     """
-    with pytest.raises(exc_type, **kwargs):
-        _ = await coro
+    with pytest.raises(exc_type, **kwargs) as exc_info:
+        await coro_factory()
+    return exc_info
 
 
 # ---------------------------------------------------------------------------
@@ -81,7 +82,7 @@ async def test_closed_state_resets_count_on_success() -> None:
     cb = CircuitBreaker(failure_threshold=5)
     # Cause a couple of failures but not enough to open the circuit
     for _ in range(3):
-        await _assert_raises(RuntimeError, cb.call(_fail()))
+        await _assert_raises(RuntimeError, lambda: cb.call(_fail()))
     assert cb.failure_count == 3
 
     # A successful call should reset the counter
@@ -100,7 +101,7 @@ async def test_failure_threshold_opens_circuit() -> None:
     """Reaching the failure threshold transitions CLOSED → OPEN."""
     cb = CircuitBreaker(failure_threshold=3, timeout=60.0)
     for _ in range(3):
-        await _assert_raises(RuntimeError, cb.call(_fail()))
+        await _assert_raises(RuntimeError, lambda: cb.call(_fail()))
 
     assert cb.state == CircuitState.OPEN
     assert cb.failure_count == 3
@@ -111,11 +112,9 @@ async def test_circuit_open_rejects_immediately() -> None:
     """Once open, the circuit rejects requests with CircuitBreakerOpenError."""
     cb = CircuitBreaker(failure_threshold=2, timeout=60.0)
     for _ in range(2):
-        with pytest.raises(RuntimeError):
-            await cb.call(_fail())
+        await _assert_raises(RuntimeError, lambda: cb.call(_fail()))
 
-    with pytest.raises(CircuitBreakerOpenError) as exc_info:
-        await cb.call(_succeed())
+    exc_info = await _assert_raises(CircuitBreakerOpenError, lambda: cb.call(_succeed()))
 
     assert exc_info.value.state == CircuitState.OPEN
     assert exc_info.value.retry_after > 0
@@ -125,11 +124,9 @@ async def test_circuit_open_rejects_immediately() -> None:
 async def test_circuit_breaker_open_error_message() -> None:
     """CircuitBreakerOpenError should mention state and retry_after."""
     cb = CircuitBreaker(failure_threshold=1, timeout=60.0)
-    with pytest.raises(RuntimeError):
-        await cb.call(_fail())
+    await _assert_raises(RuntimeError, lambda: cb.call(_fail()))
 
-    with pytest.raises(CircuitBreakerOpenError) as exc_info:
-        await cb.call(_succeed())
+    exc_info = await _assert_raises(CircuitBreakerOpenError, lambda: cb.call(_succeed()))
 
     msg = str(exc_info.value)
     assert "open" in msg
@@ -145,8 +142,7 @@ async def test_circuit_breaker_open_error_message() -> None:
 async def test_open_transitions_to_half_open_after_timeout() -> None:
     """After the timeout elapses the circuit moves to HALF_OPEN."""
     cb = CircuitBreaker(failure_threshold=1, timeout=0.05)  # 50 ms timeout
-    with pytest.raises(RuntimeError):
-        await cb.call(_fail())
+    await _assert_raises(RuntimeError, lambda: cb.call(_fail()))
     assert cb.state == CircuitState.OPEN
 
     await asyncio.sleep(0.1)  # Wait longer than the timeout
@@ -161,11 +157,9 @@ async def test_open_transitions_to_half_open_after_timeout() -> None:
 async def test_open_state_before_timeout_still_rejects() -> None:
     """Requests are still rejected while the timeout has not elapsed."""
     cb = CircuitBreaker(failure_threshold=1, timeout=60.0)
-    with pytest.raises(RuntimeError):
-        await cb.call(_fail())
+    await _assert_raises(RuntimeError, lambda: cb.call(_fail()))
 
-    with pytest.raises(CircuitBreakerOpenError):
-        await cb.call(_succeed())
+    await _assert_raises(CircuitBreakerOpenError, lambda: cb.call(_succeed()))
 
     assert cb.state == CircuitState.OPEN
 
@@ -179,8 +173,7 @@ async def test_open_state_before_timeout_still_rejects() -> None:
 async def test_half_open_success_closes_circuit() -> None:
     """A successful request in HALF_OPEN transitions back to CLOSED."""
     cb = CircuitBreaker(failure_threshold=1, timeout=0.05)
-    with pytest.raises(RuntimeError):
-        await cb.call(_fail())
+    await _assert_raises(RuntimeError, lambda: cb.call(_fail()))
 
     await asyncio.sleep(0.1)
 
@@ -195,15 +188,13 @@ async def test_half_open_success_closes_circuit() -> None:
 async def test_half_open_failure_reopens_circuit() -> None:
     """A failed request in HALF_OPEN transitions back to OPEN."""
     cb = CircuitBreaker(failure_threshold=1, timeout=0.05)
-    with pytest.raises(RuntimeError):
-        await cb.call(_fail())
+    await _assert_raises(RuntimeError, lambda: cb.call(_fail()))
 
     # Wait for timeout so the circuit naturally moves to HALF_OPEN
     await asyncio.sleep(0.1)
 
     # The circuit is now HALF_OPEN; a failure here should reopen it
-    with pytest.raises(RuntimeError):
-        await cb.call(_fail())
+    await _assert_raises(RuntimeError, lambda: cb.call(_fail()))
 
     assert cb.state == CircuitState.OPEN
 
@@ -213,8 +204,7 @@ async def test_half_open_allows_only_single_test_request() -> None:
     """When HALF_OPEN only a single test request may be in-flight."""
     cb = CircuitBreaker(failure_threshold=1, timeout=0.01)
     # Cause the circuit to open
-    with pytest.raises(RuntimeError):
-        await cb.call(_fail())
+    await _assert_raises(RuntimeError, lambda: cb.call(_fail()))
 
     # Wait for timeout so the circuit moves to HALF_OPEN
     await asyncio.sleep(0.02)
@@ -255,8 +245,7 @@ async def test_health_check_reflects_circuit_open() -> None:
     state.is_ready = True
     cb = CircuitBreaker(failure_threshold=1, timeout=60.0)
     # Open the circuit
-    with pytest.raises(RuntimeError):
-        await cb.call(_fail())
+    await _assert_raises(RuntimeError, lambda: cb.call(_fail()))
     state.circuit_breaker = cb
 
     response = health_check(state)

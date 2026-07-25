@@ -53,7 +53,6 @@ When you **merge to main**, the release workflow automatically:
    - Generates and uploads SBOM (SPDX format)
    - Runs Snyk security scan
    - Signs image with Cosign
-6. **update-changelog**: Updates CHANGELOG.md with release info
 
 **Monitor the workflow:**
 

@@ -30,7 +30,7 @@ def create_records_sync(records: list[Endpoint]) -> None:
 
 All I/O operations use async/await:
 
-- HTTP client: `httpx.AsyncClient`
+- HTTP client: `httpx2.AsyncClient`
 - FastAPI handlers: `async def`
 - State management: `async with` context managers
 
@@ -162,34 +162,34 @@ The webhook detects when the primary Technitium DNS node fails and automatically
 **Timing Strategy**:
 
 - **Token Renewal**: Every 20 minutes (normal) or 1 minute (after failure)
-- **Failback Attempts**: Every 5 minutes (independently tracked)
+- **Failback Attempts**: Every `HEALTH_POLLING_INTERVAL_SECONDS` (15 seconds by default; independently tracked)
 
 This dual-timing approach ensures:
 
 - Fast token refresh after transient errors (1-minute retry)
-- Frequent primary recovery checks (5-minute interval)
+- Configurable primary recovery checks (15-second default interval)
 - No interference between token renewal and failback logic
 
 **Configuration**:
 
 | Variable | Required | Default | Notes |
 | --- | --- | --- | --- |
-| `TECHNITIUM_FAILOVER_URLS` | ❌ | — | Semicolon-separated list of fallback endpoints (e.g., `http://backup1:5380;http://backup2:5380`) |
+| `TECHNITIUM_FAILOVER_URLS` | ❌ | — | Semicolon-separated list of HTTPS fallback endpoints (for example, `https://backup1:53443;https://backup2:53443`) |
 
 **Example Setup** (Technitium Cluster with 1 Primary + 2 Secondaries):
 
 ```bash
 # Primary DNS server
-export TECHNITIUM_URL="http://primary.dns:5380"
+export TECHNITIUM_URL="https://primary.dns:53443"
 
 # Fallback secondaries (automatically discovered as read-only)
-export TECHNITIUM_FAILOVER_URLS="http://secondary1.dns:5380;http://secondary2.dns:5380"
+export TECHNITIUM_FAILOVER_URLS="https://secondary1.dns:53443;https://secondary2.dns:53443"
 
 # If primary fails, webhook automatically:
 # 1. Rotates to secondary1, detects read-only status
 # 2. Serves read operations from secondary1
 # 3. Rejects write operations with clear error message
-# 4. Every 5 min, checks if primary recovered
+# 4. Checks whether the primary recovered at HEALTH_POLLING_INTERVAL_SECONDS
 # 5. When primary is writable again, fails back automatically
 ```
 
@@ -199,7 +199,7 @@ export TECHNITIUM_FAILOVER_URLS="http://secondary1.dns:5380;http://secondary2.dn
 | --- | --- |
 | Primary fails | Failover to secondary, serve reads from secondary, reject writes |
 | All nodes fail | Circuit breaker opens, health endpoint returns 503 |
-| Primary recovers | Within 5 minutes, failback to primary and resume normal operation |
+| Primary recovers | Within `HEALTH_POLLING_INTERVAL_SECONDS` (15 seconds by default), fail back to primary and resume normal operation |
 | Multiple secondaries fail | Rotate through remaining healthy endpoints |
 | Primary is read-only | Detected via zone status check, failback declined until primary is writable |
 

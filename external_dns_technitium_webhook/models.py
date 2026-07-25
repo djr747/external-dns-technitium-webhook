@@ -4,7 +4,7 @@ import logging
 import re
 from typing import Any
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import AliasChoices, BaseModel, Field, field_validator
 
 logger = logging.getLogger(__name__)
 
@@ -249,7 +249,7 @@ class ListZonesResponse(BaseModel):
 class ListCatalogZonesResponse(BaseModel):
     """Response from list catalog zones API."""
 
-    catalog_zones: list[str] = Field(default_factory=list, alias="catalogZones")
+    catalog_zones: list[str] = Field(default_factory=list, alias="catalogZoneNames")
 
     model_config = {"populate_by_name": True}
 
@@ -260,7 +260,16 @@ class GetZoneOptionsResponse(BaseModel):
     zone: str = Field(alias="name")
     is_catalog_zone: bool = Field(False, alias="isCatalogZone")
     is_read_only: bool = Field(False, alias="isReadOnly")
-    catalog_zone_name: str | None = Field(None, alias="catalogZoneName")
+    # Technitium calls this field ``catalog``. It identifies the Catalog zone
+    # this zone is already registered with, if any.
+    catalog_zone_name: str | None = Field(
+        None,
+        # Keep the former alias for model construction compatibility. Incoming
+        # Technitium responses use ``catalog`` (the first validation alias).
+        alias="catalogZoneName",
+        validation_alias=AliasChoices("catalog", "catalogZoneName"),
+        serialization_alias="catalog",
+    )
     available_catalog_zone_names: list[str] = Field(
         default_factory=list, alias="availableCatalogZoneNames"
     )

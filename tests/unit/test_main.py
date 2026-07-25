@@ -642,11 +642,11 @@ async def test_fetch_zone_options_reraises_other_errors(mocker: MockerFixture) -
         side_effect=TechnitiumError("server unavailable"),
     )
 
-    with pytest.raises(TechnitiumError):
-        try:
+    try:
+        with pytest.raises(TechnitiumError):
             await _fetch_zone_options(state, "example.com")
-        finally:
-            await state.close()
+    finally:
+        await state.close()
 
 
 @pytest.mark.asyncio
@@ -678,10 +678,10 @@ async def test_ensure_zone_ready_raises_when_zone_missing_after_create(
 
 
 @pytest.mark.asyncio
-async def test_ensure_catalog_membership_logs_mismatch(
+async def test_ensure_catalog_membership_rejects_mismatch(
     mocker: MockerFixture, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """Ensure catalog membership warns when server reports a different membership."""
+    """Do not report startup success when membership cannot be verified."""
 
     config = Config(
         technitium_url="https://localhost:5380",
@@ -717,11 +717,10 @@ async def test_ensure_catalog_membership_logs_mismatch(
     )
 
     try:
-        membership = await ensure_catalog_membership(state, options, "catalog.example.com")
+        with pytest.raises(RuntimeError, match="server reports other.example.com"):
+            await ensure_catalog_membership(state, options, "catalog.example.com")
     finally:
         await state.close()
-    assert membership == "other.example.com"
-    assert "server reports membership other.example.com" in caplog.text
 
 
 @pytest.mark.asyncio
@@ -1657,7 +1656,7 @@ async def test_ensure_catalog_membership(mocker: MockerFixture) -> None:
     state.config.zone = "example.com"
 
     options = mocker.Mock()
-    options.catalog_zone_name = "current.example.com"
+    options.catalog_zone_name = None
     options.available_catalog_zone_names = ["catalog.example.com"]
 
     # Mock client methods
@@ -1688,7 +1687,7 @@ async def test_ensure_catalog_membership_unavailable_zone(mocker: MockerFixture)
     state.config.zone = "example.com"
 
     options = mocker.Mock()
-    options.catalog_zone_name = "current.example.com"
+    options.catalog_zone_name = None
     options.available_catalog_zone_names = ["other.example.com"]
 
     # Mock create_zone to fail
@@ -1703,12 +1702,12 @@ async def test_ensure_catalog_membership_unavailable_zone(mocker: MockerFixture)
     result = await ensure_catalog_membership(state, options, "catalog.example.com")
 
     # Assertions
-    assert result == "current.example.com"
+    assert result is None
 
 
 @pytest.mark.asyncio
 async def test_ensure_catalog_membership_different_membership(mocker: MockerFixture) -> None:
-    """Test ensure_catalog_membership when the server reports a different membership after enrollment."""
+    """Refuse to move a zone from its current catalog membership."""
     state = mocker.Mock()
     state.active_endpoint = "https://localhost:5380"
     state.config.zone = "example.com"
@@ -1717,7 +1716,7 @@ async def test_ensure_catalog_membership_different_membership(mocker: MockerFixt
     options.catalog_zone_name = "current.example.com"
     options.available_catalog_zone_names = ["catalog.example.com"]
 
-    # Mock client methods
+    # The membership conflict must be detected before any write is attempted.
     enroll_mock = mocker.patch.object(state.client, "enroll_catalog", new_callable=AsyncMock)
     get_zone_mock = mocker.patch.object(
         state.client,
@@ -1726,15 +1725,11 @@ async def test_ensure_catalog_membership_different_membership(mocker: MockerFixt
         return_value=mocker.Mock(catalog_zone_name="other.example.com"),
     )
 
-    # Call the function
-    result = await ensure_catalog_membership(state, options, "catalog.example.com")
+    with pytest.raises(RuntimeError, match="already a member of catalog zone current.example.com"):
+        await ensure_catalog_membership(state, options, "catalog.example.com")
 
-    # Assertions
-    enroll_mock.assert_awaited_once_with(
-        member_zone="example.com", catalog_zone="catalog.example.com"
-    )
-    get_zone_mock.assert_awaited_once_with("example.com", include_catalog_names=False)
-    assert result == "other.example.com"
+    enroll_mock.assert_not_awaited()
+    get_zone_mock.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -1806,7 +1801,7 @@ async def test_ensure_catalog_membership_creates_zone_and_enrolls(
 async def test_ensure_catalog_membership_enroll_fails_with_404(
     mocker: MockerFixture,
 ) -> None:
-    """Test enrollment failure with 'not found' error - should return current membership."""
+    """A failed catalog update must not leave the webhook reporting ready."""
     config = Config(
         technitium_url="https://localhost:5380",
         technitium_username="admin",
@@ -1819,7 +1814,7 @@ async def test_ensure_catalog_membership_enroll_fails_with_404(
         name=config.zone,
         isCatalogZone=False,
         isReadOnly=False,
-        catalogZoneName="current.example.com",
+        catalogZoneName=None,
         availableCatalogZoneNames=["catalog.example.com"],
     )
 
@@ -1832,19 +1827,17 @@ async def test_ensure_catalog_membership_enroll_fails_with_404(
     )
 
     try:
-        result = await ensure_catalog_membership(state, options, "catalog.example.com")
+        with pytest.raises(TechnitiumError, match="status code 404"):
+            await ensure_catalog_membership(state, options, "catalog.example.com")
     finally:
         await state.close()
-
-    # Should return current membership, not raise
-    assert result == "current.example.com"
 
 
 @pytest.mark.asyncio
 async def test_ensure_catalog_membership_enroll_fails_with_does_not_exist(
     mocker: MockerFixture,
 ) -> None:
-    """Test enrollment failure with 'does not exist' error - should return current membership."""
+    """A missing catalog reported by the server must fail initialization."""
     config = Config(
         technitium_url="https://localhost:5380",
         technitium_username="admin",
@@ -1857,7 +1850,7 @@ async def test_ensure_catalog_membership_enroll_fails_with_does_not_exist(
         name=config.zone,
         isCatalogZone=False,
         isReadOnly=False,
-        catalogZoneName="current.example.com",
+        catalogZoneName=None,
         availableCatalogZoneNames=["catalog.example.com"],
     )
 
@@ -1870,12 +1863,10 @@ async def test_ensure_catalog_membership_enroll_fails_with_does_not_exist(
     )
 
     try:
-        result = await ensure_catalog_membership(state, options, "catalog.example.com")
+        with pytest.raises(TechnitiumError, match="does not exist"):
+            await ensure_catalog_membership(state, options, "catalog.example.com")
     finally:
         await state.close()
-
-    # Should return current membership, not raise
-    assert result == "current.example.com"
 
 
 @pytest.mark.asyncio
@@ -1895,7 +1886,7 @@ async def test_ensure_catalog_membership_enroll_fails_with_other_error(
         name=config.zone,
         isCatalogZone=False,
         isReadOnly=False,
-        catalogZoneName="current.example.com",
+        catalogZoneName=None,
         availableCatalogZoneNames=["catalog.example.com"],
     )
 
@@ -1932,7 +1923,7 @@ async def test_ensure_catalog_membership_create_zone_fails(
         name=config.zone,
         isCatalogZone=False,
         isReadOnly=False,
-        catalogZoneName="current.example.com",
+        catalogZoneName=None,
         availableCatalogZoneNames=["other.example.com"],  # catalog.example.com NOT available
     )
 
@@ -1949,8 +1940,7 @@ async def test_ensure_catalog_membership_create_zone_fails(
     finally:
         await state.close()
 
-    # Should return current membership when creation fails
-    assert result == "current.example.com"
+    assert result is None
 
 
 @pytest.mark.asyncio
@@ -1971,7 +1961,7 @@ async def test_ensure_catalog_membership_zone_created_but_not_available(
         name=config.zone,
         isCatalogZone=False,
         isReadOnly=False,
-        catalogZoneName="current.example.com",
+        catalogZoneName=None,
         availableCatalogZoneNames=["other.example.com"],  # No catalog.example.com
     )
 
@@ -1980,7 +1970,7 @@ async def test_ensure_catalog_membership_zone_created_but_not_available(
         name=config.zone,
         isCatalogZone=False,
         isReadOnly=False,
-        catalogZoneName="current.example.com",
+        catalogZoneName=None,
         availableCatalogZoneNames=["other.example.com"],  # Still no catalog.example.com
     )
 
@@ -2000,8 +1990,7 @@ async def test_ensure_catalog_membership_zone_created_but_not_available(
 
     # Should have called create_zone
     create_zone_mock.assert_awaited_once_with("catalog.example.com", zone_type="Catalog")
-    # Should return current membership (not enrolled in desired catalog)
-    assert result == "current.example.com"
+    assert result is None
 
 
 def test_import_main() -> None:
@@ -2412,20 +2401,16 @@ class TestMainMiddlewareFunctions:
         app.dependency_overrides[get_app_state] = get_state_override
         client = TestClient(app)
 
-        # Trigger ExceptionGroup if available in Python 3.11+
-        try:
-            exec(
-                """
+        # Python 3.14 always provides ExceptionGroup.
+        exec(
+            """
 @app.get("/test-group")
 async def trigger_exception_group():
     raise ExceptionGroup("test", [ValueError("test")])
 """
-            )
-            response = client.get("/test-group")
-            assert response.status_code == 500
-        except Exception:
-            # Skip if ExceptionGroup not available
-            pytest.skip("ExceptionGroup not available in this Python version")
+        )
+        response = client.get("/test-group")
+        assert response.status_code == 500
 
     def test_runtime_error_handler_not_ready_message_case_insensitive(self, mocker):
         """Test runtime error handler detects various not-ready messages (case-insensitive)."""

@@ -67,7 +67,6 @@ class AppState:
             self._client = TechnitiumClient(
                 base_url=config.technitium_url,
                 timeout=config.technitium_timeout,
-                verify_ssl=config.technitium_verify_ssl,
                 ca_bundle=config.technitium_ca_bundle_file,
                 enable_request_compression=config.technitium_enable_request_compression,
                 compression_threshold_bytes=config.technitium_compression_threshold_bytes,
@@ -142,7 +141,6 @@ class AppState:
         self._client = TechnitiumClient(
             base_url=normalized,
             timeout=self.config.technitium_timeout,
-            verify_ssl=self.config.technitium_verify_ssl,
             ca_bundle=self.config.technitium_ca_bundle_file,
             enable_request_compression=self.config.technitium_enable_request_compression,
             compression_threshold_bytes=self.config.technitium_compression_threshold_bytes,

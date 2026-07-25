@@ -159,7 +159,6 @@ def test_ca_bundle_validation_missing_file() -> None:
             technitium_username="admin",
             technitium_password="admin",
             zone="example.com",
-            technitium_verify_ssl=True,
             technitium_ca_bundle_file=nonexistent_ca,
         )
 
@@ -198,25 +197,23 @@ def test_ca_bundle_validation_with_valid_file() -> None:
             technitium_username="admin",
             technitium_password="admin",
             zone="example.com",
-            technitium_verify_ssl=True,
             technitium_ca_bundle_file=ca_file,
         )
         assert config.technitium_ca_bundle_file == ca_file
 
 
-def test_verify_ssl_false_is_rejected() -> None:
-    """TLS verification cannot be disabled through configuration."""
+def test_legacy_verify_ssl_environment_variable_is_rejected(monkeypatch) -> None:
+    """The removed TLS toggle fails clearly instead of being silently ignored."""
+    monkeypatch.setenv("TECHNITIUM_VERIFY_SSL", "false")
     with pytest.raises(
         ValueError,
-        match="Disabling TLS certificate verification is not supported",
+        match="TECHNITIUM_VERIFY_SSL is no longer supported",
     ):
         Config(
             technitium_url="https://dns.example.com",
             technitium_username="user",
             technitium_password="pass",
             zone="example.com",
-            technitium_verify_ssl=False,
-            technitium_ca_bundle_file="/nonexistent/path.pem",
         )
 
 
@@ -238,7 +235,6 @@ def test_ca_bundle_validation_unreadable_file() -> None:
                     technitium_username="admin",
                     technitium_password="admin",
                     zone="example.com",
-                    technitium_verify_ssl=True,
                     technitium_ca_bundle_file=ca_file,
                 )
             assert "not readable" in str(exc_info.value).lower()

@@ -222,15 +222,10 @@ kind cluster
 When running tests manually, set these environment variables:
 
 ```bash
-export TECHNITIUM_URL="http://localhost:30380"
-export TECHNITIUM_USERNAME="admin"
-export TECHNITIUM_PASSWORD="$(kubectl get secret technitium-secret -o jsonpath='{.data.password}' | base64 -d)"
-export ZONE="test.local"
-
-pytest tests/integration/ -m integration -v
+make test-integration
 ```
 
-The `run-integration-tests.sh` script does this automatically.
+The `run-integration-tests.sh` script creates an HTTPS port-forward to port `53443`, extracts the test CA bundle, and sets `TECHNITIUM_URL`, `TECHNITIUM_CA_BUNDLE_FILE`, credentials, and zone automatically.
 
 ## Development Workflow
 

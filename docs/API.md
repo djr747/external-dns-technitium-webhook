@@ -4,8 +4,8 @@ The Technitium webhook implements the [ExternalDNS webhook specification](https:
 
 ## Base URLs
 
-- **Main API Server:** `http://0.0.0.0:8888` (default bind address and port)
-- **Health Check Server:** `http://0.0.0.0:8080` (separate thread)
+- **Main API Server:** `http://<webhook-host>:8888` (default bind address and port)
+- **Health Check Server:** `http://<webhook-host>:8080` (separate thread)
 
 > **Note:** When deployed as an ExternalDNS webhook the ports above are fixed
 > by the controller and cannot be overridden.  `LISTEN_PORT`/`HEALTH_PORT` are
@@ -34,6 +34,7 @@ Provider-specific options (e.g., comments, expiry TTL, PTR creation, SVCB hints)
 | --- | --- | --- |
 | `GET` | `/health` | Readiness probe; returns `200 OK` when ready, `503` if not |
 | `GET` | `/healthz` | Kubernetes-style readiness probe; same behavior as `/health` |
+| `GET` | `/metrics` | Prometheus metrics in the standard text exposition format |
 
 ---
 
@@ -170,6 +171,10 @@ Kubernetes liveness/readiness probe endpoint.
 Alternative health check endpoint (same as `/health`). Provided for Kubernetes probe flexibility.
 
 **Returns:** Same as `/health`
+
+### `GET /metrics` (Health Server, port 8080)
+
+Returns Prometheus metrics in the standard text exposition format. The endpoint currently exposes the metrics registered in the default Prometheus registry, including Python runtime and process metrics.
 
 ## Rate Limiting & Payload Limits
 

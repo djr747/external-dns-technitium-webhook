@@ -30,7 +30,7 @@ assignees: ''
 ## Configuration
 <!-- Relevant environment variables (redact sensitive values) -->
 ```yaml
-TECHNITIUM_URL: http://technitium-dns:5380
+TECHNITIUM_URL: https://technitium-dns:53443
 ZONE: example.com
 LOG_LEVEL: DEBUG
 ```

@@ -250,10 +250,7 @@ async def setup_technitium_connection(state: AppState) -> None:
     This allows investigation of issues without complete container failure.
     """
 
-    logger.debug(
-        f"Config: verify_ssl={state.config.technitium_verify_ssl}, "
-        f"ca_bundle={state.config.technitium_ca_bundle_file}"
-    )
+    logger.debug("Config: ca_bundle=%s", state.config.technitium_ca_bundle_file)
 
     endpoints = state.config.technitium_endpoints
     if not endpoints:
@@ -418,6 +415,12 @@ async def ensure_catalog_membership(
     if current_membership == desired_membership:
         return current_membership
 
+    if current_membership is not None:
+        raise RuntimeError(
+            f"Zone {state.config.zone} is already a member of catalog zone "
+            f"{current_membership}; refusing to move it to {desired_membership}"
+        )
+
     available = {
         name
         for name in (
@@ -475,16 +478,13 @@ async def ensure_catalog_membership(
             catalog_zone=catalog_zone,
         )
     except TechnitiumError as exc:
-        details = str(exc).lower()
-        logger.warning(f"Caught TechnitiumError in enroll_catalog: {exc}")
-        logger.warning(f"Details: {details}")
-        if "not found" in details or "does not exist" in details or "status code 404" in details:
-            logger.warning(
-                "Catalog zone %s does not exist on endpoint %s; skipping enrollment",
-                catalog_zone,
-                state.active_endpoint,
-            )
-            return current_membership
+        logger.error(
+            "Failed to register zone %s with catalog zone %s on endpoint %s: %s",
+            state.config.zone,
+            catalog_zone,
+            state.active_endpoint,
+            exc,
+        )
         raise
 
     refreshed = await state.client.get_zone_options(
@@ -493,10 +493,9 @@ async def ensure_catalog_membership(
     )
     new_membership = _normalize_zone_name(refreshed.catalog_zone_name)
     if new_membership != desired_membership:
-        logger.warning(
-            "Catalog enrollment requested for %s but server reports membership %s",
-            catalog_zone,
-            new_membership,
+        raise RuntimeError(
+            "Catalog membership verification failed: requested "
+            f"{catalog_zone}, server reports {new_membership}"
         )
     return new_membership
 
@@ -659,7 +658,6 @@ async def _probe_primary_endpoint(state: AppState, primary_endpoint: str) -> Pri
     temp_client = TechnitiumClient(
         base_url=primary_endpoint,
         timeout=state.config.technitium_timeout,
-        verify_ssl=state.config.technitium_verify_ssl,
         ca_bundle=state.config.technitium_ca_bundle_file,
         enable_request_compression=state.config.technitium_enable_request_compression,
         compression_threshold_bytes=state.config.technitium_compression_threshold_bytes,
