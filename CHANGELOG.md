@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v1.0.13] - 2026-07-25
+
+### Fixed
+
+- Remove redundant `exc_info=True` from `logger.error()` calls inside exception handlers; use `logger.exception()` which always includes the traceback (SonarCloud code-smell remediation).
+
 ## [v1.0.12] - 2026-07-25
 
 ### Security
