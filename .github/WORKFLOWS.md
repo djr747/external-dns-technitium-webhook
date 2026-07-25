@@ -6,7 +6,7 @@ This repository uses a comprehensive CI/CD pipeline with security best practices
 
 ### 🔄 CI Pipeline (`ci.yml`)
 
-**Triggers:** Push to main/develop, Pull Requests
+**Triggers:** Pushes to branches without an open PR, and pull requests targeting any branch
 
 **Jobs:**
 - **Lint**: Code quality checks with Ruff and pyright
@@ -41,7 +41,7 @@ This repository uses a comprehensive CI/CD pipeline with security best practices
 
 ### 🔒 Security Scanning (`security.yml`)
 
-**Triggers:** Weekly (Sunday midnight), Push to main/develop, PRs, manual
+**Triggers:** Daily (midnight UTC), pushes to non-`main` branches without an open PR, pull requests targeting any branch, manual
 
 **Jobs:**
 - **CodeQL Analysis**: GitHub's semantic code analysis
@@ -60,21 +60,21 @@ This repository uses a comprehensive CI/CD pipeline with security best practices
 
 ### 🔄 Scheduled Rebuild (`scheduled-rebuild.yml`)
 
-**Triggers:** Weekly (Monday 2 AM UTC), manual dispatch
+**Triggers:** Daily at 02:00 UTC, manual dispatch
 
 **Purpose:** Automated security patching from base image updates
 
 **Jobs:**
-- **Check for Updates**: Detect UBI10 base image changes
-- **Rebuild Image**: Force rebuild with latest patches
+- **Check for Updates**: Inspect the Chainguard Python base image
+- **Rebuild Image**: Force a multi-architecture rebuild with the latest base-image patches
 - **Vulnerability Scan**: Post-rebuild security check
 - **Snyk Monitor**: Track vulnerabilities over time
 
 **Key Features:**
-- Automatic weekly rebuilds for CVE patching
+- Automatic daily rebuilds for CVE patching
 - No-cache builds to pull latest base images
 - Issue creation for critical vulnerabilities
-- Patched image tagging strategy
+- Updates the mutable `latest` and `latest-patched` tags; release-version tags are not retagged
 - Vulnerability trend tracking
 
 ### 🚀 Release (`release.yml`)
@@ -161,14 +161,11 @@ Add these secrets to your repository settings:
 
 ### Container Tags
 
-Every build creates multiple tags:
-- `latest` - Latest stable release
-- `v1.2.3` - Specific version
-- `v1.2` - Minor version
-- `v1` - Major version
-- `main-sha123456` - Branch + commit SHA
-- `2024-01-15-sha123456` - Date + commit SHA
-- `latest-patched` - Weekly security rebuild
+Release builds create `1.2.3`, `1.2`, and `1` tags. The exact version tag is the stable release-specific image; the minor and major tags move only when a newer matching release is published.
+
+The scheduled security rebuild publishes `latest`, `latest-patched`, and a dated `latest-patched-<YYYYMMDD>` tag for both `linux/amd64` and `linux/arm64`. The first two are mutable and rebuilt daily from `main` to incorporate the latest Chainguard base-image patches. They do not retag release-version images.
+
+Pin an exact version tag (for example, `1.2.3`) or a digest for reproducible production deployments.
 
 ### Change Tracking
 
@@ -196,8 +193,8 @@ You can add these badges to your README:
 
 | Workflow | Schedule | Purpose |
 |----------|----------|---------|
-| Security Scanning | Sun 00:00 UTC | Weekly security audit |
-| Scheduled Rebuild | Mon 02:00 UTC | CVE patching from base images |
+| Security Scanning | Daily 00:00 UTC | Security audit |
+| Scheduled Rebuild | Daily 02:00 UTC | Rebuild `latest`/`latest-patched` with base-image CVE patches |
 
 ## 🎯 Best Practices Implemented
 

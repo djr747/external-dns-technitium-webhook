@@ -309,7 +309,7 @@ async def _handle_get_records_error(state: AppState, exc: TechnitiumError) -> Ge
                 list_zone=True,
             )
         except Exception as retry_exc:
-            logger.error("Retry failed after failover: %s", retry_exc, exc_info=True)
+            logger.exception("Retry failed after failover: %s", retry_exc)
             await state.update_status(
                 ready=False,
                 writable=False,
@@ -429,7 +429,7 @@ async def _handle_apply_record_error(
             )
             return
         except Exception as retry_exc:
-            logger.error("Retry failed after failover: %s", retry_exc, exc_info=True)
+            logger.exception("Retry failed after failover: %s", retry_exc)
             await state.update_status(
                 ready=False,
                 writable=False,
@@ -573,7 +573,7 @@ async def _execute_change(
         raise
     except Exception as e:
         safe_message = sanitize_error_message(e)
-        logger.error(f"Failed to {operation} record {ep.dns_name}: {e}")
+        logger.exception(f"Failed to {operation} record {ep.dns_name}: {e}")
         api_errors_total.labels(error_type="connection_error").inc()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

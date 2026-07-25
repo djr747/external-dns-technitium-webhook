@@ -604,8 +604,9 @@ async def test_get_records_circuit_open(mocker):
     state = DummyState()
     state.client.get_records = mocker.AsyncMock(side_effect=cboe)
 
+    app_state = cast(AppState, state)
     with pytest.raises(HTTPException) as exc:
-        await get_records(cast(AppState, state))
+        await get_records(app_state)
 
     assert exc.value.status_code == 503
     assert exc.value.headers is not None

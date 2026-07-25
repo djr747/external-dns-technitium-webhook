@@ -1,6 +1,43 @@
 from pathlib import Path
 
 WORKFLOW = Path(__file__).parents[2] / ".github" / "workflows" / "ci.yml"
+SECURITY_WORKFLOW = Path(__file__).parents[2] / ".github" / "workflows" / "security.yml"
+SCHEDULED_REBUILD_WORKFLOW = (
+    Path(__file__).parents[2] / ".github" / "workflows" / "scheduled-rebuild.yml"
+)
+
+
+def test_ci_skips_push_jobs_only_when_the_branch_has_an_open_pr() -> None:
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    assert "  push:\n    branches:\n      - '**'" in workflow
+    assert "  pull_request:\n    branches:\n      - '**'" in workflow
+    assert "head=${GITHUB_REPOSITORY_OWNER}:${GITHUB_REF_NAME}" in workflow
+    assert "needs.check-open-pr.outputs.should-run == 'true'" in workflow
+
+
+def test_security_skips_push_jobs_only_when_the_branch_has_an_open_pr() -> None:
+    workflow = SECURITY_WORKFLOW.read_text(encoding="utf-8")
+    assert "  push:\n    branches-ignore: [ main ]" in workflow
+    assert "  pull_request:\n    branches:\n      - '**'" in workflow
+    assert "head=${GITHUB_REPOSITORY_OWNER}:${GITHUB_REF_NAME}" in workflow
+    assert "needs.check-open-pr.outputs.should-run == 'true'" in workflow
+
+
+def test_security_workflow_uses_one_codeql_action_revision() -> None:
+    workflow = SECURITY_WORKFLOW.read_text(encoding="utf-8")
+    codeql_action_sha = "7211b7c8077ea37d8641b6271f6a365a22a5fbfa"
+    codeql_lines = [line for line in workflow.splitlines() if "uses: github/codeql-action/" in line]
+    assert codeql_lines
+    assert all(f"@{codeql_action_sha}" in line for line in codeql_lines)
+
+
+def test_snyk_monitor_reads_outputs_from_declared_dependencies() -> None:
+    workflow = SCHEDULED_REBUILD_WORKFLOW.read_text(encoding="utf-8")
+    assert "needs: [check-for-updates, rebuild-image]" in workflow
+    assert (
+        "needs.check-for-updates.outputs.rebuild-needed == 'true'"
+        " && needs.rebuild-image.result == 'success'"
+    ) in workflow
 
 
 def _integration_step() -> str:

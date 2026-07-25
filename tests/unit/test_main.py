@@ -1264,8 +1264,9 @@ async def test_auto_attempt_failback_cancels_during_primary_health_check(
         return_value=None,
     )
 
+    coro = auto_attempt_failback(cast(AppState, state))
     with pytest.raises(asyncio.CancelledError):
-        await auto_attempt_failback(cast(AppState, state))
+        _ = await coro
 
     sleep_mock.assert_awaited_once_with(config.health_polling_interval_seconds)
 

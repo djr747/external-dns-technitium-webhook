@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v1.0.11] - 2026-07-24
+
+### Changed
+
+- Update Kubernetes integration test components: Kind v0.32.0, cert-manager v1.21.0, Technitium DNS 15.4.0, and external-dns Helm chart 1.21.1.
+
+### Fixed
+
+- Preserve exception tracebacks in application logging.
+- Isolate exception assertions and test global state for Sonar code-smell remediation.
+
 ## [v1.0.10] - 2026-07-21
 
 ### Security

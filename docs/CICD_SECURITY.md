@@ -6,9 +6,9 @@ This project implements enterprise-grade CI/CD pipelines with comprehensive secu
 
 | Workflow | File | Triggers | Purpose |
 | ---------- | ------ | ---------- | --------- |
-| CI | `.github/workflows/ci.yml` | Push to any branch; PR to `main`/`develop` | Lints (Ruff), type-checks (mypy, pyright), runs tests with coverage validation (95% minimum), uploads coverage to Codecov, builds multi-arch Docker images for commit, validates Python version matches Chainguard base |
-| Security Scanning | `.github/workflows/security.yml` | Daily schedule (UTC midnight); push to `main`/`develop`; PR to `main`; manual | CodeQL semantic code analysis, Snyk container vulnerability scan (SARIF + JSON), generates Snyk summary, uploads to GitHub Security tab |
-| Scheduled Security Rebuild | `.github/workflows/scheduled-rebuild.yml` | Mondays 02:00 UTC; manual | Rebuilds container on latest Chainguard Python base, runs Snyk scan, opens GitHub issue for critical CVEs |
+| CI | `.github/workflows/ci.yml` | Push to any branch without an open PR; PR to any branch | Lints (Ruff), type-checks (mypy, pyright), runs tests with coverage validation (95% minimum), uploads coverage to Codecov, builds multi-arch Docker images for commit, validates Python version matches Chainguard base |
+| Security Scanning | `.github/workflows/security.yml` | Daily schedule (UTC midnight); push to non-`main` branches without an open PR; PR to any branch; manual | CodeQL semantic code analysis, Snyk container vulnerability scan (SARIF + JSON), generates Snyk summary, uploads to GitHub Security tab |
+| Scheduled Security Rebuild | `.github/workflows/scheduled-rebuild.yml` | Daily at 02:00 UTC; manual | Rebuilds and publishes the `latest`/`latest-patched` multi-architecture images from `main` on the latest Chainguard Python base, runs Snyk scan, and opens a GitHub issue for critical CVEs. Release-version tags are not changed. |
 | Release | `.github/workflows/release.yml` | Semantic version tags (semver); manual | Validates semantic version tag, builds multi-platform Docker images, publishes to GHCR, generates SBOMs and provenance attestations, verifies attestation signatures |
 | Nightly Chainguard Version | `.github/workflows/nightly-chainguard-python-version.yml` | Daily schedule; manual | Checks for newer Chainguard Python versions, updates Dockerfile if available, creates PR for review |
 
