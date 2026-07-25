@@ -34,7 +34,7 @@ async def _assert_raises(exc_type, coro, **kwargs):
     invocation).
     """
     with pytest.raises(exc_type, **kwargs):
-        await coro
+        _ = await coro
 
 
 # ---------------------------------------------------------------------------
