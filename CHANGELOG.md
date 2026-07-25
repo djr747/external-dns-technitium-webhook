@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v1.0.14] - 2026-07-25
+
+### Fixed
+
+- Update 204 response to external DNS logs.
+
 ## [v1.0.13] - 2026-07-25
 
 ### Fixed
