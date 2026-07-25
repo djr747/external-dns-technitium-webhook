@@ -874,7 +874,7 @@ async def exception_logging_middleware(request: Request, call_next: Callable) ->
         if is_group:
             logger.exception("Unhandled exception group: %s", e)
         else:
-            logger.exception("Unhandled exception: %s", e, exc_info=True)
+            logger.exception("Unhandled exception: %s", e)
 
         # Return 503 for service not ready errors
         if "Service not ready yet" in str(e):

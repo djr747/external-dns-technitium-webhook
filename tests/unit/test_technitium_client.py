@@ -1271,16 +1271,12 @@ async def test_parse_response_malformed_json_raises(client: TechnitiumClient) ->
     response = httpx2.Response(200, content=b"not json")
     with pytest.raises(TechnitiumError, match="Failed to parse JSON response"):
         client._parse_response(response)
-    with pytest.raises(TechnitiumError, match="Failed to parse JSON response"):
-        client._parse_response(response)
 
 
 @pytest.mark.asyncio
 async def test_parse_response_unexpected_format(client: TechnitiumClient) -> None:
     """A non-dict JSON body triggers an error."""
     response = httpx2.Response(200, json=[1, 2, 3])
-    with pytest.raises(TechnitiumError, match="Unexpected response format"):
-        client._parse_response(response)
     with pytest.raises(TechnitiumError, match="Unexpected response format"):
         client._parse_response(response)
 

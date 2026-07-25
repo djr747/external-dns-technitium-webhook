@@ -309,7 +309,7 @@ async def _handle_get_records_error(state: AppState, exc: TechnitiumError) -> Ge
                 list_zone=True,
             )
         except Exception as retry_exc:
-            logger.exception("Retry failed after failover: %s", retry_exc, exc_info=True)
+            logger.exception("Retry failed after failover: %s", retry_exc)
             await state.update_status(
                 ready=False,
                 writable=False,
@@ -429,7 +429,7 @@ async def _handle_apply_record_error(
             )
             return
         except Exception as retry_exc:
-            logger.exception("Retry failed after failover: %s", retry_exc, exc_info=True)
+            logger.exception("Retry failed after failover: %s", retry_exc)
             await state.update_status(
                 ready=False,
                 writable=False,
