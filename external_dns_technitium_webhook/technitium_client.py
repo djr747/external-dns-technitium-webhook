@@ -111,14 +111,12 @@ class TechnitiumClient:
     ENDPOINT_LIST_CATALOG_ZONES = "/api/zones/catalogs/list"
     ENDPOINT_GET_ZONE_OPTIONS = "/api/zones/options/get"
     ENDPOINT_SET_ZONE_OPTIONS = "/api/zones/options/set"
-    ENDPOINT_ENROLL_CATALOG = "/api/zones/catalog/enroll"
 
     def __init__(
         self,
         base_url: str,
         token: str = "",
         timeout: float = 10.0,
-        verify_ssl: bool = True,
         ca_bundle: str | None = None,
         enable_request_compression: bool = False,
         compression_threshold_bytes: int = 32768,
@@ -131,7 +129,6 @@ class TechnitiumClient:
             base_url: Base URL of the Technitium DNS server
             token: Authentication token (optional, can be set later)
             timeout: Request timeout in seconds
-            verify_ssl: Verify SSL certificates
             ca_bundle: Optional path to a PEM file with CA certificates
             enable_request_compression: Enable gzip compression for large request bodies
             compression_threshold_bytes: Minimum size for request compression
@@ -144,7 +141,6 @@ class TechnitiumClient:
         self.base_url = base_url.rstrip("/")
         self.token = token
         self.timeout = timeout
-        self.verify_ssl = verify_ssl
         self.ca_bundle = ca_bundle
         self.enable_request_compression = enable_request_compression
         self.compression_threshold_bytes = compression_threshold_bytes
@@ -154,16 +150,9 @@ class TechnitiumClient:
         # and hostname validation using the system CA store by default. A
         # custom CA bundle (ca_bundle / TECHNITIUM_CA_BUNDLE_FILE) is only
         # needed when the Technitium endpoint uses a private/self-signed CA;
-        # it is optional otherwise. Disabling verification via
-        # verify_ssl=False is not supported and is rejected below by
-        # raising a ValueError.
-        if not verify_ssl:
-            raise ValueError(
-                "Disabling TLS certificate verification is not supported; "
-                "use ca_bundle to trust a private CA."
-            )
-
-        verify: Any = verify_ssl
+        # it is optional otherwise. TLS certificate and hostname verification
+        # are always enabled.
+        verify: Any = True
         if ca_bundle:
             # Use ssl.create_default_context to load the CA bundle
             logger.debug(f"Using custom CA bundle: {ca_bundle}")
@@ -585,12 +574,9 @@ class TechnitiumClient:
         await self._post_raw(self.ENDPOINT_SET_ZONE_OPTIONS, data)
 
     async def enroll_catalog(self, member_zone: str, catalog_zone: str) -> None:
-        """Enroll a zone in a catalog zone.
+        """Register a zone with a Catalog zone.
 
-        Args:
-            member_zone: Zone name to enroll
-            catalog_zone: Catalog zone name
+        Technitium does not expose a separate catalog-enrollment API. Catalog
+        membership is set through the zone-options endpoint using ``catalog``.
         """
-        payload: dict[str, Any] = {"zone": member_zone, "catalogZone": catalog_zone}
-        data = {"token": self.token, **payload}
-        await self._post_raw(self.ENDPOINT_ENROLL_CATALOG, data)
+        await self.set_zone_options(member_zone, catalog=catalog_zone)

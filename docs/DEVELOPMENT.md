@@ -74,10 +74,7 @@ make test-cov
 *These ports are hard‑coded in the container and in ExternalDNS; you cannot
 change them when running alongside ExternalDNS. The CLI options above simply
 mirror the defaults and are useful for local development only.*
-python -m uvicorn external_dns_technitium_webhook.main:app \
-  --host 0.0.0.0 \
-  --port 8888 \
-  --reload
+python -m external_dns_technitium_webhook.main
 
 # Test main API endpoints
 curl http://127.0.0.1:8888/
@@ -96,12 +93,6 @@ For end-to-end testing with real Kubernetes services, use the kind-based local c
 # Create local cluster and deploy services (one-time setup)
 bash local-ci-setup/setup.sh
 
-# Configure environment for integration tests
-export TECHNITIUM_URL="http://localhost:30380"  # NodePort service
-export TECHNITIUM_USERNAME="admin"
-export TECHNITIUM_PASSWORD="admin"
-export ZONE="example.com"
-
 # Run integration tests
 make test-integration
 
@@ -109,7 +100,7 @@ make test-integration
 kind delete cluster --name local-integration-test
 ```
 
-**Note:** The integration tests automatically handle port-forwarding and credential extraction from Kubernetes secrets. The environment variables above are set by the test script but shown here for reference.
+**Note:** The integration script automatically configures the HTTPS port-forward, temporary CA bundle, credentials, and test zone. Do not override these values with the HTTP NodePort.
 
 See [docs/LOCAL_TESTING.md](LOCAL_TESTING.md) for detailed guidance on local integration testing.
 

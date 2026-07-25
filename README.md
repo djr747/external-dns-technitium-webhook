@@ -26,9 +26,9 @@ FastAPI webhook provider that lets [ExternalDNS](https://github.com/kubernetes-s
 Kubernetes resources → ExternalDNS → Webhook (FastAPI) → Technitium DNS API
 ```
 
-The webhook maintains shared application state (HTTP client, auth token, readiness flag) and exposes the ExternalDNS webhook contract: `/health`, `/`, `/records`, `/adjustendpoints`, and `/records`.
+The webhook maintains shared application state (HTTP client, auth token, readiness flag). Its main API implements the ExternalDNS webhook contract through `GET /`, `GET /records`, `POST /adjustendpoints`, and `POST /records`; a separate health server exposes `GET /health` and `GET /healthz`.
 
-## DevelopmentQuick Start
+## Development Quick Start
 
 ```bash
 git clone https://github.com/djr747/external-dns-technitium-webhook.git
@@ -38,18 +38,18 @@ source .venv/bin/activate
 make install-dev
 
 # minimum configuration
-# Use port 5380 for HTTP or 53443 for HTTPS
-export TECHNITIUM_URL="http://dns.example.com:5380"  # or https://dns.example.com:53443
+# Technitium API endpoint; HTTPS is required (normally port 53443)
+export TECHNITIUM_URL="https://dns.example.com:53443"
 export TECHNITIUM_USERNAME="external-dns-webhook"
 export TECHNITIUM_PASSWORD="changeme"
 export ZONE="example.com"
-# For self-signed certificates with HTTPS, disable SSL verification
-# export TECHNITIUM_VERIFY_SSL="false"
+# For a private or self-signed CA, mount its PEM file and set:
+# export TECHNITIUM_CA_BUNDLE_FILE="/path/to/technitium-ca.pem"
 
 python -m external_dns_technitium_webhook.main
 ```
 
-Interactive API docs live at `http://127.0.0.1:3000/docs` while the server runs.
+Interactive API docs live at `http://127.0.0.1:8888/docs` while the server runs.
 
 > **Important:** The webhook-to-Technitium connection must use HTTPS (port 53443). The
 > `TECHNITIUM_URL` environment variable must be an `https://` URL. Upstream Kubernetes
@@ -71,8 +71,7 @@ Environment variables map directly to `external_dns_technitium_webhook.config.Co
 | `DOMAIN_FILTERS` | ❌ | — | Semicolon-separated allowlist for ExternalDNS |
 | `TECHNITIUM_FAILOVER_URLS` | ❌ | — | Semicolon-separated fallback endpoints; automatic read-only replica detection with intelligent primary failback |
 | `CATALOG_ZONE` | ❌ | — | Catalog zone joined when the endpoint is writable |
-| `TECHNITIUM_VERIFY_SSL` | ❌ | `true` | Verify TLS certificates using system CA store. Must remain `true`; use `TECHNITIUM_CA_BUNDLE_FILE` for private CAs. |
-| `TECHNITIUM_CA_BUNDLE_FILE` | ❌ | — | PEM CA bundle for private or self-signed certificates; verification stays enabled. | for private CAs; mounted via ConfigMap |
+| `TECHNITIUM_CA_BUNDLE_FILE` | ❌ | — | PEM CA bundle for private or self-signed certificates; verification stays enabled and the file must be readable. |
 | `LISTEN_ADDRESS` | ❌ | `0.0.0.0` | Bind address for the FastAPI server |
 | `LOG_LEVEL` | ❌ | `INFO` | Python logging level |
 | `TECHNITIUM_TIMEOUT` | ❌ | `10.0` | HTTP timeout (seconds) for Technitium calls |

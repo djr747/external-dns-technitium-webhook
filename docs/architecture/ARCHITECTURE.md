@@ -332,11 +332,9 @@ graph LR
     
     Actions --> CI["ci.yml<br/>- Lint ruff<br/>- Type check mypy<br/>- Test pytest<br/>- Coverage ≥95%"]
     Actions --> Security["security.yml<br/>- Snyk scan<br/>- Semgrep analysis<br/>- CodeQL<br/>- Grype"]
-    Actions --> Docker["docker.yml<br/>- Build image<br/>- Multi-arch AMD64/ARM64<br/>- Push to GHCR"]
     
     CI --> Test{Tests<br/>Pass?}
     Security --> Test
-    Docker --> Test
     
     Test -->|Yes| Release["release.yml<br/>- Semantic versioning<br/>- Changelog update<br/>- GitHub release<br/>- Tag Docker image"]
     Test -->|No| Fail["❌ Workflow Fails<br/>Block merge"]
@@ -349,7 +347,7 @@ graph LR
 ```mermaid
 graph TB
     subgraph TestSuite["Test Suite - pytest + pytest-asyncio"]
-        subgraph UnitTests["Unit Tests: 176 total"]
+        subgraph UnitTests["Unit Tests"]
             Config["test_config.py<br/>- Env var validation<br/>- Domain filter parsing<br/>- Config initialization"]
             Models["test_models.py<br/>- Pydantic validation<br/>- Serialization/deserialization<br/>- Field aliasing"]
             Handlers["test_handlers.py<br/>- Health checks<br/>- Domain negotiation<br/>- Record retrieval<br/>- Changes application"]
@@ -357,7 +355,7 @@ graph TB
             Enhanced["test_enhancements.py<br/>- Advanced error handling<br/>- Special record types<br/>- Provider properties"]
         end
         
-        Config --> Coverage["Coverage Report<br/>99% (933/941 lines)"]
+        Config --> Coverage["Coverage Report"]
         Models --> Coverage
         Handlers --> Coverage
         Client --> Coverage
@@ -457,20 +455,21 @@ graph TB
 
 - `GET /health` → Returns `{"status": "ok"}` on 200, or 503 with error on failure
 - `GET /healthz` → Kubernetes-style readiness probe, returns `{"status": "ok"}` on 200, or 503 with error
+- `GET /metrics` → Prometheus metrics from the default registry
 - Checks if main server socket is responding (liveness/readiness validation)
 - Runs on separate thread to isolate from main API load
 
-### Future Enhancements
+### Metrics and Future Enhancements
 
 ```text
 ┌────────────────────────────────────┐
-│    Prometheus Metrics (Future)     │
+│    Prometheus Metrics (Current)     │
 │                                    │
-│  - Request count                   │
-│  - Request duration                │
-│  - Error rate                      │
-│  - Technitium API latency          │
 │  - Record operations               │
+│  - API errors                      │
+│  - Technitium API latency          │
+│  - Webhook readiness               │
+│  - Managed-record count            │
 └────────────────────────────────────┘
 
 ┌────────────────────────────────────┐

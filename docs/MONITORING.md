@@ -42,10 +42,10 @@ Watch for these key log messages to understand failover/failback behavior:
 time="2025-11-02T20:33:20Z" level=warning module=handlers msg="Connection error detected, attempting failover to alternate endpoints: Connection refused"
 
 # Successful failover to alternate endpoint
-time="2025-11-02T20:33:21Z" level=info module=app_state msg="Successfully authenticated with failover endpoint http://secondary1:5380"
+time="2025-11-02T20:33:21Z" level=info module=app_state msg="Successfully authenticated with failover endpoint https://secondary1:53443"
 
 # Cluster role detected (primary vs secondary)
-time="2025-11-02T20:33:21Z" level=info module=app_state msg="Failover endpoint http://secondary1:5380 is secondary node (writable=false)"
+time="2025-11-02T20:33:21Z" level=info module=app_state msg="Failover endpoint https://secondary1:53443 is secondary node (writable=false)"
 
 # Retry after failover succeeded
 time="2025-11-02T20:33:22Z" level=info module=handlers msg="Failover successful to writable endpoint, retrying record changes"
@@ -193,38 +193,26 @@ time="2025-11-02T20:33:18Z" level=debug module=technitium_client msg="Fetching r
 time="2025-11-02T20:33:18Z" level=info module=handlers msg="Found 42 endpoints"
 ```
 
-## Planned Enhancements
+## Metrics and Planned Enhancements
 
-### 1. Prometheus Metrics (Future)
+### 1. Prometheus Metrics
 
-**Planned Metrics**:
+`GET /metrics` is available now on the health server (port 8080) and exposes the Prometheus registry in the Prometheus text format.
+
+**Application metrics**:
 
 ```python
 # Counter metrics
-webhook_requests_total{method, endpoint, status}
-webhook_dns_records_created_total{zone, record_type}
-webhook_dns_records_deleted_total{zone, record_type}
-webhook_technitium_api_calls_total{endpoint, status}
-webhook_errors_total{error_type}
+webhook_dns_records_processed_total{operation}
+webhook_api_errors_total{error_type}
 
 # Histogram metrics  
-webhook_request_duration_seconds{method, endpoint}
-webhook_technitium_api_duration_seconds{endpoint}
+webhook_technitium_latency_seconds{operation}
 
 # Gauge metrics
-webhook_active_connections
-webhook_dns_records_managed{zone}
+webhook_ready
+webhook_dns_records_total
 ```
-
-**Endpoint**: `GET /metrics` (Prometheus format)
-
-**Implementation Plan**:
-
-1. Add `prometheus_client` dependency
-2. Create metrics module (`external_dns_technitium_webhook/metrics.py`)
-3. Add middleware to track request metrics
-4. Instrument Technitium client for API call metrics
-5. Add metrics endpoint to FastAPI app
 
 ### 2. OpenTelemetry Tracing (Future)
 

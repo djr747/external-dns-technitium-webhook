@@ -12,7 +12,7 @@ For Kubernetes deployment details, see `docs/deployment/kubernetes.md`.
 
 ## Step 1: Create a Dedicated Technitium User
 
-1. Sign in to Technitium DNS at `http://<technitium-host>:5380` (HTTP) or `https://<technitium-host>:53443` (HTTPS)
+1. Sign in to Technitium DNS at `https://<technitium-host>:53443`; this is also the HTTPS endpoint required by the webhook
 2. Navigate to **Administration** → **Users** → **Add User**
 3. Create user account:
    - **Username:** `external-dns-webhook`
@@ -62,8 +62,6 @@ For a private or self-signed Technitium certificate, mount the issuing CA PEM fi
 env:
   - name: TECHNITIUM_URL
     value: "https://dns.example.com:53443"
-  - name: TECHNITIUM_VERIFY_SSL
-    value: "true"
   - name: TECHNITIUM_CA_BUNDLE_FILE
     value: "/etc/technitium-ca/ca.crt"
 ```
@@ -84,8 +82,6 @@ provider:
     env:
       - name: TECHNITIUM_URL
         value: "https://technitium-dns.technitium.svc.cluster.local:53443"
-      - name: TECHNITIUM_VERIFY_SSL
-        value: "true"
       - name: TECHNITIUM_CA_BUNDLE_FILE
         value: "/etc/technitium-ssl/ca.pem"
     volumeMounts:
@@ -111,12 +107,11 @@ volumes:
 
 | Variable | Required | Default | Purpose |
 | ---------- | ---------- | --------- | --------- |
-| `TECHNITIUM_URL` | Yes | None | Technitium DNS API endpoint (port 5380 for HTTP, 53443 for HTTPS) |
+| `TECHNITIUM_URL` | Yes | None | HTTPS Technitium DNS API endpoint (normally port 53443) |
 | `TECHNITIUM_USERNAME` | Yes | None | Username for authentication |
 | `TECHNITIUM_PASSWORD` | Yes | None | Password for authentication |
 | `ZONE` | Yes | None | Primary DNS zone for management |
 | `DOMAIN_FILTERS` | No | None | Semicolon-separated list of domains |
-| `TECHNITIUM_VERIFY_SSL` | No | `true` | Enable TLS certificate verification using system CA store. Must remain `true`; use `TECHNITIUM_CA_BUNDLE_FILE` for private CAs. |
 | `TECHNITIUM_CA_BUNDLE_FILE` | No | None | Path to PEM file with CA certificate |
 | `TECHNITIUM_TIMEOUT` | No | `10.0` | HTTP client timeout in seconds |
 | `TECHNITIUM_FAILOVER_URLS` | No | None | Semicolon-separated list of failover Technitium URLs for HA |
@@ -143,7 +138,7 @@ volumes:
 2. Test credentials manually:
 
    ```bash
-   curl -X POST "http://technitium:5380/api/user/login" \
+   curl -X POST "https://technitium:53443/api/user/login" \
      -d "username=external-dns-webhook&password=YOUR_PASSWORD"
    ```
 

@@ -41,10 +41,10 @@ provider:
   webhook:
     image:
       repository: ghcr.io/dj747/external-dns-technitium-webhook
-      tag: v1.0.0  # Use your released version
+      tag: 1.0.0  # Use an exact released version
     env:
       - name: TECHNITIUM_URL
-        value: "http://technitium-dns.technitium.svc.cluster.local:5380"  # or https://...:53443 for HTTPS
+        value: "https://technitium-dns.technitium.svc.cluster.local:53443"
       - name: TECHNITIUM_USERNAME
         valueFrom:
           secretKeyRef:
@@ -57,9 +57,7 @@ provider:
             key: password
       - name: ZONE
         value: "example.com"
-      # For self-signed HTTPS certificates, uncomment:
-      # - name: TECHNITIUM_VERIFY_SSL
-      #   value: "false"
+      # For a private CA, mount its PEM file and set TECHNITIUM_CA_BUNDLE_FILE.
       - name: DOMAIN_FILTERS
         value: "example.com"
       - name: LOG_LEVEL
@@ -93,8 +91,6 @@ Update your Helm values to include TLS configuration:
 provider:
   webhook:
     env:
-      - name: TECHNITIUM_VERIFY_SSL
-        value: "true"
       - name: TECHNITIUM_CA_BUNDLE_FILE
         value: "/etc/technitium-ssl/ca.pem"
     volumeMounts:
@@ -111,11 +107,9 @@ volumes:
           path: ca.pem
 ```
 
-### TLS Cipher Security
+### TLS Security
 
-**Note:** Disabling certificate verification (`TECHNITIUM_VERIFY_SSL=false`) in development environments does **NOT** downgrade cipher strength. Cipher strength remains at SECLEVEL=2 for all connections, ensuring secure communication even when verifying self-signed certificates.
-
-For production deployments, always use `TECHNITIUM_VERIFY_SSL=true` with properly trusted CA certificates.
+Certificate-chain and hostname verification are always required. For a private or self-signed CA, mount the CA PEM file and configure `TECHNITIUM_CA_BUNDLE_FILE`.
 
 ## Standalone Deployment
 
@@ -140,7 +134,7 @@ spec:
       automountServiceAccountToken: false  # Webhook does not need K8s API access
       containers:
       - name: webhook
-        image: ghcr.io/djr747/external-dns-technitium-webhook:v1.0.0
+        image: ghcr.io/djr747/external-dns-technitium-webhook:1.0.0
         ports:
         - containerPort: 8888
           name: webhook
@@ -148,7 +142,7 @@ spec:
           name: health
         env:
         - name: TECHNITIUM_URL
-          value: "http://technitium-dns.technitium.svc.cluster.local:5380"  # or https://...:53443 for HTTPS
+          value: "https://technitium-dns.technitium.svc.cluster.local:53443"
         - name: TECHNITIUM_USERNAME
           valueFrom:
             secretKeyRef:
@@ -161,9 +155,7 @@ spec:
               key: password
         - name: ZONE
           value: "example.com"
-        # For self-signed HTTPS certificates:
-        # - name: TECHNITIUM_VERIFY_SSL
-        #   value: "false"
+        # For a private CA, mount its PEM file and set TECHNITIUM_CA_BUNDLE_FILE.
         - name: DOMAIN_FILTERS
           value: "example.com"
         livenessProbe:
@@ -207,7 +199,6 @@ spec:
 | `TECHNITIUM_PASSWORD` | Yes | None | Password for authentication |
 | `ZONE` | Yes | None | Primary DNS zone for management |
 | `DOMAIN_FILTERS` | No | None | Semicolon-separated list of domains |
-| `TECHNITIUM_VERIFY_SSL` | No | `true` | Enable/disable SSL certificate verification |
 | `TECHNITIUM_CA_BUNDLE_FILE` | No | None | Path to PEM file with CA certificate |
 | `LOG_LEVEL` | No | `INFO` | Logging level: DEBUG, INFO, WARNING, ERROR |
 | `LISTEN_ADDRESS` | No | `0.0.0.0` | Address to bind the webhook server |
@@ -259,7 +250,7 @@ provider:
 2. Test credentials manually:
 
    ```bash
-   curl -X POST "http://technitium:5380/api/user/login" \
+   curl -X POST "https://technitium:53443/api/user/login" \
      -d "username=external-dns-webhook&password=YOUR_PASSWORD"
    ```
 
@@ -300,9 +291,9 @@ If running ExternalDNS with multiple replicas:
 
 - Use RBAC to limit ExternalDNS permissions
 - Store credentials in Kubernetes Secrets (never in ConfigMaps)
-- Enable TLS verification when possible (`TECHNITIUM_VERIFY_SSL=true`)
+- Configure `TECHNITIUM_CA_BUNDLE_FILE` when using a private CA
 - Use private CA certificates for internal Technitium deployments
-- Webhook enforces strong TLS ciphers (SECLEVEL=2) on all connections
+- The webhook requires HTTPS with certificate-chain and hostname verification for Technitium connections
 
 ### Credential Management
 

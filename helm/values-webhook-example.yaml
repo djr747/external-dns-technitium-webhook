@@ -41,15 +41,13 @@ provider:
       port: 8080
     env:
       - name: TECHNITIUM_URL
-        # Note: Ports 5380 (HTTPS) and 53443 (HTTP) are the default API ports for Technitium DNS Server.
+        # Technitium's HTTPS API normally uses port 53443; the webhook requires HTTPS.
         value: "https://192.168.7.18:53443" # Replace with your Technitium DNS Server URL (IP or hostname)
       - name: TECHNITIUM_USERNAME
         valueFrom:
           secretKeyRef:
             name: technitium-credentials
             key: username
-      - name: TECHNITIUM_VERIFY_SSL
-        value: "False" # Set to "True" to verify SSL certificates but false for self-signed certs
       - name: TECHNITIUM_PASSWORD
         valueFrom:
           secretKeyRef:
@@ -57,7 +55,7 @@ provider:
             key: password
       - name: ZONE
         value: "kubernetes.example.com" # Replace with your DNS zone managed in Technitium DNS Server
-      - name: CATALOG_ZONE_NAME
+      - name: CATALOG_ZONE
         value: "catalog.example.com" # Replace with your catalog DNS zone in Technitium DNS Server
 
 ## Notes:

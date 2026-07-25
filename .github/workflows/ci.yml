@@ -422,6 +422,7 @@ jobs:
           TECHNITIUM_URL: https://localhost:30443
           TECHNITIUM_CA_BUNDLE_FILE: /tmp/technitium-test-ca.crt
           ZONE: test.local
+          CATALOG_ZONE: catalog.invalid
         run: |
           set -o pipefail
           kubectl get secret technitium-test-ca -n default -o jsonpath='{.data.ca\.crt}' | base64 --decode > /tmp/technitium-test-ca.crt

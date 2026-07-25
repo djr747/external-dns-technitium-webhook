@@ -173,6 +173,15 @@ class TestWebhookIntegration:
 
     @pytest.fixture(scope="class")
     @classmethod
+    def catalog_zone(cls):
+        """Get the Catalog zone the webhook must register the managed zone with."""
+        catalog_zone = os.getenv("CATALOG_ZONE")
+        if not catalog_zone:
+            pytest.skip("CATALOG_ZONE environment variable required")
+        return catalog_zone
+
+    @pytest.fixture(scope="class")
+    @classmethod
     def webhook_url(cls):
         """Get the webhook service URL"""
         webhook_url = os.getenv("WEBHOOK_URL")
@@ -193,6 +202,16 @@ class TestWebhookIntegration:
         )
         assert response.status_code in [200, 400], (
             f"Technitium API unreachable: {response.status_code}"
+        )
+
+    def test_zone_is_registered_with_catalog(
+        self, technitium_client, technitium_zone, catalog_zone
+    ):
+        """Verify webhook startup registered the managed zone with its Catalog zone."""
+        options = technitium_client.get_zone_options(technitium_zone)
+        assert options.get("catalog", "").rstrip(".").lower() == catalog_zone.rstrip(".").lower(), (
+            f"Zone {technitium_zone} is not registered with catalog zone {catalog_zone}: "
+            f"{options.get('catalog')!r}"
         )
 
     def test_dns_record_creation_and_validation(
@@ -461,3 +480,8 @@ class TechnitiumTestClient:
         )
         print(f"[TechnitiumTestClient] Full response: {result}")
         return records
+
+    def get_zone_options(self, zone: str) -> dict:
+        """Return the configured options for a zone."""
+        result = self._authenticated_request("POST", "/api/zones/options/get", {"zone": zone})
+        return result.get("response", {})
