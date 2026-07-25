@@ -12,9 +12,11 @@ on:
       - pyproject.toml
       - '**/*.py'
       - 'Dockerfile'
+    if: ${{ !(github.event_name == 'push' && github.event.pull_request != null) }}
 
 jobs:
   codeql-analysis:
+    if: ${{ !(github.event_name == 'push' && github.event.pull_request != null) }}
     name: CodeQL Security Analysis
     runs-on: ubuntu-latest
     permissions:
@@ -54,8 +56,7 @@ jobs:
           category: "/language:${{matrix.language}}"
 
   container-scan:
-    # GitHub does not provide repository secrets to Dependabot-triggered workflows.
-    if: github.actor != 'dependabot[bot]'
+    if: ${{ !(github.event_name == 'push' && github.event.pull_request != null) }}
     name: Container Scan (Snyk)
     runs-on: ubuntu-latest
     permissions:
@@ -110,6 +111,7 @@ jobs:
       # Trivy artifact step removed; Snyk JSON is uploaded earlier as 'snyk-container-json'
 
   dependency-scan:
+    if: ${{ !(github.event_name == 'push' && github.event.pull_request != null) }}
     name: Dependency Security Scan
     runs-on: ubuntu-latest
     permissions:
@@ -153,6 +155,7 @@ jobs:
           fi
 
   code-scan:
+    if: ${{ !(github.event_name == 'push' && github.event.pull_request != null) }}
     name: Code Security Analysis
     runs-on: ubuntu-latest
     permissions:
@@ -201,8 +204,7 @@ jobs:
           retention-days: 90
 
   snyk-security:
-    # GitHub does not provide repository secrets to Dependabot-triggered workflows.
-    if: github.actor != 'dependabot[bot]'
+    if: ${{ !(github.event_name == 'push' && github.event.pull_request != null) }}
     name: Snyk Security Analysis
     runs-on: ubuntu-latest
     permissions:
@@ -306,6 +308,7 @@ jobs:
           args: --project-name=${{ github.repository }}-container
 
   sbom-generation:
+    if: ${{ !(github.event_name == 'push' && github.event.pull_request != null) }}
     name: SBOM Generation and Analysis
     runs-on: ubuntu-latest
     permissions:
@@ -362,7 +365,7 @@ jobs:
     name: Security Summary Report
     runs-on: ubuntu-latest
     needs: [container-scan, dependency-scan, code-scan, sbom-generation]
-    if: always()
+    if: ${{ !(github.event_name == 'push' && github.event.pull_request != null) }}
     permissions:
       contents: read
       security-events: write
