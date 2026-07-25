@@ -17,7 +17,7 @@ on:
 jobs:
   lint:
     name: Lint & Format Check (Python)
-    if: ${{ !(github.event_name == 'push' && github.ref == 'refs/heads/main') && !(github.event_name == 'push' && github.event.pull_request != null) }}
+    if: ${{ !(github.event_name == 'push' && github.ref == 'refs/heads/main') }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -49,7 +49,6 @@ jobs:
 
   test:
     name: Unit Test & Coverage (Python)
-    if: ${{ !(github.event_name == 'push' && github.ref == 'refs/heads/main') && !(github.event_name == 'push' && github.event.pull_request != null) }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -132,7 +131,7 @@ jobs:
 
   build-amd64:
     name: Build Docker Image (amd64)
-    if: ${{ !(github.event_name == 'push' && github.ref == 'refs/heads/main') && !(github.event_name == 'push' && github.event.pull_request != null) }}
+    if: ${{ !(github.event_name == 'push' && github.ref == 'refs/heads/main') }}
     runs-on: ubuntu-24.04
     needs: [test, lint]
     outputs:
@@ -175,7 +174,7 @@ jobs:
 
   build-arm64:
     name: Build Docker Image (arm64)
-    if: ${{ !(github.event_name == 'push' && github.ref == 'refs/heads/main') && !(github.event_name == 'push' && github.event.pull_request != null) }}
+    if: ${{ !(github.event_name == 'push' && github.ref == 'refs/heads/main') }}
     runs-on: ubuntu-24.04-arm
     needs: [test, lint]
     outputs:
@@ -215,7 +214,7 @@ jobs:
 
   integration:
     name: Integration Tests (Kubernetes)
-    if: ${{ !(github.event_name == 'push' && github.ref == 'refs/heads/main') && !(github.event_name == 'push' && github.event.pull_request != null) }}
+    if: ${{ !(github.event_name == 'push' && github.ref == 'refs/heads/main') }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
