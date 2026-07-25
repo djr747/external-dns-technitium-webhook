@@ -26,7 +26,7 @@ async def _fail(exc: Exception | None = None) -> None:
     raise exc or RuntimeError("simulated failure")
 
 
-async def _assert_raises(exc_type, coro, **kwargs):
+async def _assert_raises(exc_type, coro_factory, **kwargs):
     """Assert that an async coroutine raises an exception.
 
     Replaces ``with pytest.raises(...) as exc_info: await ...`` so that
@@ -34,7 +34,7 @@ async def _assert_raises(exc_type, coro, **kwargs):
     invocation).
     """
     with pytest.raises(exc_type, **kwargs) as exc_info:
-        await coro
+        await coro_factory()
     return exc_info
 
 
@@ -82,7 +82,7 @@ async def test_closed_state_resets_count_on_success() -> None:
     cb = CircuitBreaker(failure_threshold=5)
     # Cause a couple of failures but not enough to open the circuit
     for _ in range(3):
-        await _assert_raises(RuntimeError, cb.call(_fail()))
+        await _assert_raises(RuntimeError, lambda: cb.call(_fail()))
     assert cb.failure_count == 3
 
     # A successful call should reset the counter
