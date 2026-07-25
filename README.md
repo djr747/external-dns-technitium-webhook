@@ -129,6 +129,20 @@ This project uses **Chainguard Python** base images for maximum security:
 
 For security disclosures, see [docs/SECURITY.md](docs/SECURITY.md).
 
+### Image tags and update policy
+
+The image is published to `ghcr.io/djr747/external-dns-technitium-webhook` for both `linux/amd64` and `linux/arm64`.
+
+| Tag | Updated by | Intended use |
+| --- | --- | --- |
+| `latest`, `latest-patched` | The scheduled security rebuild, daily at 02:00 UTC | Receive the latest Chainguard base-image security updates. These tags are mutable and should not be used when a fixed deployment is required. |
+| `latest-patched-<YYYYMMDD>` (for example, `latest-patched-20260725`) | The scheduled security rebuild | A dated record of a particular nightly rebuild. It is not a release tag and may contain newer base-image layers than a released image. |
+| `<version>` (for example, `1.0.10`) | The release workflow only | A stable, release-specific image. Scheduled rebuilds never retag these images. Use this tag to pin a deployment. |
+| `<major>.<minor>` (for example, `1.0`) | The release workflow only | Stable release channel for that minor version. It moves only when a new patch release in that minor line is published—not during scheduled rebuilds. |
+| `<major>` (for example, `1`) | The release workflow only | Stable release channel for that major version. It moves only when a new release in that major line is published—not during scheduled rebuilds. |
+
+For production deployments that require reproducibility, pin the exact release tag (for example, `1.0.10`) or an image digest. Use `latest` only when automatically consuming nightly base-image security rebuilds is intentional.
+
 ## Development Workflow
 
 Run the project's quality gates before opening a pull request:

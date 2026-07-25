@@ -3,6 +3,9 @@
 # Use -dev variant for builder (includes pip, build tools), minimal runtime for final stage
 FROM cgr.dev/chainguard/python:latest-dev AS builder
 
+# pip installs console scripts into the non-root user site directory.
+ENV PATH="/home/nonroot/.local/bin:$PATH"
+
 # Set working directory
 WORKDIR /build
 

@@ -162,8 +162,10 @@ When a release is created:
 1. **Container Image**
    - Base: Chainguard Python (zero CVEs, daily updates)
    - Architecture: linux/amd64, linux/arm64
-   - Tag: `vX.Y.Z` and `latest`
+   - Tags: `X.Y.Z`, `X.Y`, and `X` (for example, `1.0.10`, `1.0`, and `1`); stable releases also update `latest`
    - Signature: Cosigned with project key
+
+The scheduled security rebuild later refreshes the mutable `latest` and `latest-patched` tags daily with the current Chainguard base image. It never retags `X.Y.Z`, `X.Y`, or `X`; those tags change only when the release workflow publishes a matching new release. Pin `X.Y.Z` or an image digest when deployment reproducibility is required.
 
 2. **SBOM (Software Bill of Materials)**
    - Format: Anchore/SPDX
