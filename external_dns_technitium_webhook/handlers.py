@@ -283,7 +283,7 @@ async def _handle_get_records_error(state: AppState, exc: TechnitiumError) -> Ge
     """
     if not _is_connection_error(exc):
         # Not a connection error, return error response
-        logger.error("API error during get_records: %s", exc, exc_info=True)
+        logger.exception("API error during get_records: %s", exc)
         sanitized = sanitize_error_message(exc)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -400,7 +400,7 @@ async def _handle_apply_record_error(
     """
     if not _is_connection_error(exc):
         # Not a connection error, return error response
-        logger.error("API error during record application: %s", exc, exc_info=True)
+        logger.exception("API error during record application: %s", exc)
         sanitized = sanitize_error_message(exc)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
