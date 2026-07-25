@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 - Register catalog membership through Technitium's documented zone-options API and read the documented `catalog` response field.
 - Refuse to move a managed zone that already belongs to a different catalog, and fail initialization when the requested membership cannot be applied or verified.
 - Verify catalog membership explicitly in the Kubernetes integration test after the Helm deployment starts.
+- Refactor circuit-breaker exception tests to satisfy SonarCloud's maintainability rule without weakening their assertions.
 
 ### Changed
 
