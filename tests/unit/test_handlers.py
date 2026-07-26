@@ -297,6 +297,7 @@ async def test_apply_record_create(app_state: AppState, mocker: MockerFixture) -
 
     response = await apply_record(app_state, changes)
     assert response.status_code == 204
+    assert response.body == b""
     mock_add.assert_called_once()
 
 
@@ -662,6 +663,7 @@ async def test_apply_record_delete(app_state: AppState, mocker: MockerFixture) -
 
     response = await apply_record(app_state, changes)
     assert response.status_code == 204
+    assert response.body == b""
     mock_delete.assert_called_once()
 
 
@@ -671,6 +673,7 @@ async def test_apply_record_empty_changes(app_state: AppState) -> None:
     changes = Changes(updateOld=[], updateNew=[])
     response = await apply_record(app_state, changes)
     assert response.status_code == 204
+    assert response.body == b""
 
 
 @pytest.mark.asyncio

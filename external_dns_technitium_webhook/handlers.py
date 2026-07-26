@@ -513,7 +513,7 @@ async def apply_record(state: AppState, changes: Changes) -> Response:
     no_changes = not deletions and not additions
     if no_changes:
         logger.info("All records already up to date, skipping apply")
-        return ExternalDNSResponse(content=None, status_code=status.HTTP_204_NO_CONTENT)
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     # Attempt to apply changes with failover support
     try:
@@ -523,7 +523,7 @@ async def apply_record(state: AppState, changes: Changes) -> Response:
     except TechnitiumError as exc:
         await _handle_apply_record_error(state, exc, deletions, additions)
 
-    return ExternalDNSResponse(content=None, status_code=status.HTTP_204_NO_CONTENT)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 async def _execute_change(
