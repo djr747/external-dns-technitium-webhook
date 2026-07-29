@@ -57,20 +57,26 @@ if echo "$LOGIN_RESPONSE" | grep -q '"status":"ok"'; then
 
   echo "✓ Token obtained: ${TOKEN:0:10}..."
 
-  # Add user to DNS Administrators group
+  # Keep the built-in administrator group and grant DNS administration access.
+  # Technitium v15 removed the former /api/user/setUserGroup endpoint; the
+  # supported admin/users/set API replaces the user's complete group list.
   echo "Adding user to DNS Administrators group..."
-  GROUP_RESPONSE=$(curl -s -X POST "$TECHNITIUM_URL/api/user/setUserGroup" \
+  GROUP_RESPONSE=$(curl -sS --fail-with-body -X POST "$TECHNITIUM_URL/api/admin/users/set" \
     -H "Content-Type: application/x-www-form-urlencoded" \
-    --data-urlencode "token=$TOKEN" \
+    -H "Authorization: Bearer $TOKEN" \
     --data-urlencode "user=$ADMIN_USER" \
-    --data-urlencode "group=DNS Administrators" 2>&1)
+    --data-urlencode "memberOfGroups=Administrators,DNS Administrators" 2>&1) || {
+      echo "✗ ERROR: Failed to add user to DNS Administrators group: $GROUP_RESPONSE" >&2
+      exit 1
+    }
 
   echo "Group change response: $GROUP_RESPONSE"
 
   if echo "$GROUP_RESPONSE" | grep -q '"status":"ok"'; then
     echo "✓ User added to DNS Administrators group"
   else
-    echo "⚠ Failed to add user to DNS Administrators group: $GROUP_RESPONSE"
+    echo "✗ ERROR: Failed to add user to DNS Administrators group: $GROUP_RESPONSE" >&2
+    exit 1
   fi
 else
   echo "✗ ERROR: Could not authenticate to Technitium" >&2
