@@ -248,6 +248,7 @@ async def get_records(state: AppState, zone: str) -> list[DnsRecord]:
 
 ```python
 import logging
+
 logger = logging.getLogger(__name__)
 
 logger.debug("Diagnostic info")
