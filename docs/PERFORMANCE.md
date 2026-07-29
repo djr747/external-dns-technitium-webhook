@@ -14,6 +14,7 @@ async def create_records(records: list[Endpoint]) -> None:
     tasks = [create_record(r) for r in records]
     await asyncio.gather(*tasks)  # Concurrent execution
 
+
 # ❌ Bad - Blocking
 def create_records_sync(records: list[Endpoint]) -> None:
     for record in records:
@@ -70,6 +71,7 @@ The webhook handles SIGTERM and SIGINT for clean shutdown:
 def handle_signal(signum: int, frame: object) -> None:
     logger.info(f"Received signal {signum}, shutting down...")
     sys.exit(0)
+
 
 signal.signal(signal.SIGINT, handle_signal)
 signal.signal(signal.SIGTERM, handle_signal)
@@ -225,10 +227,8 @@ For production deployments, consider adding retry logic for transient failures:
 # Example with tenacity (not currently implemented)
 from tenacity import retry, stop_after_attempt, wait_exponential
 
-@retry(
-    stop=stop_after_attempt(3),
-    wait=wait_exponential(multiplier=1, min=1, max=10)
-)
+
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=1, max=10))
 async def create_dns_record(record: Endpoint) -> None:
     await client.add_record(...)
 ```
@@ -316,10 +316,7 @@ When possible, batch DNS record changes:
 
 ```python
 # ✅ Good - Single request with multiple changes
-changes = Changes(
-    create=[record1, record2, record3],
-    delete=[old_record1, old_record2]
-)
+changes = Changes(create=[record1, record2, record3], delete=[old_record1, old_record2])
 await apply_record(state, changes)
 
 # ❌ Bad - Multiple separate requests
