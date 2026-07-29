@@ -8,6 +8,7 @@ TECHNITIUM_URL="${TECHNITIUM_URL:-http://technitium:5380}"
 ADMIN_USER="${ADMIN_USER:-admin}"
 ADMIN_PASSWORD="${ADMIN_PASSWORD}"
 CATALOG_ZONE="${CATALOG_ZONE:-test.local}"
+TECHNITIUM_INIT_DEBUG="${TECHNITIUM_INIT_DEBUG:-false}"
 MAX_RETRIES=30
 RETRY_INTERVAL=2
 
@@ -70,7 +71,9 @@ if echo "$LOGIN_RESPONSE" | grep -q '"status":"ok"'; then
       exit 1
     }
 
-  echo "Group change response: $GROUP_RESPONSE"
+  if [[ "$TECHNITIUM_INIT_DEBUG" == "true" ]]; then
+    echo "Group change response: $GROUP_RESPONSE"
+  fi
 
   if echo "$GROUP_RESPONSE" | grep -q '"status":"ok"'; then
     echo "✓ User added to DNS Administrators group"
