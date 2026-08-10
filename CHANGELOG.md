@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v1.0.16] - 2026-08-09
+
+### Fixed
+
+- Preserve the token issued to a temporary primary-health probe before its authenticated zone query, preventing false `invalid-token` failures during failback detection.
+- Prevent a token renewal completing after failover or failback from installing a token issued by the previous endpoint on the newly active client.
+
+### Changed
+
+- Update FastAPI to 0.141.1, Uvicorn to 0.52.0, Ruff to 0.16.1, and all CodeQL actions to 4.37.3.
+
 ## [v1.0.15] - 2026-07-28
 
 ### Changed

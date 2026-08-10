@@ -1018,6 +1018,38 @@ async def test_auto_renew_token_success_sets_token(mocker: MockerFixture) -> Non
 
 
 @pytest.mark.asyncio
+async def test_auto_renew_token_does_not_overwrite_token_after_endpoint_rotation(
+    mocker: MockerFixture,
+) -> None:
+    """A renewal started on an old endpoint must not update the new endpoint's token."""
+
+    config = _build_config()
+    old_client = SimpleNamespace(token="old-token")
+    active_client = SimpleNamespace(token="active-token")
+    state = SimpleNamespace(config=config, client=old_client)
+
+    async def login_on_old_endpoint(*args: object, **kwargs: object) -> SimpleNamespace:
+        state.client = active_client
+        return SimpleNamespace(token="old-endpoint-token")
+
+    old_client.login = AsyncMock(side_effect=login_on_old_endpoint)
+    sleep_mock = mocker.patch(
+        "external_dns_technitium_webhook.main.asyncio.sleep",
+        new_callable=AsyncMock,
+        side_effect=[None, asyncio.CancelledError()],
+    )
+
+    from contextlib import suppress
+
+    with suppress(asyncio.CancelledError):
+        await auto_renew_technitium_token(cast(AppState, state))
+
+    assert old_client.token == "old-token"
+    assert active_client.token == "active-token"
+    assert sleep_mock.await_args_list[0].args[0] == 20 * 60
+
+
+@pytest.mark.asyncio
 async def test_auto_renew_token_failure_uses_failure_interval(mocker: MockerFixture) -> None:
     """auto_renew_technitium_token should retry quickly after a failure."""
 
@@ -1320,6 +1352,7 @@ async def test_auto_attempt_failback_recovers_to_writable_primary(
         username=config.technitium_username,
         password=config.technitium_password,
     )
+    assert temp_client.token == "renewed-primary-token"
     temp_client.get_zone_options.assert_awaited_once_with(config.zone, include_catalog_names=True)
     temp_client.close.assert_awaited_once_with()
     state.set_active_endpoint.assert_awaited_once_with("https://primary:5380")

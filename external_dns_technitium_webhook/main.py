@@ -528,12 +528,19 @@ async def auto_renew_technitium_token(state: AppState) -> None:
         logger.debug("Token renewal cycle started (sleep interval: %.1f sec)", sleep_for)
 
         try:
-            login_response = await state.client.login(
+            # Keep the client used for login.  Failback/failover can replace
+            # state.client while this request is in flight; a token issued by
+            # the previous server must never be installed on the new client.
+            client = state.client
+            login_response = await client.login(
                 username=state.config.technitium_username,
                 password=state.config.technitium_password,
             )
-            state.client.token = login_response.token
-            logger.debug("Successfully renewed Technitium DNS server access token")
+            if state.client is client:
+                client.token = login_response.token
+                logger.debug("Successfully renewed Technitium DNS server access token")
+            else:
+                logger.debug("Discarded token renewed for a no-longer-active Technitium endpoint")
             sleep_for = DURATION_TOKEN_SUCCESS
         except (
             TechnitiumError,
@@ -674,6 +681,7 @@ async def _probe_primary_endpoint(state: AppState, primary_endpoint: str) -> Pri
             username=state.config.technitium_username,
             password=state.config.technitium_password,
         )
+        temp_client.token = login_response.token
         zone_options = await temp_client.get_zone_options(
             state.config.zone, include_catalog_names=True
         )
