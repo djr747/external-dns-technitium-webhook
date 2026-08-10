@@ -25,7 +25,7 @@ def test_security_skips_push_jobs_only_when_the_branch_has_an_open_pr() -> None:
 
 def test_security_workflow_uses_one_codeql_action_revision() -> None:
     workflow = SECURITY_WORKFLOW.read_text(encoding="utf-8")
-    codeql_action_sha = "e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81"
+    codeql_action_sha = "d1ba80a13dd99fba24a470575428917156a28b43"
     codeql_lines = [line for line in workflow.splitlines() if "uses: github/codeql-action/" in line]
     assert codeql_lines
     assert all(f"@{codeql_action_sha}" in line for line in codeql_lines)
