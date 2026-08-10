@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "external-dns-technitium-webhook"
-version = "1.0.15"
+version = "1.0.16"
 description = "ExternalDNS webhook provider for Technitium DNS"
 readme = "README.md"
 requires-python = ">=3.14,<3.15"
@@ -29,11 +29,11 @@ dependencies = [
     # Bumped to releases that declare support for modern Python (>=3.8) and
     # are known to be compatible with CPython 3.14 when no upper bound
     # is present in their metadata.
-    "fastapi==0.140.13",
-    "uvicorn[standard]==0.51.0",
-    "httpx2==2.9.1",
+    "fastapi==0.141.1",
+    "uvicorn[standard]==0.52.1",
+    "httpx2==2.10.0",
     "pydantic==2.13.4",
-    "pydantic-settings==2.14.2",
+    "pydantic-settings==2.15.0",
     "prometheus-client==0.26.0",
 ]
 
@@ -45,9 +45,9 @@ dev = [
     "coverage>=7.13.5",
     "pytest-asyncio==1.4.0",
     "pytest-mock==3.15.1",
-    "httpx2==2.9.1",
+    "httpx2==2.10.0",
     "kubernetes==36.0.3",
-    "ruff==0.16.0",
+    "ruff==0.16.2",
     "mypy==2.3.0",
     "pyright==1.1.411",
     "semgrep",
