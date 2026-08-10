@@ -11,7 +11,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
-- Update FastAPI to 0.141.1, Uvicorn to 0.52.0, Ruff to 0.16.1, and all CodeQL actions to 4.37.3.
+- Update FastAPI to 0.141.1, Uvicorn to 0.52.1, Ruff to 0.16.1, and all CodeQL actions to 4.37.3.
 
 ## [v1.0.15] - 2026-07-28
 
