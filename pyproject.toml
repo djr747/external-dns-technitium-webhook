@@ -31,9 +31,9 @@ dependencies = [
     # is present in their metadata.
     "fastapi==0.141.1",
     "uvicorn[standard]==0.52.1",
-    "httpx2==2.9.1",
+    "httpx2==2.10.0",
     "pydantic==2.13.4",
-    "pydantic-settings==2.14.2",
+    "pydantic-settings==2.15.0",
     "prometheus-client==0.26.0",
 ]
 
@@ -45,9 +45,9 @@ dev = [
     "coverage>=7.13.5",
     "pytest-asyncio==1.4.0",
     "pytest-mock==3.15.1",
-    "httpx2==2.9.1",
+    "httpx2==2.10.0",
     "kubernetes==36.0.3",
-    "ruff==0.16.1",
+    "ruff==0.16.2",
     "mypy==2.3.0",
     "pyright==1.1.411",
     "semgrep",
