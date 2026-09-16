@@ -187,6 +187,7 @@ def test_parse_external_dns_target(record_type: str, target: str, expected: dict
         ("MX", "70000 mail.example.com"),
         ("SRV", "0 0 443"),
         ("SRV", "0 0 65536 target.example.com"),
+        ("NAPTR", "   "),
         ("NAPTR", 'bad 2 "U" "S" "!x!" .'),
         ("NAPTR", '1 2 "U" "S" "unterminated .'),
         ("TLSA", "3 1 1"),
