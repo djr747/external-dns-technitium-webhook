@@ -6,6 +6,7 @@ Deploy the Technitium webhook as a sidecar container next to ExternalDNS in Kube
 
 - Kubernetes cluster 1.19+ with sufficient RBAC permissions
 - Helm 3.x installed
+- ExternalDNS Helm chart 1.22.0 (ExternalDNS v0.22.0)
 - Technitium DNS Server v5.0+ accessible from the cluster
 - Credentials created per `docs/CREDENTIALS_SETUP.md`
 
@@ -36,12 +37,15 @@ kubectl create secret generic technitium-credentials \
 Create `values-technitium.yaml` with the webhook sidecar configuration:
 
 ```yaml
+policy: sync
+annotationPrefix: external-dns.kubernetes.io/
 provider:
   name: webhook
   webhook:
     image:
-      repository: ghcr.io/dj747/external-dns-technitium-webhook
-      tag: 1.0.0  # Use an exact released version
+      repository: ghcr.io/djr747/external-dns-technitium-webhook
+      tag: 1.1.0  # Use an exact released version
+      pullPolicy: IfNotPresent
     env:
       - name: TECHNITIUM_URL
         value: "https://technitium-dns.technitium.svc.cluster.local:53443"
@@ -62,16 +66,34 @@ provider:
         value: "example.com"
       - name: LOG_LEVEL
         value: "INFO"
+managedRecordTypes:
+  - A
+  - AAAA
+  - NS
+  - CNAME
+  - PTR
+  - MX
+  - TXT
+  - SRV
+  - NAPTR
+  - DNAME
+  # TLSA is accepted by the webhook; ExternalDNS source support is post-v0.22.
+  - TLSA
+  - ANAME
+  - CAA
+  - URI
+  - SSHFP
+  - SVCB
+  - HTTPS
 ```
 
 ### Step 4: Install ExternalDNS with Webhook
 
 ```bash
 helm install external-dns external-dns/external-dns \
+  --version 1.22.0 \
   --namespace external-dns \
-  --values values-technitium.yaml \
-  --set provider.webhook.url="http://127.0.0.1:8888" \
-  --set provider.webhook.httpClient.timeout="30s"
+  --values values-technitium.yaml
 ```
 
 ## TLS Configuration (Optional)
@@ -93,12 +115,12 @@ provider:
     env:
       - name: TECHNITIUM_CA_BUNDLE_FILE
         value: "/etc/technitium-ssl/ca.pem"
-    volumeMounts:
+    extraVolumeMounts:
       - name: technitium-ca-bundle
         mountPath: /etc/technitium-ssl
         readOnly: true
 
-volumes:
+extraVolumes:
   - name: technitium-ca-bundle
     configMap:
       name: technitium-ca-bundle
@@ -134,7 +156,7 @@ spec:
       automountServiceAccountToken: false  # Webhook does not need K8s API access
       containers:
       - name: webhook
-        image: ghcr.io/djr747/external-dns-technitium-webhook:1.0.0
+        image: ghcr.io/djr747/external-dns-technitium-webhook:1.1.0
         ports:
         - containerPort: 8888
           name: webhook

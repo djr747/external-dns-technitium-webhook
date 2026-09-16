@@ -3,7 +3,7 @@
 # tool — you can copy/merge these keys into your chart's values.yaml or use it with
 # helm repo add external-dns https://kubernetes-sigs.github.io/external-dns/
 # helm repo update
-# helm upgrade --install external-dns external-dns/external-dns \
+# helm upgrade --install external-dns external-dns/external-dns --version 1.22.0 \
 #     --namespace external-dns \
 #     --create-namespace \
 #     --values helm/values-webhook-example.yaml.
@@ -11,15 +11,35 @@
 txtOwnerId: kubernetes
 txtPrefix: cluster-name-external-dns- # Replace cluster-name with a unique name for your cluster
 policy: sync
+annotationPrefix: external-dns.kubernetes.io/
 domainFilters:
   - kubernetes.example.com
+managedRecordTypes:
+  - A
+  - AAAA
+  - NS
+  - CNAME
+  - PTR
+  - MX
+  - TXT
+  - SRV
+  - NAPTR
+  - DNAME
+  # TLSA is accepted by the webhook; ExternalDNS source support is post-v0.22.
+  - TLSA
+  - ANAME
+  - CAA
+  - URI
+  - SSHFP
+  - SVCB
+  - HTTPS
 provider: 
   name: webhook
   webhook:
     image:
       repository: ghcr.io/djr747/external-dns-technitium-webhook
-      tag: 1 # Or replace with desired release tag
-      imagePullPolicy: IfNotPresent # Avoid cold-start pull delays that can race ExternalDNS webhook startup checks
+      tag: 1.1.0 # Pin an exact release tag for reproducible deployments
+      pullPolicy: IfNotPresent # Avoid cold-start pull delays that can race ExternalDNS webhook startup checks
     resources:
       requests:
         cpu: 100m
@@ -28,7 +48,6 @@ provider:
         cpu: 250m
         memory: 256Mi
         ephemeral-storage: 2Gi # limit ephemeral storage for security
-    automountServiceAccountToken: false # security: do not mount SA token in pod
     securityContext:
       runAsNonRoot: true
       runAsUser: 65532
@@ -63,7 +82,7 @@ provider:
 #   secrets (valueFrom.secretKeyRef) or mount secrets via volumes and extraVolumeMounts.
 # - If you run the webhook as a sidecar (inside ExternalDNS pod), use the chart's
 #   `extraContainers` block instead of `webhook` and populate a container spec there.
-# - In sidecar mode, prefer `imagePullPolicy: IfNotPresent` on stable tags. `Always` can
+# - In sidecar mode, prefer `provider.webhook.image.pullPolicy: IfNotPresent` on stable tags. `Always` can
 #   delay webhook container start long enough for ExternalDNS to fail its startup webhook
 #   negotiation (`failed to connect to webhook`).
 # - Health probes are inherited from the External DNS Helm chart defaults (/healthz endpoint).

@@ -238,7 +238,7 @@ class TestWebhookIntegration:
                 kind="Service",
                 metadata=client.V1ObjectMeta(
                     name=service_name,
-                    annotations={"external-dns.alpha.kubernetes.io/internal-hostname": hostname},
+                    annotations={"external-dns.kubernetes.io/internal-hostname": hostname},
                 ),
                 spec=client.V1ServiceSpec(
                     type="ClusterIP",

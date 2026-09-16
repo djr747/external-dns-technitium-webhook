@@ -55,7 +55,7 @@ jobs:
         uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4.2.0
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
 
       - name: Log in to Container Registry
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
@@ -107,6 +107,9 @@ jobs:
 
       - name: Run Snyk container test (SARIF + JSON)
         uses: snyk/actions/docker@9adf32b1121593767fc3c057af55b55db032dc04 # v1.0.0
+        # Snyk exits non-zero when findings are present. Keep the report steps
+        # reachable so the explicit high/critical gate below can inspect JSON.
+        continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
@@ -114,9 +117,23 @@ jobs:
           command: test
           args: --sarif-file-output=snyk-results.sarif --json-file-output=snyk-report.json
 
-      - name: Upload Snyk SARIF results
-        uses: github/codeql-action/upload-sarif@d1ba80a13dd99fba24a470575428917156a28b43 # v4.37.5
+      - name: Normalize Snyk SARIF
         if: always()
+        run: |
+          if [ -f snyk-results.sarif ]; then
+            if jq 'walk(if type == "object" then with_entries(select(.key != "security-severity" or .value != null)) else . end)' \
+                snyk-results.sarif > snyk-results.normalized.sarif; then
+              mv snyk-results.normalized.sarif snyk-results.sarif
+            else
+              echo "Snyk SARIF normalization failed; preserving the original report"
+              rm -f snyk-results.normalized.sarif
+            fi
+          fi
+
+      - name: Upload Snyk SARIF results
+        uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
+        if: always()
+        continue-on-error: true
         with:
           sarif_file: 'snyk-results.sarif'
           category: 'rebuild-image-snyk'
@@ -124,17 +141,37 @@ jobs:
       - name: Check vulnerability status (Snyk JSON)
         id: vuln-check
         run: |
-          if [ ! -f snyk-report.json ]; then echo "snyk-report.json not found"; echo "critical=0" >> $GITHUB_OUTPUT; echo "high=0" >> $GITHUB_OUTPUT; echo "medium=0" >> $GITHUB_OUTPUT; exit 0; fi
+          if [ ! -s snyk-report.json ]; then
+            echo "snyk-report.json not found or empty"
+            echo "scan-error=true" >> "$GITHUB_OUTPUT"
+            echo "critical=0" >> "$GITHUB_OUTPUT"
+            echo "high=0" >> "$GITHUB_OUTPUT"
+            echo "medium=0" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           CRITICAL=$(jq '[.. | .vulnerabilities? // [] | .[]? | select((.severity // "") | ascii_downcase=="critical")] | length' snyk-report.json)
           HIGH=$(jq '[.. | .vulnerabilities? // [] | .[]? | select((.severity // "") | ascii_downcase=="high")] | length' snyk-report.json)
           MEDIUM=$(jq '[.. | .vulnerabilities? // [] | .[]? | select((.severity // "") | ascii_downcase=="medium")] | length' snyk-report.json)
           echo "critical=$CRITICAL" >> $GITHUB_OUTPUT
           echo "high=$HIGH" >> $GITHUB_OUTPUT
           echo "medium=$MEDIUM" >> $GITHUB_OUTPUT
+          echo "scan-error=false" >> "$GITHUB_OUTPUT"
           echo "### Vulnerability Summary" >> $GITHUB_STEP_SUMMARY
           echo "- **Critical**: $CRITICAL" >> $GITHUB_STEP_SUMMARY
           echo "- **High**: $HIGH" >> $GITHUB_STEP_SUMMARY
           echo "- **Medium**: $MEDIUM" >> $GITHUB_STEP_SUMMARY
+
+      - name: Enforce Snyk vulnerability gate
+        if: always()
+        run: |
+          if [ "${{ steps.vuln-check.outputs.scan-error }}" != "false" ]; then
+            echo "Snyk did not produce a readable JSON report"
+            exit 1
+          fi
+          if [ "${{ steps.vuln-check.outputs.critical }}" -gt 0 ] || [ "${{ steps.vuln-check.outputs.high }}" -gt 0 ]; then
+            echo "Failing because Snyk found high or critical vulnerabilities"
+            exit 1
+          fi
 
       - name: Comment on latest commit
         if: github.event_name == 'schedule'

@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v1.1.0] - 2026-09-15
+
+### Added
+
+- ExternalDNS v0.22.0 compatibility, including the GA `external-dns.kubernetes.io/`
+  annotation prefix and explicit Helm chart policy configuration.
+- Explicit `managedRecordTypes` examples for all 17 DNS record types supported by the
+  webhook: A, AAAA, NS, CNAME, PTR, MX, TXT, SRV, NAPTR, DNAME, TLSA, ANAME, CAA, URI,
+  SSHFP, SVCB, and HTTPS. TLSA is included for the webhook contract; ExternalDNS source
+  support requires a release newer than v0.22.0.
+
+### Changed
+
+- Update the integration test chart to ExternalDNS Helm chart 1.22.0.
+- Update runtime and development dependencies to the latest compatible versions from the
+  pending Dependabot updates.
+- Update the pinned CodeQL, Docker Buildx, and GitHub release actions from the pending
+  Dependabot updates.
+
+### Fixed
+
+- Normalize Snyk's null SARIF security severities before upload while retaining explicit
+  high/critical vulnerability gates for security, scheduled rebuild, and release workflows.
+
 ## [v1.0.16] - 2026-08-09
 
 ### Fixed

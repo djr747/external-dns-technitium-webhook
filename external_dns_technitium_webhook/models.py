@@ -124,6 +124,55 @@ class RecordCNAMEData(BaseModel):
     cname: str
 
 
+class RecordNSData(BaseModel):
+    """NS record data."""
+
+    name_server: str = Field(..., alias="nameServer")
+
+    model_config = {"populate_by_name": True}
+
+
+class RecordPTRData(BaseModel):
+    """PTR record data."""
+
+    ptr_name: str = Field(..., alias="ptrName")
+
+    model_config = {"populate_by_name": True}
+
+
+class RecordMXData(BaseModel):
+    """MX record data."""
+
+    preference: int = Field(..., ge=0, le=65535)
+    exchange: str
+
+
+class RecordSRVData(BaseModel):
+    """SRV record data."""
+
+    priority: int = Field(..., ge=0, le=65535)
+    weight: int = Field(..., ge=0, le=65535)
+    port: int = Field(..., ge=0, le=65535)
+    target: str
+
+
+class RecordNAPTRData(BaseModel):
+    """NAPTR record data."""
+
+    order: int = Field(..., ge=0, le=65535)
+    preference: int = Field(..., ge=0, le=65535)
+    flags: str
+    services: str
+    regexp: str
+    replacement: str
+
+
+class RecordDNAMEData(BaseModel):
+    """DNAME record data."""
+
+    dname: str
+
+
 class RecordTXTData(BaseModel):
     """TXT record data."""
 
@@ -160,6 +209,17 @@ class RecordSSHFPData(BaseModel):
     algorithm: int
     fingerprint_type: int = Field(..., alias="fingerprintType")
     fingerprint: str
+
+    model_config = {"populate_by_name": True}
+
+
+class RecordTLSAData(BaseModel):
+    """TLSA record data."""
+
+    certificate_usage: str = Field(..., alias="certificateUsage")
+    selector: str
+    matching_type: str = Field(..., alias="matchingType")
+    certificate_association_data: str = Field(..., alias="certificateAssociationData")
 
     model_config = {"populate_by_name": True}
 
