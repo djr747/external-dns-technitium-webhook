@@ -97,6 +97,16 @@ def test_snyk_container_reports_reach_json_gate_after_scan_errors() -> None:
         assert "exit 1" in workflow
 
 
+def test_release_zlib_exception_is_exact_and_expires() -> None:
+    release = RELEASE_WORKFLOW.read_text(encoding="utf-8")
+    security = SECURITY_WORKFLOW.read_text(encoding="utf-8")
+    assert "SNYK-WOLFILATEST-ZLIB-19698962" in release
+    assert '.packageName != "zlib"' in release
+    assert '.version != "1.3.2-r7"' in release
+    assert '"2026-10-01"' in release
+    assert "SNYK-WOLFILATEST-ZLIB-19698962" not in security
+
+
 def _integration_step() -> str:
     workflow = WORKFLOW.read_text(encoding="utf-8")
     marker = "pytest tests/integration/test_webhook_integration.py"

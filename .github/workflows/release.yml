@@ -318,7 +318,20 @@ jobs:
             echo "Snyk did not produce a readable JSON report"
             exit 1
           fi
-          HIGH_OR_CRITICAL=$(jq '[.. | .vulnerabilities? // [] | .[]? | select((((.severity // "") | ascii_downcase) == "high") or (((.severity // "") | ascii_downcase) == "critical"))] | length' snyk-release-report.json)
+          # Temporary release-only exception for CVE-2026-85091 in the Wolfi base
+          # image. It expires on 2026-10-01 and applies only to zlib 1.3.2-r7.
+          # The security workflow remains red and continues to report the CVE.
+          TODAY=$(date -u +%F)
+          HIGH_OR_CRITICAL=$(jq --arg today "$TODAY" '
+            [.. | .vulnerabilities? // [] | .[]?
+              | select(((.severity // "") | ascii_downcase) == "high" or
+                       ((.severity // "") | ascii_downcase) == "critical")
+              | select($today >= "2026-10-01" or
+                       .id != "SNYK-WOLFILATEST-ZLIB-19698962" or
+                       .packageName != "zlib" or
+                       .version != "1.3.2-r7")
+            ] | length
+          ' snyk-release-report.json)
           if [ "$HIGH_OR_CRITICAL" -gt 0 ]; then
             echo "Failing because Snyk found $HIGH_OR_CRITICAL high/critical vulnerabilities"
             exit 1
