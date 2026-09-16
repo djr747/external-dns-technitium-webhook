@@ -124,6 +124,18 @@ async def test_stream_serializes_new_record_types() -> None:
                 "naptrReplacement": ".",
             },
         ),
+        (
+            "NAPTR",
+            '100 10 "U" "E2U+sip" "!quoted\\"value!" .',
+            {
+                "naptrOrder": 100,
+                "naptrPreference": 10,
+                "naptrFlags": "U",
+                "naptrServices": "E2U+sip",
+                "naptrRegexp": '!quoted"value!',
+                "naptrReplacement": ".",
+            },
+        ),
         ("DNAME", "target.example.net.", {"dname": "target.example.net."}),
         (
             "TLSA",
@@ -135,6 +147,26 @@ async def test_stream_serializes_new_record_types() -> None:
                 "tlsaCertificateAssociationData": "0123abcd",
             },
         ),
+        (
+            "TLSA",
+            "DANE-EE Cert Full AABB",
+            {
+                "tlsaCertificateUsage": "DANE-EE",
+                "tlsaSelector": "Cert",
+                "tlsaMatchingType": "Full",
+                "tlsaCertificateAssociationData": "AABB",
+            },
+        ),
+        (
+            "TLSA",
+            "PKIX_EE SPKI SHA2_512 AABB",
+            {
+                "tlsaCertificateUsage": "PKIX-EE",
+                "tlsaSelector": "SPKI",
+                "tlsaMatchingType": "SHA2-512",
+                "tlsaCertificateAssociationData": "AABB",
+            },
+        ),
     ],
 )
 def test_parse_external_dns_target(record_type: str, target: str, expected: dict[str, Any]) -> None:
@@ -144,11 +176,25 @@ def test_parse_external_dns_target(record_type: str, target: str, expected: dict
 @pytest.mark.parametrize(
     ("record_type", "target"),
     [
+        ("NS", "   "),
+        ("PTR", ""),
+        ("DNAME", ""),
+        ("URI", "invalid 1 https://example.com"),
+        ("SSHFP", "1 invalid ABCD"),
+        ("SVCB", "invalid example.com"),
+        ("HTTPS", "-1 example.com"),
+        ("MX", "10"),
         ("MX", "70000 mail.example.com"),
+        ("SRV", "0 0 443"),
         ("SRV", "0 0 65536 target.example.com"),
+        ("NAPTR", 'bad 2 "U" "S" "!x!" .'),
         ("NAPTR", '1 2 "U" "S" "unterminated .'),
+        ("TLSA", "3 1 1"),
         ("TLSA", "3 1 1 abc"),  # odd number of hex digits
         ("TLSA", "3 4 1 0011"),
+        ("TLSA", "3 1 9 0011"),
+        ("TLSA", "9 1 1 0011"),
+        ("TLSA", "3 1 1 invalid"),
     ],
 )
 def test_parse_external_dns_target_rejects_invalid_data(record_type: str, target: str) -> None:
@@ -166,6 +212,29 @@ def test_extract_targets_accepts_record_like_values() -> None:
         },
     )
     assert _extract_targets(record) == ["1 0 0 AABB"]
+
+
+def test_extract_targets_preserves_numeric_and_unknown_tlsa_fields() -> None:
+    record = SimpleNamespace(
+        type="TLSA",
+        r_data={
+            "certificateUsage": "3",
+            "selector": "1",
+            "matchingType": "2",
+            "certificateAssociationData": "AABB",
+        },
+    )
+    assert _extract_targets(record) == ["3 1 2 AABB"]
+    record.r_data.update(
+        certificateUsage="future-usage", selector="future-selector", matchingType="future-match"
+    )
+    assert _extract_targets(record) == ["future-usage future-selector future-match AABB"]
+
+
+@pytest.mark.parametrize("record_type", ["NS", "PTR", "DNAME"])
+def test_extract_targets_renders_missing_domain_as_root(record_type: str) -> None:
+    record = SimpleNamespace(type=record_type, r_data={})
+    assert _extract_targets(record) == ["."]
 
 
 @pytest.mark.asyncio
