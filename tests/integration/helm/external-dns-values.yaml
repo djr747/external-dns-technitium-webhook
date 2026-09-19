@@ -40,6 +40,10 @@ provider:
         value: "test.local"
       - name: LOG_LEVEL
         value: "DEBUG"
+      # The functional matrix performs more than 50 create/read/delete requests
+      # through the same localhost sidecar address in under a second.
+      - name: RATE_LIMIT_BURST
+        value: "200"
     
     extraVolumeMounts:
       - name: technitium-ca
