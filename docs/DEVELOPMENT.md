@@ -199,7 +199,7 @@ external-dns-technitium-webhook/
 
 - Async HTTP client using httpx
 - Auto-authentication with token refresh
-- All 10 DNS record types supported
+- All 17 DNS record types supported: A, AAAA, NS, CNAME, PTR, MX, TXT, SRV, NAPTR, DNAME, TLSA, ANAME, CAA, URI, SSHFP, SVCB, and HTTPS
 - TLS certificate verification support
 - Passes every API call through the circuit breaker (if configured)
 

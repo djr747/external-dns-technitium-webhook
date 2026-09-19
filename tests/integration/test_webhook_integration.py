@@ -22,6 +22,27 @@ pytestmark = pytest.mark.integration
 
 logger = logging.getLogger(__name__)
 
+WEBHOOK_MEDIA_TYPE = "application/external.dns.webhook+json;version=1"
+FUNCTIONAL_RECORD_CASES = [
+    ("A", "192.0.2.10"),
+    ("AAAA", "2001:db8::10"),
+    ("NS", "ns1.example.net"),
+    ("CNAME", "alias.example.net"),
+    ("PTR", "host.example.net"),
+    ("MX", "10 mail.example.net"),
+    ("TXT", "functional-record"),
+    ("SRV", "10 20 443 service.example.net"),
+    ("NAPTR", '100 10 "U" "E2U+sip" "!^.*$!sip:info@example.net!" .'),
+    ("DNAME", "target.example.net"),
+    ("TLSA", "3 1 1 AABBCCDDEEFF00112233445566778899AABBCCDDEEFF00112233445566778899"),
+    ("ANAME", "origin.example.net"),
+    ("CAA", '0 issue "letsencrypt.org"'),
+    ("URI", '10 20 "https://example.net/service"'),
+    ("SSHFP", "1 1 0123456789ABCDEF0123456789ABCDEF01234567"),
+    ("SVCB", "1 service.example.net alpn=h2"),
+    ("HTTPS", "1 service.example.net alpn=h2"),
+]
+
 
 class TestWebhookIntegration:
     """Test webhook integration with Technitium in Kubernetes"""
@@ -214,6 +235,91 @@ class TestWebhookIntegration:
             f"{options.get('catalog')!r}"
         )
 
+    @pytest.mark.parametrize(
+        ("record_type", "target"),
+        FUNCTIONAL_RECORD_CASES,
+        ids=[record_type.lower() for record_type, _target in FUNCTIONAL_RECORD_CASES],
+    )
+    def test_supported_record_type_round_trip(
+        self,
+        webhook_url,
+        technitium_client,
+        technitium_zone,
+        record_type,
+        target,
+    ):
+        """Create, read, and delete every supported type through the live webhook."""
+        label = f"functional-{record_type.lower()}"
+        if record_type == "SRV":
+            label = f"_sip._tcp.{label}"
+        dns_name = f"{label}.{technitium_zone}"
+        endpoint = {
+            "dnsName": dns_name,
+            "recordType": record_type,
+            "recordTTL": 300,
+            "setIdentifier": "",
+            "targets": [target],
+        }
+        headers = {"Accept": WEBHOOK_MEDIA_TYPE, "Content-Type": WEBHOOK_MEDIA_TYPE}
+        created = False
+
+        try:
+            response = httpx2.post(
+                f"{webhook_url}/records",
+                headers=headers,
+                json={"create": [endpoint], "updateOld": None, "updateNew": None, "delete": None},
+                timeout=30,
+                verify=True,
+            )
+            assert response.status_code == 204, (
+                f"{record_type} create failed: {response.status_code} {response.text}"
+            )
+            created = True
+
+            response = httpx2.get(
+                f"{webhook_url}/records", headers=headers, timeout=30, verify=True
+            )
+            response.raise_for_status()
+            returned = next(
+                (
+                    item
+                    for item in response.json()
+                    if item["dnsName"] == dns_name and item["recordType"] == record_type
+                ),
+                None,
+            )
+            assert returned is not None, f"{record_type} was not returned by the webhook"
+            assert returned["targets"] == [target]
+
+            raw_records = technitium_client.get_records(technitium_zone, list_zone=True)
+            assert any(
+                record.get("name") == dns_name and record.get("type") == record_type
+                for record in raw_records
+            ), f"{record_type} was not persisted by Technitium"
+        finally:
+            if created:
+                response = httpx2.post(
+                    f"{webhook_url}/records",
+                    headers=headers,
+                    json={
+                        "create": None,
+                        "updateOld": None,
+                        "updateNew": None,
+                        "delete": [endpoint],
+                    },
+                    timeout=30,
+                    verify=True,
+                )
+                assert response.status_code == 204, (
+                    f"{record_type} delete failed: {response.status_code} {response.text}"
+                )
+
+                raw_records = technitium_client.get_records(technitium_zone, list_zone=True)
+                assert not any(
+                    record.get("name") == dns_name and record.get("type") == record_type
+                    for record in raw_records
+                ), f"{record_type} was not deleted from Technitium"
+
     def test_dns_record_creation_and_validation(
         self, k8s_client, technitium_client, technitium_url, technitium_verify, technitium_zone
     ):
@@ -238,7 +344,7 @@ class TestWebhookIntegration:
                 kind="Service",
                 metadata=client.V1ObjectMeta(
                     name=service_name,
-                    annotations={"external-dns.alpha.kubernetes.io/internal-hostname": hostname},
+                    annotations={"external-dns.kubernetes.io/internal-hostname": hostname},
                 ),
                 spec=client.V1ServiceSpec(
                     type="ClusterIP",

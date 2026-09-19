@@ -25,7 +25,7 @@ graph TB
         Handlers -->|POST /adjustendpoints| AdjustEP["Endpoint Adjustment"]
         
         Handlers --> Client["Technitium Client<br/>technitium_client.py<br/>- Authentication<br/>- Zone management<br/>- Record CRUD"]
-        Client --> Models["Pydantic Models<br/>models.py<br/>10 DNS types: A, AAAA, CNAME, TXT,<br/>ANAME, CAA, URI, SSHFP, SVCB, HTTPS"]
+        Client --> Models["Pydantic Models<br/>models.py<br/>17 DNS types: A, AAAA, NS, CNAME, PTR, MX, TXT,<br/>SRV, NAPTR, DNAME, TLSA, ANAME, CAA, URI, SSHFP, SVCB, HTTPS"]
     end
     
     Health["Health Server (port 8080)<br/>server.py + health.py<br/>Separate thread"]
@@ -34,7 +34,7 @@ graph TB
     Client -->|HTTP REST API| DNS["Technitium DNS Server<br/>5380 HTTP / 53443 HTTPS"]
     
     DNS --> ZoneMgmt["Zone Management<br/>- Auto-create zones<br/>- Zone transfer support"]
-    DNS --> RecordMgmt["Record Management<br/>- 10 DNS record types<br/>- Comments & Expiry TTL<br/>- PTR record creation"]
+    DNS --> RecordMgmt["Record Management<br/>- 17 DNS record types<br/>- Comments & Expiry TTL<br/>- PTR record creation"]
     DNS --> Auth["Authentication<br/>- Token auth<br/>- Auto-renewal"]
 ```
 

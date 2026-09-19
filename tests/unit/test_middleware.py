@@ -248,7 +248,7 @@ async def test_rate_limiter_max_burst_refill(rate_limiter: RateLimiter) -> None:
 async def test_rate_limit_middleware_returns_429_when_limited(
     mocker: MockerFixture,
 ) -> None:
-    """Global rate limit middleware should raise HTTP 429 when over the limit."""
+    """Global rate limit middleware should return HTTP 429 when over the limit."""
 
     scope = {
         "type": "http",
@@ -268,10 +268,9 @@ async def test_rate_limit_middleware_returns_429_when_limited(
     async def call_next(_: Request) -> Response:
         return Response(status_code=200)
 
-    with pytest.raises(HTTPException) as exc_info:
-        await rate_limit_middleware(request, call_next)
-
-    assert exc_info.value.status_code == status.HTTP_429_TOO_MANY_REQUESTS
+    response = await rate_limit_middleware(request, call_next)
+    assert response.status_code == status.HTTP_429_TOO_MANY_REQUESTS
+    assert response.body == b'{"detail":"Rate limit exceeded. Please try again later."}'
 
 
 @pytest.mark.asyncio
@@ -394,12 +393,9 @@ async def test_rate_limit_middleware_retry_after_header(mocker) -> None:
     async def call_next(_: Request) -> Response:
         return Response(status_code=200)
 
-    with pytest.raises(HTTPException) as exc_info:
-        await rate_limit_middleware(request, call_next)
-
-    assert exc_info.value.status_code == 429
-    assert exc_info.value.headers is not None
-    assert exc_info.value.headers.get("Retry-After") == "60"
+    response = await rate_limit_middleware(request, call_next)
+    assert response.status_code == 429
+    assert response.headers.get("Retry-After") == "60"
 
 
 @pytest.mark.asyncio

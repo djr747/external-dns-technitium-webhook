@@ -2595,6 +2595,11 @@ async def trigger_exception_group():
         from external_dns_technitium_webhook import main as main_mod
 
         mocker.patch("external_dns_technitium_webhook.main.AppConfig", return_value=_build_config())
+        mocker.patch(
+            "external_dns_technitium_webhook.middleware.rate_limiter.check_rate_limit",
+            new_callable=AsyncMock,
+            return_value=True,
+        )
         app = main_mod.create_app()
 
         @app.get("/raise-exc")

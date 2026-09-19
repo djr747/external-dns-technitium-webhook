@@ -6,7 +6,7 @@ from collections import defaultdict
 from collections.abc import Awaitable, Callable
 from datetime import datetime
 
-from fastapi import HTTPException, Request, status
+from fastapi import Request, status
 from fastapi.responses import Response
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.types import ASGIApp
@@ -119,17 +119,15 @@ async def rate_limit_middleware(
     Returns:
         Response from next handler or 429 error
 
-    Raises:
-        HTTPException: 429 status if rate limit exceeded
     """
     # Use client IP as identifier
     client_ip = request.client.host if request.client else "unknown"
 
     # Check rate limit
     if not await rate_limiter.check_rate_limit(client_ip):
-        raise HTTPException(
+        return ExternalDNSResponse(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Rate limit exceeded. Please try again later.",
+            content={"detail": "Rate limit exceeded. Please try again later."},
             headers={"Retry-After": "60"},
         )
 

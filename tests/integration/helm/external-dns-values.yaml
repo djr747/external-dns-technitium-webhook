@@ -2,6 +2,10 @@
 # Deploys External DNS with webhook provider to sync DNS records to Technitium
 
 # External DNS provider configuration
+image:
+  # Chart 1.22.0 defaults to ExternalDNS v0.22.0; exercise the current controller.
+  tag: v0.23.0
+
 provider:
   name: webhook
   
@@ -9,7 +13,7 @@ provider:
   webhook:
     # Image for the webhook provider (our Technitium webhook)
     image:
-      imagePullPolicy: Never
+      pullPolicy: Never
     
     # Environment variables for the webhook container
     env:
@@ -36,6 +40,10 @@ provider:
         value: "test.local"
       - name: LOG_LEVEL
         value: "DEBUG"
+      # The functional matrix performs more than 50 create/read/delete requests
+      # through the same localhost sidecar address in under a second.
+      - name: RATE_LIMIT_BURST
+        value: "200"
     
     extraVolumeMounts:
       - name: technitium-ca
@@ -56,8 +64,7 @@ provider:
     service:
       port: 8080
     
-    # Security hardening: disable SA token and add container constraints
-    automountServiceAccountToken: false
+    # Security hardening: add container constraints
     securityContext:
       runAsNonRoot: true
       runAsUser: 65532
@@ -77,6 +84,30 @@ extraVolumes:
 
 # RBAC policies for External DNS
 policy: sync
+
+# ExternalDNS v0.23 uses the GA annotation prefix and requires explicit policy.
+annotationPrefix: external-dns.kubernetes.io/
+
+# Keep this list aligned with the webhook's supported Technitium record types.
+managedRecordTypes:
+  - A
+  - AAAA
+  - NS
+  - CNAME
+  - PTR
+  - MX
+  - TXT
+  - SRV
+  - NAPTR
+  - DNAME
+  # ExternalDNS v0.23 adds TLSA source support.
+  - TLSA
+  - ANAME
+  - CAA
+  - URI
+  - SSHFP
+  - SVCB
+  - HTTPS
 
 # Sync interval for faster integration testing feedback
 interval: 15s
@@ -100,7 +131,7 @@ registry: txt
 txtOwnerId: external-dns-test
 
 # Replicas for testing
-replicas: 1
+replicaCount: 1
 
 # Pod resources for testing (minimal)
 resources:

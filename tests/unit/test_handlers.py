@@ -313,11 +313,11 @@ async def test_record_stream_skips_ignored_types_and_emits_commas() -> None:
     ``]`` and include a comma between the two serialized endpoints.
     """
 
-    # include one ignored type (MX) plus two valid ones to exercise both
+    # include one ignored type (SOA) plus two valid ones to exercise both
     # the skipping logic and the comma insertion.
     records = [
         RecordInfo(disabled=False, name="foo.example", ttl=300, type="A", rData={"A": "1.2.3.4"}),
-        RecordInfo(disabled=False, name="skip.example", ttl=300, type="MX", rData={"mx": "mail"}),
+        RecordInfo(disabled=False, name="skip.example", ttl=300, type="SOA", rData={"mx": "mail"}),
         RecordInfo(
             disabled=False, name="bar.example", ttl=300, type="ANAME", rData={"aname": "alias"}
         ),
@@ -347,7 +347,7 @@ async def test_process_changes_skips_unsupported_type(app_state: AppState, caplo
     ep = Endpoint(
         dnsName="bad.example.com",
         targets=["ignored"],
-        recordType="MX",  # unsupported type
+        recordType="SOA",  # unsupported type
         recordTTL=60,
         setIdentifier="",
     )
@@ -630,7 +630,7 @@ def test_get_record_data_variants_additional():
     # SSHFP valid
     data_sshfp = _get_record_data("SSHFP", "1 1 abcdef")
     assert data_sshfp is not None
-    assert data_sshfp["algorithm"] == 1
+    assert data_sshfp["sshfpAlgorithm"] == "RSA"
 
     # SVCB/HTTPS valid
     data_svcb = _get_record_data("SVCB", "0 target.example param=value")
@@ -877,7 +877,7 @@ async def test_get_records_sshfp(app_state: AppState, mocker: MockerFixture) -> 
                 name="host.example.com",
                 type="SSHFP",
                 ttl=3600,
-                rData={"algorithm": 1, "fingerprintType": 1, "fingerprint": "abc123"},
+                rData={"algorithm": "RSA", "fingerprintType": "SHA1", "fingerprint": "abc123"},
             )
         ],
     )
@@ -903,7 +903,7 @@ async def test_get_records_svcb(app_state: AppState, mocker: MockerFixture) -> N
                 rData={
                     "svcPriority": 1,
                     "svcTargetName": "svc.example.com",
-                    "svcParams": "alpn=h2",
+                    "svcParams": {"alpn": "h2"},
                 },
             )
         ],
@@ -928,7 +928,7 @@ async def test_get_records_with_https_record(app_state: AppState, mocker: Mocker
                 name="example.com",
                 type="HTTPS",
                 ttl=3600,
-                rData={"svcPriority": 1, "svcTargetName": ".", "svcParams": "alpn=h3"},
+                rData={"svcPriority": 1, "svcTargetName": "", "svcParams": {"alpn": "h3"}},
             )
         ],
     )
@@ -989,7 +989,7 @@ async def test_apply_record_with_updates(app_state: AppState, mocker: MockerFixt
 @pytest.mark.asyncio
 async def test_get_record_data_unsupported_type() -> None:
     """Test _get_record_data with an unsupported type."""
-    assert _get_record_data("MX", "10 mail.example.com") is None
+    assert _get_record_data("SOA", "10 mail.example.com") is None
 
 
 @pytest.mark.asyncio
@@ -1048,7 +1048,11 @@ async def test_get_record_data_uri() -> None:
 async def test_get_record_data_sshfp() -> None:
     """Test _get_record_data with SSHFP record."""
     result = _get_record_data("SSHFP", "1 1 da9c419d6757")
-    assert result == {"algorithm": 1, "fingerprintType": 1, "fingerprint": "da9c419d6757"}
+    assert result == {
+        "sshfpAlgorithm": "RSA",
+        "sshfpFingerprintType": "SHA1",
+        "sshfpFingerprint": "da9c419d6757",
+    }
 
 
 @pytest.mark.asyncio
@@ -1058,7 +1062,7 @@ async def test_get_record_data_svcb() -> None:
     assert result == {
         "svcPriority": 1,
         "svcTargetName": "svc.example.com",
-        "svcParams": "alpn=h2",
+        "svcParams": "alpn|h2",
     }
 
 
@@ -1066,7 +1070,24 @@ async def test_get_record_data_svcb() -> None:
 async def test_get_record_data_https() -> None:
     """Test _get_record_data with HTTPS record."""
     result = _get_record_data("HTTPS", "1 . alpn=h3")
-    assert result == {"svcPriority": 1, "svcTargetName": ".", "svcParams": "alpn=h3"}
+    assert result == {"svcPriority": 1, "svcTargetName": ".", "svcParams": "alpn|h3"}
+
+
+@pytest.mark.asyncio
+async def test_get_record_data_svcb_without_params() -> None:
+    """Technitium represents an empty SvcParam collection with ``false``."""
+    assert _get_record_data("SVCB", "0 alias.example.com") == {
+        "svcPriority": 0,
+        "svcTargetName": "alias.example.com",
+        "svcParams": "false",
+    }
+
+
+@pytest.mark.asyncio
+async def test_get_record_data_svcb_rejects_invalid_params() -> None:
+    """Malformed or empty SvcParam keys are rejected before reaching Technitium."""
+    assert _get_record_data("SVCB", '1 svc.example.com "unterminated') is None
+    assert _get_record_data("SVCB", "1 svc.example.com =value") is None
 
 
 @pytest.mark.asyncio
@@ -1079,6 +1100,8 @@ async def test_get_record_data_invalid_uri() -> None:
 async def test_get_record_data_invalid_sshfp() -> None:
     """Test _get_record_data with invalid SSHFP record."""
     assert _get_record_data("SSHFP", "invalid-sshfp") is None
+    assert _get_record_data("SSHFP", "5 1 AABB") is None
+    assert _get_record_data("SSHFP", "1 3 AABB") is None
 
 
 @pytest.mark.asyncio

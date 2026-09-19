@@ -23,6 +23,60 @@ from .technitium_client import TechnitiumError
 
 logger = logging.getLogger(__name__)
 
+# Record types understood by both the read and write paths.  Keeping this as
+# one whitelist avoids exposing records that the webhook cannot round-trip.
+SUPPORTED_RECORD_TYPES = (
+    "A",
+    "AAAA",
+    "NS",
+    "CNAME",
+    "PTR",
+    "MX",
+    "TXT",
+    "SRV",
+    "NAPTR",
+    "DNAME",
+    "TLSA",
+    "ANAME",
+    "CAA",
+    "URI",
+    "SSHFP",
+    "SVCB",
+    "HTTPS",
+)
+
+
+def _quote_rdata_text(value: Any) -> str:
+    """Quote a character-string field in DNS presentation format."""
+    text = str(value)
+    return '"' + text.replace('"', '\\"') + '"'
+
+
+def _domain_rdata_target(value: Any) -> str:
+    """Render Technitium's empty internal root name in presentation format."""
+    return "." if value is None or value == "" else str(value)
+
+
+def _sshfp_algorithm_to_number(value: Any) -> str:
+    """Render Technitium's SSHFP algorithm name in DNS presentation format."""
+    mapping = {"RSA": "1", "DSA": "2", "ECDSA": "3", "ED25519": "4", "ED448": "6"}
+    normalized = str(value).upper()
+    return mapping.get(normalized, str(value))
+
+
+def _sshfp_fingerprint_type_to_number(value: Any) -> str:
+    """Render Technitium's SSHFP fingerprint type in DNS presentation format."""
+    mapping = {"SHA1": "1", "SHA256": "2"}
+    normalized = str(value).replace("-", "").upper()
+    return mapping.get(normalized, str(value))
+
+
+def _svc_params_to_target(value: Any) -> str:
+    """Render Technitium's SvcParam object in ExternalDNS target syntax."""
+    if isinstance(value, dict):
+        return " ".join(f"{key}={param_value}" for key, param_value in value.items())
+    return str(value) if value else ""
+
 
 def _is_connection_error(error: Exception) -> bool:
     """Check if an error is a connection/network-level error.
@@ -204,6 +258,15 @@ def _extract_targets(record: Any) -> list[str]:
         return [r_data.get("ipAddress", "")]
     if r_type == "CNAME":
         return [r_data.get("cname", "")]
+    if r_type == "NS":
+        return [_domain_rdata_target(r_data.get("nameServer"))]
+    if r_type == "PTR":
+        return [_domain_rdata_target(r_data.get("ptrName"))]
+    if r_type == "DNAME":
+        return [_domain_rdata_target(r_data.get("dname"))]
+    if r_type == "MX":
+        exchange = _domain_rdata_target(r_data.get("exchange"))
+        return [f"{r_data.get('preference', 0)} {exchange}"]
     if r_type == "TXT":
         return [r_data.get("text", "")]
     if r_type == "ANAME":
@@ -219,14 +282,34 @@ def _extract_targets(record: Any) -> list[str]:
         uri = r_data.get("uri", "")
         return [f'{priority} {weight} "{uri}"']
     if r_type == "SSHFP":
-        algorithm = r_data.get("algorithm", 0)
-        fp_type = r_data.get("fingerprintType", 0)
+        algorithm = _sshfp_algorithm_to_number(r_data.get("algorithm", 0))
+        fp_type = _sshfp_fingerprint_type_to_number(r_data.get("fingerprintType", 0))
         fingerprint = r_data.get("fingerprint", "")
         return [f"{algorithm} {fp_type} {fingerprint}"]
+    if r_type == "SRV":
+        priority = r_data.get("priority", 0)
+        weight = r_data.get("weight", 0)
+        port = r_data.get("port", 0)
+        target = _domain_rdata_target(r_data.get("target"))
+        return [f"{priority} {weight} {port} {target}"]
+    if r_type == "NAPTR":
+        order = r_data.get("order", 0)
+        preference = r_data.get("preference", 0)
+        flags = _quote_rdata_text(r_data.get("flags", ""))
+        services = _quote_rdata_text(r_data.get("services", ""))
+        regexp = _quote_rdata_text(r_data.get("regexp", ""))
+        replacement = _domain_rdata_target(r_data.get("replacement"))
+        return [f"{order} {preference} {flags} {services} {regexp} {replacement}"]
+    if r_type == "TLSA":
+        usage = _tlsa_usage_to_number(r_data.get("certificateUsage", ""))
+        selector = _tlsa_selector_to_number(r_data.get("selector", ""))
+        matching_type = _tlsa_matching_type_to_number(r_data.get("matchingType", ""))
+        association_data = r_data.get("certificateAssociationData", "")
+        return [f"{usage} {selector} {matching_type} {association_data}"]
     if r_type in ("SVCB", "HTTPS"):
         priority = r_data.get("svcPriority", 0)
-        target = r_data.get("svcTargetName", "")
-        params = r_data.get("svcParams", "")
+        target = _domain_rdata_target(r_data.get("svcTargetName"))
+        params = _svc_params_to_target(r_data.get("svcParams", {}))
         return [f"{priority} {target} {params}".strip()]
     # fallback: wrap raw data
     return [r_data] if not isinstance(r_data, list) else r_data
@@ -237,18 +320,7 @@ async def _record_stream(response: GetRecordsResponse) -> AsyncGenerator[str]:
     yield "["
     first = True
     for record in response.records:
-        if record.type not in (
-            "A",
-            "AAAA",
-            "CNAME",
-            "TXT",
-            "ANAME",
-            "CAA",
-            "URI",
-            "SSHFP",
-            "SVCB",
-            "HTTPS",
-        ):
+        if record.type not in SUPPORTED_RECORD_TYPES:
             continue
 
         endpoint = Endpoint(
@@ -645,6 +717,17 @@ def _record_data_cname(target: str) -> dict[str, Any] | None:
     return {"cname": target}
 
 
+def _record_data_name(target: str, key: str) -> dict[str, Any] | None:
+    """Build a domain-name record field, allowing the DNS root (``.``)."""
+    target = target.strip()
+    if not target:
+        return None
+    # Technitium trims the presentation-format trailing dot itself. Keeping
+    # it here is important for delete/update calls and for a faithful ``.``
+    # root target.
+    return {key: target}
+
+
 def _record_data_txt(target: str) -> dict[str, Any] | None:
     return {"text": target}
 
@@ -657,21 +740,35 @@ def _record_data_caa(target: str) -> dict[str, Any] | None:
     parts = target.split(maxsplit=2)
     if len(parts) < 3:
         return None
-    try:
-        flags = int(parts[0])
-    except ValueError:
+    flags = _parse_uint(parts[0], maximum=255)
+    if flags is None:
         return None
     tag = parts[1]
     value = parts[2].strip('"')
     return {"flags": flags, "tag": tag, "value": value}
 
 
+def _parse_uint(value: str, *, maximum: int = 65535) -> int | None:
+    """Parse a DNS unsigned integer with the range used by its wire format."""
+    try:
+        number = int(value)
+    except TypeError:
+        return None
+    except ValueError:
+        return None
+    if not 0 <= number <= maximum:
+        return None
+    return number
+
+
 def _record_data_uri(target: str) -> dict[str, Any] | None:
     parts = target.split(maxsplit=2)
     if len(parts) < 3:
         return None
-    priority = int(parts[0])
-    weight = int(parts[1])
+    priority = _parse_uint(parts[0])
+    weight = _parse_uint(parts[1])
+    if priority is None or weight is None:
+        return None
     uri = parts[2].strip('"')
     return {"uriPriority": priority, "uriWeight": weight, "uri": uri}
 
@@ -680,13 +777,19 @@ def _record_data_sshfp(target: str) -> dict[str, Any] | None:
     parts = target.split(maxsplit=2)
     if len(parts) < 3:
         return None
-    algorithm = int(parts[0])
-    fp_type = int(parts[1])
+    algorithm = _parse_uint(parts[0], maximum=255)
+    fp_type = _parse_uint(parts[1], maximum=255)
+    if algorithm is None or fp_type is None:
+        return None
+    algorithm_name = {1: "RSA", 2: "DSA", 3: "ECDSA", 4: "Ed25519", 6: "Ed448"}.get(algorithm)
+    fingerprint_type_name = {1: "SHA1", 2: "SHA256"}.get(fp_type)
     fingerprint = parts[2]
+    if algorithm_name is None or fingerprint_type_name is None:
+        return None
     return {
-        "algorithm": algorithm,
-        "fingerprintType": fp_type,
-        "fingerprint": fingerprint,
+        "sshfpAlgorithm": algorithm_name,
+        "sshfpFingerprintType": fingerprint_type_name,
+        "sshfpFingerprint": fingerprint,
     }
 
 
@@ -694,10 +797,168 @@ def _record_data_svcb_https(target: str) -> dict[str, Any] | None:
     parts = target.split(maxsplit=2)
     if len(parts) < 2:
         return None
-    priority = int(parts[0])
+    priority = _parse_uint(parts[0])
+    if priority is None:
+        return None
     target_name = parts[1]
-    params = parts[2] if len(parts) > 2 else ""
+    params = "false"
+    if len(parts) > 2:
+        svc_fields = _split_rdata_fields(parts[2])
+        if svc_fields is None:
+            return None
+        api_fields: list[str] = []
+        for field in svc_fields:
+            key, separator, value = field.partition("=")
+            if not key:
+                return None
+            api_fields.extend((key, value if separator else ""))
+        params = "|".join(api_fields)
     return {"svcPriority": priority, "svcTargetName": target_name, "svcParams": params}
+
+
+def _record_data_mx(target: str) -> dict[str, Any] | None:
+    parts = target.split()
+    if len(parts) != 2:
+        return None
+    preference = _parse_uint(parts[0])
+    if preference is None or not parts[1]:
+        return None
+    return {"preference": preference, "exchange": parts[1]}
+
+
+def _record_data_srv(target: str) -> dict[str, Any] | None:
+    parts = target.split()
+    if len(parts) != 4:
+        return None
+    priority = _parse_uint(parts[0])
+    weight = _parse_uint(parts[1])
+    port = _parse_uint(parts[2])
+    if priority is None or weight is None or port is None or not parts[3]:
+        return None
+    return {
+        "priority": priority,
+        "weight": weight,
+        "port": port,
+        "target": parts[3],
+    }
+
+
+def _split_rdata_fields(target: str) -> list[str] | None:
+    """Split quoted DNS text fields while preserving backslashes in regexps."""
+    fields: list[str] = []
+    field: list[str] = []
+    quoted = False
+    token_started = False
+    index = 0
+    while index < len(target):
+        char = target[index]
+        if char == '"':
+            quoted = not quoted
+            token_started = True
+        elif char == "\\" and quoted and index + 1 < len(target) and target[index + 1] == '"':
+            # A quoted quote is the only escape needed for DNS character
+            # strings here; retain all other backslashes (NAPTR regexps use
+            # them as significant data).
+            field.append('"')
+            token_started = True
+            index += 1
+        elif char.isspace() and not quoted:
+            if token_started:
+                fields.append("".join(field))
+                field = []
+                token_started = False
+        else:
+            field.append(char)
+            token_started = True
+        index += 1
+    if quoted:
+        return None
+    if token_started:
+        fields.append("".join(field))
+    return fields
+
+
+def _record_data_naptr(target: str) -> dict[str, Any] | None:
+    parts = _split_rdata_fields(target)
+    if parts is None or len(parts) != 6:
+        return None
+    order = _parse_uint(parts[0])
+    preference = _parse_uint(parts[1])
+    if order is None or preference is None or not parts[5]:
+        return None
+    return {
+        "naptrOrder": order,
+        "naptrPreference": preference,
+        "naptrFlags": parts[2],
+        "naptrServices": parts[3],
+        "naptrRegexp": parts[4],
+        "naptrReplacement": parts[5],
+    }
+
+
+def _tlsa_usage_to_number(value: Any) -> str:
+    mapping = {"PKIX-TA": "0", "PKIX-EE": "1", "DANE-TA": "2", "DANE-EE": "3"}
+    normalized = str(value).replace("_", "-").upper()
+    return mapping.get(normalized, str(value))
+
+
+def _tlsa_selector_to_number(value: Any) -> str:
+    mapping = {"CERT": "0", "SPKI": "1"}
+    return mapping.get(str(value).upper(), str(value))
+
+
+def _tlsa_matching_type_to_number(value: Any) -> str:
+    mapping = {"FULL": "0", "SHA2-256": "1", "SHA2-512": "2"}
+    normalized = str(value).replace("_", "-").upper()
+    return mapping.get(normalized, str(value))
+
+
+def _tlsa_usage_to_name(value: str) -> str | None:
+    mapping = {"0": "PKIX-TA", "1": "PKIX-EE", "2": "DANE-TA", "3": "DANE-EE"}
+    normalized = value.replace("_", "-").upper()
+    if normalized in mapping.values():
+        return normalized
+    return mapping.get(normalized)
+
+
+def _tlsa_selector_to_name(value: str) -> str | None:
+    mapping = {"0": "Cert", "1": "SPKI"}
+    normalized = value.upper()
+    if normalized in ("CERT", "SPKI"):
+        return "Cert" if normalized == "CERT" else "SPKI"
+    return mapping.get(normalized)
+
+
+def _tlsa_matching_type_to_name(value: str) -> str | None:
+    mapping = {"0": "Full", "1": "SHA2-256", "2": "SHA2-512"}
+    normalized = value.replace("_", "-").upper()
+    if normalized in ("FULL", "SHA2-256", "SHA2-512"):
+        return "Full" if normalized == "FULL" else normalized
+    return mapping.get(normalized)
+
+
+def _record_data_tlsa(target: str) -> dict[str, Any] | None:
+    parts = target.split()
+    if len(parts) != 4:
+        return None
+    usage = _tlsa_usage_to_name(parts[0])
+    selector = _tlsa_selector_to_name(parts[1])
+    matching_type = _tlsa_matching_type_to_name(parts[2])
+    association_data = parts[3]
+    if (
+        usage is None
+        or selector is None
+        or matching_type is None
+        or not re.fullmatch(r"[0-9a-fA-F]+", association_data)
+        or len(association_data) % 2
+    ):
+        return None
+    return {
+        "tlsaCertificateUsage": usage,
+        "tlsaSelector": selector,
+        "tlsaMatchingType": matching_type,
+        "tlsaCertificateAssociationData": association_data,
+    }
 
 
 def _get_record_data(record_type: str, target: str) -> dict[str, Any] | None:
@@ -712,8 +973,15 @@ def _get_record_data(record_type: str, target: str) -> dict[str, Any] | None:
     mapping: dict[str, Callable[[str], dict[str, Any] | None]] = {
         "A": _record_data_a,
         "AAAA": _record_data_aaaa,
+        "NS": lambda target: _record_data_name(target, "nameServer"),
         "CNAME": _record_data_cname,
+        "PTR": lambda target: _record_data_name(target, "ptrName"),
+        "MX": _record_data_mx,
         "TXT": _record_data_txt,
+        "SRV": _record_data_srv,
+        "NAPTR": _record_data_naptr,
+        "DNAME": lambda target: _record_data_name(target, "dname"),
+        "TLSA": _record_data_tlsa,
         "ANAME": _record_data_aname,
         "CAA": _record_data_caa,
         "URI": _record_data_uri,
