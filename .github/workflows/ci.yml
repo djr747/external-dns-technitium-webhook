@@ -128,7 +128,7 @@ jobs:
           test -f pytest-report.xml && ls -l pytest-report.xml || echo "pytest-report.xml not found"
 
       - name: Upload coverage to Codecov (branch coverage)
-        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           files: coverage.xml
           verbose: true
@@ -182,10 +182,10 @@ jobs:
           echo "tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       - name: Build Docker image for amd64
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         id: build-amd64
         with:
           context: .
@@ -224,10 +224,10 @@ jobs:
           echo "tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       - name: Build Docker image for arm64
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         id: build-arm64
         with:
           context: .
@@ -280,15 +280,15 @@ jobs:
           EOF
 
       - name: Set up Kind cluster
-        uses: helm/kind-action@ef37e7f390d99f746eb8b610417061a60e82a6cc # v1.14.0
+        uses: helm/kind-action@06c1ae10762d3b9c1644e7fe69596ae519e015a2 # v1.15.0
         with:
-          version: v0.32.0
+          version: v0.33.0
           cluster_name: integration-test
           config: /tmp/kind-config.yaml
 
       - name: Install cert-manager
         run: |
-          kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.21.0/cert-manager.yaml
+          kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.21.2/cert-manager.yaml
           kubectl wait --for=condition=Available deployment/cert-manager-webhook --timeout=180s -n cert-manager
 
       - name: Load webhook image into Kind
@@ -421,6 +421,7 @@ jobs:
         env:
           TECHNITIUM_URL: https://localhost:30443
           TECHNITIUM_CA_BUNDLE_FILE: /tmp/technitium-test-ca.crt
+          WEBHOOK_URL: http://localhost:30888
           ZONE: test.local
           CATALOG_ZONE: catalog.invalid
         run: |
@@ -432,21 +433,31 @@ jobs:
           export TECHNITIUM_USERNAME TECHNITIUM_PASSWORD
           kubectl port-forward -n default svc/technitium 30443:53443 > /tmp/technitium-tls-port-forward.log 2>&1 &
           TLS_FORWARD_PID=$!
+          WEBHOOK_POD=$(kubectl get pods -n default -l app.kubernetes.io/name=external-dns -o jsonpath='{.items[0].metadata.name}')
+          kubectl port-forward -n default "pod/$WEBHOOK_POD" 30888:8888 > /tmp/webhook-port-forward.log 2>&1 &
+          WEBHOOK_FORWARD_PID=$!
           emit_integration_failure_diagnostics() {
             echo "--- Technitium TLS port-forward log (last 200 lines) ---"
             tail -n 200 /tmp/technitium-tls-port-forward.log || true
+            echo "--- Webhook port-forward log (last 200 lines) ---"
+            tail -n 200 /tmp/webhook-port-forward.log || true
             echo "--- ExternalDNS container log stream (last 200 lines) ---"
             tail -n 200 /tmp/external-dns.log || true
             echo "--- Webhook container log stream (last 200 lines) ---"
             tail -n 200 /tmp/webhook.log || true
           }
 
-          trap 'status=$?; if [ "$status" -ne 0 ]; then emit_integration_failure_diagnostics; fi; kill $TLS_FORWARD_PID 2>/dev/null || true; exit "$status"' EXIT
+          trap 'status=$?; if [ "$status" -ne 0 ]; then emit_integration_failure_diagnostics; fi; kill $TLS_FORWARD_PID $WEBHOOK_FORWARD_PID 2>/dev/null || true; exit "$status"' EXIT
           for _ in $(seq 1 30); do
             if kill -0 $TLS_FORWARD_PID 2>/dev/null && curl --fail-with-body --show-error --silent --cacert /tmp/technitium-test-ca.crt https://localhost:30443 > /dev/null 2>&1; then break; fi
             sleep 1
           done
           kill -0 $TLS_FORWARD_PID
+          for _ in $(seq 1 30); do
+            if kill -0 $WEBHOOK_FORWARD_PID 2>/dev/null && curl --fail-with-body --show-error --silent -H 'Accept: application/external.dns.webhook+json;version=1' http://localhost:30888/ > /dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          kill -0 $WEBHOOK_FORWARD_PID
 
           # Start log streaming in background
           echo "Starting log streams for debugging..."
@@ -523,7 +534,7 @@ jobs:
     if: ${{ success() && needs.check-open-pr.outputs.should-run == 'true' && !(github.event_name == 'push' && github.ref == 'refs/heads/main') }}
     steps:
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       - name: Log in to Container Registry
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0

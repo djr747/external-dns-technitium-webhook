@@ -16,8 +16,8 @@ The Technitium webhook implements the [ExternalDNS webhook specification](https:
 `A`, `AAAA`, `NS`, `CNAME`, `PTR`, `MX`, `TXT`, `SRV`, `NAPTR`, `DNAME`, `TLSA`, `ANAME`,
 `CAA`, `URI`, `SSHFP`, `SVCB`, `HTTPS`
 
-The webhook accepts TLSA endpoints for round-trip support. ExternalDNS source
-support for TLSA requires a release newer than v0.22.0.
+The webhook accepts TLSA endpoints for round-trip support. ExternalDNS v0.23.0
+adds TLSA source support.
 
 Provider-specific options (e.g., comments, expiry TTL, PTR creation, SVCB hints) are passed through using the `providerSpecific` array on each endpoint.
 

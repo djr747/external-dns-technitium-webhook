@@ -6,7 +6,7 @@ Deploy the Technitium webhook as a sidecar container next to ExternalDNS in Kube
 
 - Kubernetes cluster 1.19+ with sufficient RBAC permissions
 - Helm 3.x installed
-- ExternalDNS Helm chart 1.22.0 (ExternalDNS v0.22.0)
+- ExternalDNS Helm chart 1.22.0 with the ExternalDNS v0.23.0 image override
 - Technitium DNS Server v5.0+ accessible from the cluster
 - Credentials created per `docs/CREDENTIALS_SETUP.md`
 
@@ -39,6 +39,9 @@ Create `values-technitium.yaml` with the webhook sidecar configuration:
 ```yaml
 policy: sync
 annotationPrefix: external-dns.kubernetes.io/
+image:
+  # Chart 1.22.0 defaults to v0.22.0, so select the current controller explicitly.
+  tag: v0.23.0
 provider:
   name: webhook
   webhook:
@@ -77,7 +80,7 @@ managedRecordTypes:
   - SRV
   - NAPTR
   - DNAME
-  # TLSA is accepted by the webhook; ExternalDNS source support is post-v0.22.
+  # ExternalDNS v0.23 adds TLSA source support.
   - TLSA
   - ANAME
   - CAA

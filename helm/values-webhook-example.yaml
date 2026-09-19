@@ -25,7 +25,7 @@ managedRecordTypes:
   - SRV
   - NAPTR
   - DNAME
-  # TLSA is accepted by the webhook; ExternalDNS source support is post-v0.22.
+  # ExternalDNS v0.23 adds TLSA source support.
   - TLSA
   - ANAME
   - CAA

@@ -2,6 +2,10 @@
 # Deploys External DNS with webhook provider to sync DNS records to Technitium
 
 # External DNS provider configuration
+image:
+  # Chart 1.22.0 defaults to ExternalDNS v0.22.0; exercise the current controller.
+  tag: v0.23.0
+
 provider:
   name: webhook
   
@@ -77,7 +81,7 @@ extraVolumes:
 # RBAC policies for External DNS
 policy: sync
 
-# ExternalDNS v0.22 uses the GA annotation prefix and requires explicit policy.
+# ExternalDNS v0.23 uses the GA annotation prefix and requires explicit policy.
 annotationPrefix: external-dns.kubernetes.io/
 
 # Keep this list aligned with the webhook's supported Technitium record types.
@@ -92,7 +96,7 @@ managedRecordTypes:
   - SRV
   - NAPTR
   - DNAME
-  # TLSA is accepted by the webhook; ExternalDNS source support is post-v0.22.
+  # ExternalDNS v0.23 adds TLSA source support.
   - TLSA
   - ANAME
   - CAA

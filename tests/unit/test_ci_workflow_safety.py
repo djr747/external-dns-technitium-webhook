@@ -30,7 +30,7 @@ def test_security_skips_push_jobs_only_when_the_branch_has_an_open_pr() -> None:
 
 def test_security_workflow_uses_one_codeql_action_revision() -> None:
     workflow = SECURITY_WORKFLOW.read_text(encoding="utf-8")
-    codeql_action_sha = "cdf488f595d80d6e07e03d4674febd5ab45fa938"
+    codeql_action_sha = "1c5b675653bb5c22dbe9b12b556ec555138e09fd"
     codeql_lines = [line for line in workflow.splitlines() if "uses: github/codeql-action/" in line]
     assert codeql_lines
     assert all(f"@{codeql_action_sha}" in line for line in codeql_lines)
@@ -45,7 +45,7 @@ def test_snyk_monitor_reads_outputs_from_declared_dependencies() -> None:
     ) in workflow
 
 
-def test_external_dns_v022_helm_values_are_explicit_and_supported() -> None:
+def test_external_dns_v023_helm_values_are_explicit_and_supported() -> None:
     expected = [
         "A",
         "AAAA",
@@ -77,13 +77,15 @@ def test_external_dns_v022_helm_values_are_explicit_and_supported() -> None:
         assert "imagePullPolicy:" not in managed_types
 
 
-def test_v022_chart_and_ga_annotations_are_used() -> None:
+def test_v023_controller_chart_and_ga_annotations_are_used() -> None:
     ci = WORKFLOW.read_text(encoding="utf-8")
     integration_path = (
         Path(__file__).parents[2] / "tests" / "integration" / "test_webhook_integration.py"
     )
     integration = integration_path.read_text(encoding="utf-8")
     assert "external-dns/external-dns --version 1.22.0" in ci
+    values = INTEGRATION_HELM_VALUES.read_text(encoding="utf-8")
+    assert "tag: v0.23.0" in values
     assert "external-dns.alpha.kubernetes.io/" not in integration
 
 
