@@ -14,6 +14,7 @@ from external_dns_technitium_webhook.handlers import (
     SUPPORTED_RECORD_TYPES,
     _extract_targets,
     _get_record_data,
+    _parse_uint,
     _record_stream,
 )
 from external_dns_technitium_webhook.models import (
@@ -45,6 +46,11 @@ def app_state(mocker: MockerFixture) -> AppState:
 def test_standard_record_types_are_whitelisted() -> None:
     """All record types handled by the generic CRUD path are streamed."""
     assert {"DNAME", "SRV", "NS", "PTR", "MX", "NAPTR", "TLSA"}.issubset(SUPPORTED_RECORD_TYPES)
+
+
+def test_parse_uint_rejects_values_that_cannot_be_converted() -> None:
+    invalid_value: Any = None
+    assert _parse_uint(invalid_value) is None
 
 
 @pytest.mark.asyncio
