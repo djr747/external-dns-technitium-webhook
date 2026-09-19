@@ -57,6 +57,27 @@ def _domain_rdata_target(value: Any) -> str:
     return "." if value is None or value == "" else str(value)
 
 
+def _sshfp_algorithm_to_number(value: Any) -> str:
+    """Render Technitium's SSHFP algorithm name in DNS presentation format."""
+    mapping = {"RSA": "1", "DSA": "2", "ECDSA": "3", "ED25519": "4", "ED448": "6"}
+    normalized = str(value).upper()
+    return mapping.get(normalized, str(value))
+
+
+def _sshfp_fingerprint_type_to_number(value: Any) -> str:
+    """Render Technitium's SSHFP fingerprint type in DNS presentation format."""
+    mapping = {"SHA1": "1", "SHA256": "2"}
+    normalized = str(value).replace("-", "").upper()
+    return mapping.get(normalized, str(value))
+
+
+def _svc_params_to_target(value: Any) -> str:
+    """Render Technitium's SvcParam object in ExternalDNS target syntax."""
+    if isinstance(value, dict):
+        return " ".join(f"{key}={param_value}" for key, param_value in value.items())
+    return str(value) if value else ""
+
+
 def _is_connection_error(error: Exception) -> bool:
     """Check if an error is a connection/network-level error.
 
@@ -261,8 +282,8 @@ def _extract_targets(record: Any) -> list[str]:
         uri = r_data.get("uri", "")
         return [f'{priority} {weight} "{uri}"']
     if r_type == "SSHFP":
-        algorithm = r_data.get("algorithm", 0)
-        fp_type = r_data.get("fingerprintType", 0)
+        algorithm = _sshfp_algorithm_to_number(r_data.get("algorithm", 0))
+        fp_type = _sshfp_fingerprint_type_to_number(r_data.get("fingerprintType", 0))
         fingerprint = r_data.get("fingerprint", "")
         return [f"{algorithm} {fp_type} {fingerprint}"]
     if r_type == "SRV":
@@ -288,7 +309,7 @@ def _extract_targets(record: Any) -> list[str]:
     if r_type in ("SVCB", "HTTPS"):
         priority = r_data.get("svcPriority", 0)
         target = r_data.get("svcTargetName", "")
-        params = r_data.get("svcParams", "")
+        params = _svc_params_to_target(r_data.get("svcParams", {}))
         return [f"{priority} {target} {params}".strip()]
     # fallback: wrap raw data
     return [r_data] if not isinstance(r_data, list) else r_data
@@ -760,11 +781,15 @@ def _record_data_sshfp(target: str) -> dict[str, Any] | None:
     fp_type = _parse_uint(parts[1], maximum=255)
     if algorithm is None or fp_type is None:
         return None
+    algorithm_name = {1: "RSA", 2: "DSA", 3: "ECDSA", 4: "Ed25519", 6: "Ed448"}.get(algorithm)
+    fingerprint_type_name = {1: "SHA1", 2: "SHA256"}.get(fp_type)
     fingerprint = parts[2]
+    if algorithm_name is None or fingerprint_type_name is None:
+        return None
     return {
-        "algorithm": algorithm,
-        "fingerprintType": fp_type,
-        "fingerprint": fingerprint,
+        "sshfpAlgorithm": algorithm_name,
+        "sshfpFingerprintType": fingerprint_type_name,
+        "sshfpFingerprint": fingerprint,
     }
 
 
@@ -776,7 +801,18 @@ def _record_data_svcb_https(target: str) -> dict[str, Any] | None:
     if priority is None:
         return None
     target_name = parts[1]
-    params = parts[2] if len(parts) > 2 else ""
+    params = "false"
+    if len(parts) > 2:
+        svc_fields = _split_rdata_fields(parts[2])
+        if svc_fields is None:
+            return None
+        api_fields: list[str] = []
+        for field in svc_fields:
+            key, separator, value = field.partition("=")
+            if not key:
+                return None
+            api_fields.extend((key, value if separator else ""))
+        params = "|".join(api_fields)
     return {"svcPriority": priority, "svcTargetName": target_name, "svcParams": params}
 
 

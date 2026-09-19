@@ -221,6 +221,32 @@ def test_extract_targets_accepts_record_like_values() -> None:
     assert _extract_targets(record) == ["1 0 0 AABB"]
 
 
+def test_extract_targets_translates_technitium_sshfp_names() -> None:
+    record = SimpleNamespace(
+        type="SSHFP",
+        r_data={"algorithm": "Ed25519", "fingerprintType": "SHA256", "fingerprint": "AABB"},
+    )
+    assert _extract_targets(record) == ["4 2 AABB"]
+
+    record.r_data.update(algorithm="future", fingerprintType="future")
+    assert _extract_targets(record) == ["future future AABB"]
+
+
+def test_extract_targets_translates_technitium_svc_params() -> None:
+    record = SimpleNamespace(
+        type="HTTPS",
+        r_data={
+            "svcPriority": 1,
+            "svcTargetName": "svc.example.com",
+            "svcParams": {"alpn": "h2,h3", "port": "443"},
+        },
+    )
+    assert _extract_targets(record) == ["1 svc.example.com alpn=h2,h3 port=443"]
+
+    record.r_data["svcParams"] = ""
+    assert _extract_targets(record) == ["1 svc.example.com"]
+
+
 def test_extract_targets_preserves_numeric_and_unknown_tlsa_fields() -> None:
     record = SimpleNamespace(
         type="TLSA",

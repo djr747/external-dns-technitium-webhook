@@ -182,7 +182,7 @@ def test_integration_pytest_reports_skip_reasons() -> None:
 def test_integration_failure_emits_buffered_container_diagnostics() -> None:
     workflow = (Path(__file__).parents[2] / ".github" / "workflows" / "ci.yml").read_text()
     assert "emit_integration_failure_diagnostics()" in workflow
-    assert "tail -n 200 /tmp/external-dns.log || true" in workflow
-    assert "tail -n 200 /tmp/webhook.log || true" in workflow
+    assert "tail -n 2000 /tmp/external-dns.log || true" in workflow
+    assert "tail -n 2000 /tmp/webhook.log || true" in workflow
     assert "tail -n 200 /tmp/technitium-tls-port-forward.log || true" in workflow
     assert "emit_integration_failure_diagnostics" in workflow.split("trap ", 1)[1]

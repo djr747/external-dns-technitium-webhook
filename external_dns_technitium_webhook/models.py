@@ -206,8 +206,8 @@ class RecordURIData(BaseModel):
 class RecordSSHFPData(BaseModel):
     """SSHFP record data."""
 
-    algorithm: int
-    fingerprint_type: int = Field(..., alias="fingerprintType")
+    algorithm: str
+    fingerprint_type: str = Field(..., alias="fingerprintType")
     fingerprint: str
 
     model_config = {"populate_by_name": True}
@@ -229,7 +229,7 @@ class RecordSVCBData(BaseModel):
 
     priority: int = Field(..., alias="svcPriority")
     target_name: str = Field(..., alias="svcTargetName")
-    svc_params: str | None = Field(None, alias="svcParams")
+    svc_params: dict[str, str] = Field(default_factory=dict, alias="svcParams")
     auto_ipv4_hint: bool = Field(False, alias="autoIpv4Hint")
     auto_ipv6_hint: bool = Field(False, alias="autoIpv6Hint")
 

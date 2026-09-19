@@ -27,6 +27,10 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- Use Technitium's documented SSHFP enum fields and pipe-delimited SVCB/HTTPS parameters,
+  and translate their API response forms back to ExternalDNS presentation format.
+- Validate every supported record type with a live create/read/delete round trip, including
+  RFC-shaped SRV ownership and correctly sized SHA-256 TLSA association data.
 - Normalize Snyk's null SARIF security severities before upload while retaining explicit
   high/critical vulnerability gates for security, scheduled rebuild, and release workflows.
 - Remove the obsolete release-only zlib waiver now that the Wolfi base image contains the

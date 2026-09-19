@@ -34,7 +34,7 @@ FUNCTIONAL_RECORD_CASES = [
     ("SRV", "10 20 443 service.example.net"),
     ("NAPTR", '100 10 "U" "E2U+sip" "!^.*$!sip:info@example.net!" .'),
     ("DNAME", "target.example.net"),
-    ("TLSA", "3 1 1 AABBCCDDEEFF"),
+    ("TLSA", "3 1 1 AABBCCDDEEFF00112233445566778899AABBCCDDEEFF00112233445566778899"),
     ("ANAME", "origin.example.net"),
     ("CAA", '0 issue "letsencrypt.org"'),
     ("URI", '10 20 "https://example.net/service"'),
@@ -249,7 +249,10 @@ class TestWebhookIntegration:
         target,
     ):
         """Create, read, and delete every supported type through the live webhook."""
-        dns_name = f"functional-{record_type.lower()}.{technitium_zone}"
+        label = f"functional-{record_type.lower()}"
+        if record_type == "SRV":
+            label = f"_sip._tcp.{label}"
+        dns_name = f"{label}.{technitium_zone}"
         endpoint = {
             "dnsName": dns_name,
             "recordType": record_type,

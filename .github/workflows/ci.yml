@@ -441,10 +441,10 @@ jobs:
             tail -n 200 /tmp/technitium-tls-port-forward.log || true
             echo "--- Webhook port-forward log (last 200 lines) ---"
             tail -n 200 /tmp/webhook-port-forward.log || true
-            echo "--- ExternalDNS container log stream (last 200 lines) ---"
-            tail -n 200 /tmp/external-dns.log || true
-            echo "--- Webhook container log stream (last 200 lines) ---"
-            tail -n 200 /tmp/webhook.log || true
+            echo "--- ExternalDNS container log stream (last 2000 lines) ---"
+            tail -n 2000 /tmp/external-dns.log || true
+            echo "--- Webhook container log stream (last 2000 lines) ---"
+            tail -n 2000 /tmp/webhook.log || true
           }
 
           trap 'status=$?; if [ "$status" -ne 0 ]; then emit_integration_failure_diagnostics; fi; kill $TLS_FORWARD_PID $WEBHOOK_FORWARD_PID 2>/dev/null || true; exit "$status"' EXIT

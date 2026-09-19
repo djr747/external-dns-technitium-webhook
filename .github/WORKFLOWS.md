@@ -227,7 +227,7 @@ Tests must maintain 95% coverage minimum:
 pytest --cov=external_dns_technitium_webhook --cov-fail-under=95
 ```
 
-Current project coverage: 100% (1,829/1,829 statements and 458/458 branches)
+Current project coverage: 100% (1,856/1,856 statements and 470/470 branches)
 
 ## 📚 Additional Resources
 
