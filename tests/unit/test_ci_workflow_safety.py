@@ -97,14 +97,11 @@ def test_snyk_container_reports_reach_json_gate_after_scan_errors() -> None:
         assert "exit 1" in workflow
 
 
-def test_release_zlib_exception_is_exact_and_expires() -> None:
+def test_release_snyk_gate_has_no_zlib_exception() -> None:
     release = RELEASE_WORKFLOW.read_text(encoding="utf-8")
-    security = SECURITY_WORKFLOW.read_text(encoding="utf-8")
-    assert "SNYK-WOLFILATEST-ZLIB-19698962" in release
-    assert '.packageName != "zlib"' in release
-    assert '.version != "1.3.2-r7"' in release
-    assert '"2026-10-01"' in release
-    assert "SNYK-WOLFILATEST-ZLIB-19698962" not in security
+    assert "SNYK-WOLFILATEST-ZLIB-19698962" not in release
+    assert "CVE-2026-85091" not in release
+    assert "1.3.2-r7" not in release
 
 
 def _integration_step() -> str:

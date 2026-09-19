@@ -25,8 +25,6 @@ All notable changes to this project will be documented in this file.
 
 - Normalize Snyk's null SARIF security severities before upload while retaining explicit
   high/critical vulnerability gates for security, scheduled rebuild, and release workflows.
-- Add a release-only exception, expiring 2026-10-01, for the known Wolfi zlib
-  CVE-2026-85091 in version 1.3.2-r7; all other high/critical findings remain blocking.
 
 ## [v1.0.16] - 2026-08-09
 
