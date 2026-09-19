@@ -266,13 +266,16 @@ class TestWebhookIntegration:
                 headers=headers,
                 json={"create": [endpoint], "updateOld": None, "updateNew": None, "delete": None},
                 timeout=30,
+                verify=True,
             )
             assert response.status_code == 204, (
                 f"{record_type} create failed: {response.status_code} {response.text}"
             )
             created = True
 
-            response = httpx2.get(f"{webhook_url}/records", headers=headers, timeout=30)
+            response = httpx2.get(
+                f"{webhook_url}/records", headers=headers, timeout=30, verify=True
+            )
             response.raise_for_status()
             returned = next(
                 (
@@ -302,6 +305,7 @@ class TestWebhookIntegration:
                         "delete": [endpoint],
                     },
                     timeout=30,
+                    verify=True,
                 )
                 assert response.status_code == 204, (
                     f"{record_type} delete failed: {response.status_code} {response.text}"
