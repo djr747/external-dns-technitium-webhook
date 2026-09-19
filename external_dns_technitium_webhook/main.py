@@ -717,8 +717,8 @@ def create_app() -> FastAPI:
         description=(
             "ExternalDNS webhook provider for Technitium DNS Server. "
             "This service enables automatic DNS record synchronization from Kubernetes resources "
-            "(Ingress, Service) to Technitium DNS. Supports A, AAAA, CNAME, TXT, ANAME, CAA, URI, "
-            "SSHFP, SVCB, and HTTPS record types."
+            "(Ingress, Service) to Technitium DNS. Supports A, AAAA, NS, CNAME, PTR, MX, TXT, SRV, "
+            "NAPTR, DNAME, TLSA, ANAME, CAA, URI, SSHFP, SVCB, and HTTPS record types."
         ),
         version=__version__,
         lifespan=lifespan,

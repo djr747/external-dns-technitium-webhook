@@ -30,11 +30,13 @@ When deploying ExternalDNS with this webhook via Helm, ensure you use the defaul
 ```bash
 # Option 1: Use the provided example values file (recommended for this webhook)
 helm install external-dns external-dns/external-dns \
+  --version 1.22.0 \
   --namespace external-dns \
   --values helm/values-webhook-example.yaml
 
 # Option 2: Explicitly set sync policy (if needed)
 helm install external-dns external-dns/external-dns \
+  --version 1.22.0 \
   --namespace external-dns \
   --set policy=sync \
   --values helm/values-webhook-example.yaml
@@ -129,7 +131,7 @@ metadata:
   name: test-cleanup
   namespace: default
   annotations:
-    external-dns.alpha.kubernetes.io/hostname: test-cleanup.example.com
+    external-dns.kubernetes.io/hostname: test-cleanup.example.com
 spec:
   type: LoadBalancer
   selector:

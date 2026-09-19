@@ -2,6 +2,36 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v1.1.0] - 2026-09-19
+
+### Added
+
+- ExternalDNS v0.23.0 compatibility, including the GA `external-dns.kubernetes.io/`
+  annotation prefix, explicit Helm chart policy configuration, and the upstream 32 MiB
+  webhook request/response limit.
+- Explicit `managedRecordTypes` examples for all 17 DNS record types supported by the
+  webhook: A, AAAA, NS, CNAME, PTR, MX, TXT, SRV, NAPTR, DNAME, TLSA, ANAME, CAA, URI,
+  SSHFP, SVCB, and HTTPS, including TLSA source support added by ExternalDNS v0.23.0.
+- Live Kubernetes integration coverage that creates, reads, and deletes every supported
+  record type through the webhook and verifies persistence in Technitium.
+
+### Changed
+
+- Update the integration test to ExternalDNS v0.23.0 on Helm chart 1.22.0.
+- Update Uvicorn to 0.53.0, HTTPX2 to 2.13.0, Ruff to 0.16.8, and Pyright to 1.1.414;
+  all other Python requirements already resolve to their latest compatible releases.
+- Update pinned Codecov, CodeQL, Docker Buildx/Build Push/QEMU, Helm Kind, Anchore SBOM,
+  and Anchore Scan actions to their latest immutable revisions.
+- Update integration infrastructure to Kind v0.33.0 and cert-manager v1.21.2; Technitium
+  DNS Server 15.4.0 remains the current release.
+
+### Fixed
+
+- Normalize Snyk's null SARIF security severities before upload while retaining explicit
+  high/critical vulnerability gates for security, scheduled rebuild, and release workflows.
+- Remove the obsolete release-only zlib waiver now that the Wolfi base image contains the
+  patched package; all release vulnerability gates remain strict.
+
 ## [v1.0.16] - 2026-08-09
 
 ### Fixed

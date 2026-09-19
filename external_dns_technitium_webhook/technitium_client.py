@@ -419,7 +419,8 @@ class TechnitiumClient:
 
         Args:
             domain: Domain name
-            record_type: Record type (A, AAAA, CNAME, TXT, ANAME, CAA, URI, SSHFP, SVCB, HTTPS)
+            record_type: Record type (A, AAAA, NS, CNAME, PTR, MX, TXT, SRV, NAPTR, DNAME,
+                TLSA, ANAME, CAA, URI, SSHFP, SVCB, HTTPS)
             record_data: Record data
             ttl: TTL in seconds
             zone: Zone name
