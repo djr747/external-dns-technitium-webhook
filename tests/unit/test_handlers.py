@@ -237,7 +237,8 @@ async def test_get_records(app_state: AppState, mocker: MockerFixture) -> None:
     response = await get_records(app_state)
     body_bytes = await collect_streaming_response(response)
     endpoints = json.loads(body_bytes.decode())
-    assert endpoints and endpoints[0]["dnsName"] == "test.example.com"
+    assert endpoints
+    assert endpoints[0]["dnsName"] == "test.example.com"
     assert "1.2.3.4" in endpoints[0].get("targets", [])
 
 
@@ -258,7 +259,8 @@ async def test_adjust_endpoints(app_state: AppState) -> None:
     raw_body = response.body
     body_bytes = raw_body.tobytes() if isinstance(raw_body, memoryview) else raw_body or b""
     endpoints_resp = json.loads(body_bytes.decode())
-    assert endpoints_resp and endpoints_resp[0]["dnsName"] == "test.example.com"
+    assert endpoints_resp
+    assert endpoints_resp[0]["dnsName"] == "test.example.com"
 
 
 @pytest.mark.asyncio
@@ -711,7 +713,8 @@ async def test_sanitize_error_message() -> None:
 
     error = Exception(r"Path C:\Users\john\documents")
     result = sanitize_error_message(error)
-    assert "C:" in result and "Users" in result
+    assert "C:" in result
+    assert "Users" in result
     assert "john" not in result
 
     # Test URL sanitization

@@ -71,12 +71,10 @@ def _stub_health_thread(mocker: MockerFixture) -> None:
     FastAPI lifespan manager; that code spins up a thread running
     ``run_health_server`` from the ``server`` module.  Rather than allowing
     the thread to bind a real port (which provokes a warning/error if the
-    port is already in use), we stub the function to a benign lambda.
+    port is already in use), we stub the function with a benign return value.
     """
     # patch the actual implementation used by the lifespan context
-    mocker.patch(
-        "external_dns_technitium_webhook.server.run_health_server", lambda *args, **kwargs: None
-    )
+    mocker.patch("external_dns_technitium_webhook.server.run_health_server", return_value=None)
 
 
 def test_app_creation(mocker: MockerFixture) -> None:
@@ -912,9 +910,7 @@ async def test_lifespan_waits_for_setup_task_on_shutdown(mocker: MockerFixture) 
     await setup_lock.acquire()
 
     # Stub the health server to avoid threading issues
-    mocker.patch(
-        "external_dns_technitium_webhook.server.run_health_server", lambda *args, **kwargs: None
-    )
+    mocker.patch("external_dns_technitium_webhook.server.run_health_server", return_value=None)
     logger_mock = mocker.patch("external_dns_technitium_webhook.main.logger")
 
     # Run the lifespan in a task so we can control when it exits
@@ -961,9 +957,7 @@ async def test_lifespan_does_not_wait_if_setup_task_ready(mocker: MockerFixture)
     )
 
     # Stub the health server to avoid threading issues
-    mocker.patch(
-        "external_dns_technitium_webhook.server.run_health_server", lambda *args, **kwargs: None
-    )
+    mocker.patch("external_dns_technitium_webhook.server.run_health_server", return_value=None)
     logger_mock = mocker.patch("external_dns_technitium_webhook.main.logger")
 
     async with lifespan(app):

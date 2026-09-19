@@ -13,7 +13,7 @@ from external_dns_technitium_webhook.technitium_client import TechnitiumClient
 
 
 @pytest.fixture(autouse=True)
-def _disable_asyncio_run(monkeypatch):
+def _disable_asyncio_run(monkeypatch: pytest.MonkeyPatch) -> None:
     """Replace asyncio.run in the main module with a harmless stub.
 
     This prevents accidental server startup when tests import or call
@@ -31,8 +31,6 @@ def _disable_asyncio_run(monkeypatch):
         # If import fails for some reason, don't block tests; they will fail
         # normally and provide more context.
         pass
-
-    yield
 
 
 @pytest.fixture(autouse=True)

@@ -31,7 +31,9 @@ class TestSanitizeValue:
         assert result is not None
         assert "\x00" not in result
         assert "\x1f" not in result
-        assert "hello" in result and "world" in result and "test" in result
+        assert "hello" in result
+        assert "world" in result
+        assert "test" in result
 
     def test_sanitize_value_removes_newlines(self):
         """Test newlines and carriage returns are removed."""

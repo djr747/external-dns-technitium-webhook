@@ -16,7 +16,7 @@ from external_dns_technitium_webhook.technitium_client import (
 
 
 @pytest.fixture(autouse=True)
-def reset_prometheus_metrics():
+def reset_prometheus_metrics() -> None:
     """Reset Prometheus metrics between tests without reloading the module.
 
     Re-registers each collector so its internal state is cleared without
@@ -37,8 +37,6 @@ def reset_prometheus_metrics():
         with contextlib.suppress(ValueError):
             REGISTRY.unregister(collector)
         REGISTRY.register(collector)
-
-    yield
 
 
 class TestMetricsEndpoint:
