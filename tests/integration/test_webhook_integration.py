@@ -38,7 +38,7 @@ FUNCTIONAL_RECORD_CASES = [
     ("ANAME", "origin.example.net"),
     ("CAA", '0 issue "letsencrypt.org"'),
     ("URI", '10 20 "https://example.net/service"'),
-    ("SSHFP", "1 1 0123456789abcdef0123456789abcdef01234567"),
+    ("SSHFP", "1 1 0123456789ABCDEF0123456789ABCDEF01234567"),
     ("SVCB", "1 service.example.net alpn=h2"),
     ("HTTPS", "1 service.example.net alpn=h2"),
 ]

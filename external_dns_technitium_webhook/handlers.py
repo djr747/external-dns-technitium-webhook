@@ -308,7 +308,7 @@ def _extract_targets(record: Any) -> list[str]:
         return [f"{usage} {selector} {matching_type} {association_data}"]
     if r_type in ("SVCB", "HTTPS"):
         priority = r_data.get("svcPriority", 0)
-        target = r_data.get("svcTargetName", "")
+        target = _domain_rdata_target(r_data.get("svcTargetName"))
         params = _svc_params_to_target(r_data.get("svcParams", {}))
         return [f"{priority} {target} {params}".strip()]
     # fallback: wrap raw data

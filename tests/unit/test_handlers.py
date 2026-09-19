@@ -928,7 +928,7 @@ async def test_get_records_with_https_record(app_state: AppState, mocker: Mocker
                 name="example.com",
                 type="HTTPS",
                 ttl=3600,
-                rData={"svcPriority": 1, "svcTargetName": ".", "svcParams": {"alpn": "h3"}},
+                rData={"svcPriority": 1, "svcTargetName": "", "svcParams": {"alpn": "h3"}},
             )
         ],
     )
