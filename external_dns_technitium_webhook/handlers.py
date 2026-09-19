@@ -753,7 +753,9 @@ def _parse_uint(value: str, *, maximum: int = 65535) -> int | None:
     """Parse a DNS unsigned integer with the range used by its wire format."""
     try:
         number = int(value)
-    except TypeError, ValueError:
+    except TypeError:
+        return None
+    except ValueError:
         return None
     if not 0 <= number <= maximum:
         return None
