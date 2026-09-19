@@ -37,6 +37,8 @@ All notable changes to this project will be documented in this file.
   high/critical vulnerability gates for security, scheduled rebuild, and release workflows.
 - Remove the obsolete release-only zlib waiver now that the Wolfi base image contains the
   patched package; all release vulnerability gates remain strict.
+- Refactor record target rendering and test fixtures/assertions to clear every open
+  SonarCloud maintainability finding before release.
 
 ## [v1.0.16] - 2026-08-09
 

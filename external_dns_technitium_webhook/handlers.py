@@ -45,6 +45,15 @@ SUPPORTED_RECORD_TYPES = (
     "HTTPS",
 )
 
+_SIMPLE_TARGET_FIELDS = {
+    "A": "ipAddress",
+    "AAAA": "ipAddress",
+    "CNAME": "cname",
+    "TXT": "text",
+    "ANAME": "aname",
+}
+_DOMAIN_TARGET_FIELDS = {"NS": "nameServer", "PTR": "ptrName", "DNAME": "dname"}
+
 
 def _quote_rdata_text(value: Any) -> str:
     """Quote a character-string field in DNS presentation format."""
@@ -254,23 +263,15 @@ def _extract_targets(record: Any) -> list[str]:
     r_type = record.type
     r_data = record.r_data
 
-    if r_type in ("A", "AAAA"):
-        return [r_data.get("ipAddress", "")]
-    if r_type == "CNAME":
-        return [r_data.get("cname", "")]
-    if r_type == "NS":
-        return [_domain_rdata_target(r_data.get("nameServer"))]
-    if r_type == "PTR":
-        return [_domain_rdata_target(r_data.get("ptrName"))]
-    if r_type == "DNAME":
-        return [_domain_rdata_target(r_data.get("dname"))]
+    if field := _SIMPLE_TARGET_FIELDS.get(r_type):
+        return [r_data.get(field, "")]
+
+    if field := _DOMAIN_TARGET_FIELDS.get(r_type):
+        return [_domain_rdata_target(r_data.get(field))]
+
     if r_type == "MX":
         exchange = _domain_rdata_target(r_data.get("exchange"))
         return [f"{r_data.get('preference', 0)} {exchange}"]
-    if r_type == "TXT":
-        return [r_data.get("text", "")]
-    if r_type == "ANAME":
-        return [r_data.get("aname", "")]
     if r_type == "CAA":
         flags = r_data.get("flags", 0)
         tag = r_data.get("tag", "")
@@ -752,9 +753,7 @@ def _parse_uint(value: str, *, maximum: int = 65535) -> int | None:
     """Parse a DNS unsigned integer with the range used by its wire format."""
     try:
         number = int(value)
-    except TypeError:
-        return None
-    except ValueError:
+    except TypeError, ValueError:
         return None
     if not 0 <= number <= maximum:
         return None
