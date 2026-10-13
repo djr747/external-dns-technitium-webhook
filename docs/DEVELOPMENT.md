@@ -28,13 +28,16 @@ To add or update a dependency:
 ```bash
 # 1. Edit the pins in pyproject.toml, then:
 uv lock
-uv export --format pylock.toml --no-emit-project > pylock.toml
+uv export --frozen --format pylock.toml --no-emit-project -o pylock.toml
 
-# 2. Commit pyproject.toml and pylock.toml together.
+# 2. Commit pyproject.toml, uv.lock and pylock.toml together.
 ```
 
-CI fails if `pylock.toml` is stale relative to `pyproject.toml`. The image
-build installs from `pylock.toml` with `pip --require-hashes`.
+CI fails if `pylock.toml` is stale relative to `pyproject.toml`/`uv.lock`.
+The gate regenerates with `--frozen`, so it replays the committed resolution
+instead of re-resolving against the live index (which could drift past the
+commit when upstream ships a new release). The image build installs from
+`pylock.toml` with `pip --require-hashes`.
 
 ## Prerequisites
 
