@@ -170,7 +170,7 @@ jobs:
           echo "| 🔵 Low | $LOW |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Gate:** $BLOCKING high/critical finding(s) block (a published fix exists) · $BYPASS high/critical finding(s) have no published fix yet (not blocking)." >> $GITHUB_STEP_SUMMARY
-          BYPASS_LIST=$(jq -r "[.. | .vulnerabilities? // [] | .[]? | select(($SEV) and ((($FIX) | not))) )] | unique_by(.id) | .[] | .id + \" \" + (.packageName // \"?\") + \" \" + (.version // \"?\")" snyk-container.json)
+          BYPASS_LIST=$(jq -r "[.. | .vulnerabilities? // [] | .[]? | select(($SEV) and ((($FIX) | not))) ] | unique_by(.id) | .[] | .id + \" \" + (.packageName // \"?\") + \" \" + (.version // \"?\")" snyk-container.json)
           if [ -n "$BYPASS_LIST" ]; then
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "High/critical findings with no published fix (bypassed — listed so the CVEs stay visible until a fix ships):" >> $GITHUB_STEP_SUMMARY
