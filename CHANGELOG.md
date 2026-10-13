@@ -12,9 +12,9 @@ All notable changes to this project will be documented in this file.
   read-only DHI registry credentials (`DOCKER_HUB_RO_USER` /
   `DOCKER_HUB_RO_PAT`). Published GHCR images are unaffected.
 - Dependency management now uses a committed PEP 751 lock (`pylock.toml`)
-  generated deterministically (`uv export --frozen`) from the committed
-  `uv.lock` as the single source of truth; CI fails on a stale lock and
-  never re-resolves against the live package index.
+  generated with `uv export` from `pyproject.toml` as the single source of
+  truth; CI fails on a stale lock. `uv.lock` remains a local intermediate
+  and stays gitignored.
 - CI runners pinned to `ubuntu-26.04`; GitHub Actions, CodeQL, semgrep and
   SBOM tooling updated to current pins; dev dependencies pinned exactly.
 

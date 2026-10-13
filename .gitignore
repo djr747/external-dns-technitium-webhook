@@ -97,12 +97,11 @@ poetry.lock
 .pdm-build/
 
 # uv
-#   `uv.lock` is the committed resolution lock (uv's native format) and the
-#   PEP 751 lock-of-record `pylock.toml` is a deterministic
-#   `uv export --frozen` of it. Both are committed together; the CI freshness
-#   gate regenerates with --frozen so it never re-resolves against the live
-#   index (a fresh resolve could drift past the commit when upstream ships a
-#   new release, making the gate flaky by design).
+#   The PEP 751 lock-of-record is committed as pylock.toml (generated via
+#   `uv export --format pylock.toml --no-emit-project`). `uv.lock` is a local
+#   intermediate of that export and is NOT a second lock file — keep it out
+#   of version control.
+uv.lock
 
 # PEP 582
 __pypackages__/

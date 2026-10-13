@@ -41,8 +41,8 @@ dependencies = [
 dev = [
     # Pinned exactly (with the transitive runtime set in pylock.toml) so CI,
     # local dev and the image build all resolve identically. Refresh with
-    # `uv lock --upgrade && uv export --format pylock.toml --no-emit-project -o pylock.toml`
-    # and commit both files together.
+    # `uv lock --upgrade && uv export --format pylock.toml --no-emit-project > pylock.toml`
+    # and commit pyproject.toml and pylock.toml together.
     "pytest==9.1.1",
     "pytest-cov==7.1.0",
     "coverage==7.16.2",
