@@ -154,29 +154,52 @@ jobs:
           echo "### Snyk Container Vulnerability Scan Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           if [ ! -f snyk-container.json ]; then echo "No Snyk JSON output found" >> $GITHUB_STEP_SUMMARY; exit 0; fi
-          CRITICAL=$(jq '[.. | .vulnerabilities? // [] | .[]? | select((.severity // "") | ascii_downcase=="critical")] | length' snyk-container.json)
-          HIGH=$(jq '[.. | .vulnerabilities? // [] | .[]? | select((.severity // "") | ascii_downcase=="high")] | length' snyk-container.json)
-          MEDIUM=$(jq '[.. | .vulnerabilities? // [] | .[]? | select((.severity // "") | ascii_downcase=="medium")] | length' snyk-container.json)
-          LOW=$(jq '[.. | .vulnerabilities? // [] | .[]? | select((.severity // "") | ascii_downcase=="low")] | length' snyk-container.json)
+          SEV='(((.severity // "") | ascii_downcase) == "high") or (((.severity // "") | ascii_downcase) == "critical")'
+          FIX='(((.fixInfo.name // "") != "") or ((.fixInfo.version // "") != "") or (((.fixedIn // []) | length) > 0) or (((.patches // []) | length) > 0) or (.isPatchable // false) or (.isUpgradable // false))'
+          CRITICAL=$(jq '[.. | .vulnerabilities? // [] | .[]? | select((.severity // "") | ascii_downcase=="critical")] | unique_by(.id) | length' snyk-container.json)
+          HIGH=$(jq '[.. | .vulnerabilities? // [] | .[]? | select((.severity // "") | ascii_downcase=="high")] | unique_by(.id) | length' snyk-container.json)
+          MEDIUM=$(jq '[.. | .vulnerabilities? // [] | .[]? | select((.severity // "") | ascii_downcase=="medium")] | unique_by(.id) | length' snyk-container.json)
+          LOW=$(jq '[.. | .vulnerabilities? // [] | .[]? | select((.severity // "") | ascii_downcase=="low")] | unique_by(.id) | length' snyk-container.json)
+          BLOCKING=$(jq "[.. | .vulnerabilities? // [] | .[]? | select(($SEV) and ($FIX))] | unique_by(.id) | length" snyk-container.json)
+          BYPASS=$(jq "[.. | .vulnerabilities? // [] | .[]? | select(($SEV) and (($FIX) | not))] | unique_by(.id) | length" snyk-container.json)
           echo "| Severity | Count |" >> $GITHUB_STEP_SUMMARY
           echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
           echo "| 🔴 Critical | $CRITICAL |" >> $GITHUB_STEP_SUMMARY
           echo "| 🟠 High | $HIGH |" >> $GITHUB_STEP_SUMMARY
           echo "| 🟡 Medium | $MEDIUM |" >> $GITHUB_STEP_SUMMARY
           echo "| 🔵 Low | $LOW |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Gate:** $BLOCKING high/critical finding(s) block (a published fix exists) · $BYPASS high/critical finding(s) have no published fix yet (not blocking)." >> $GITHUB_STEP_SUMMARY
+          BYPASS_LIST=$(jq -r "[.. | .vulnerabilities? // [] | .[]? | select(($SEV) and ((($FIX) | not))) )] | unique_by(.id) | .[] | .id + \" \" + (.packageName // \"?\") + \" \" + (.version // \"?\")" snyk-container.json)
+          if [ -n "$BYPASS_LIST" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "High/critical findings with no published fix (bypassed — listed so the CVEs stay visible until a fix ships):" >> $GITHUB_STEP_SUMMARY
+            printf '%s\n' "$BYPASS_LIST" | while IFS= read -r line; do
+              [ -n "$line" ] && echo "- \`$line\`" >> $GITHUB_STEP_SUMMARY
+            done
+          fi
 
       - name: Enforce Snyk container vulnerability gate
         if: always()
         run: |
+          # Gate policy: block a high/critical finding only when a published fix
+          # exists for the affected package. A high/critical finding with no
+          # published fix version (Debian has not shipped it yet) is reported but
+          # does not block, because there is no version this build can move to;
+          # the instant Snyk reports a fixed version it becomes blocking again.
           if [ ! -s snyk-container.json ]; then
             echo "Snyk did not produce a readable JSON report"
             exit 1
           fi
-          HIGH_OR_CRITICAL=$(jq '[.. | .vulnerabilities? // [] | .[]? | select((((.severity // "") | ascii_downcase) == "high") or (((.severity // "") | ascii_downcase) == "critical"))] | length' snyk-container.json)
-          if [ "$HIGH_OR_CRITICAL" -gt 0 ]; then
-            echo "Failing because Snyk found $HIGH_OR_CRITICAL high/critical vulnerabilities"
+          SEV='(((.severity // "") | ascii_downcase) == "high") or (((.severity // "") | ascii_downcase) == "critical")'
+          FIX='(((.fixInfo.name // "") != "") or ((.fixInfo.version // "") != "") or (((.fixedIn // []) | length) > 0) or (((.patches // []) | length) > 0) or (.isPatchable // false) or (.isUpgradable // false))'
+          BLOCKING=$(jq "[.. | .vulnerabilities? // [] | .[]? | select(($SEV) and ($FIX))] | unique_by(.id) | length" snyk-container.json)
+          if [ "$BLOCKING" -gt 0 ]; then
+            echo "Failing because Snyk found $BLOCKING high/critical vulnerabilities WITH a published fix:"
+            jq -r "[.. | .vulnerabilities? // [] | .[]? | select((($SEV) and ($FIX)))] | unique_by(.id) | .[] | .id + \" \" + (.packageName // \"?\") + \" \" + (.version // \"?\")" snyk-container.json
             exit 1
           fi
+          echo "No blocking high/critical findings (every high/critical finding has no published fix yet; see the summary for the bypassed list)."
 
       # Trivy artifact step removed; Snyk JSON is uploaded earlier as 'snyk-container-json'
 
@@ -389,10 +412,16 @@ jobs:
       - name: Fail on HIGH or CRITICAL Snyk vulnerabilities
         run: |
           if [ ! -f snyk-container.json ]; then echo "snyk-container.json not found"; exit 0; fi
-          HIGH_COUNT=$(jq '[.vulnerabilities[]? | select(.severity=="high" or .severity=="critical")] | length' snyk-container.json)
-          echo "Found $HIGH_COUNT high/critical Snyk vulnerabilities"
-          if [ "$HIGH_COUNT" -gt 0 ]; then
-            echo "Failing because high/critical vulnerabilities found by Snyk"
+          # Gate policy (mirrors the container job): block only high/critical
+          # findings that have a published fix; unfixable findings stay visible
+          # in the SARIF/JSON artifacts and become blocking once a fix ships.
+          SEV='(((.severity // "") | ascii_downcase) == "high") or (((.severity // "") | ascii_downcase) == "critical")'
+          FIX='(((.fixInfo.name // "") != "") or ((.fixInfo.version // "") != "") or (((.fixedIn // []) | length) > 0) or (((.patches // []) | length) > 0) or (.isPatchable // false) or (.isUpgradable // false))'
+          BLOCKING=$(jq "[.. | .vulnerabilities? // [] | .[]? | select(($SEV) and ($FIX))] | unique_by(.id) | length" snyk-container.json)
+          echo "Found $BLOCKING blocking (fixable high/critical) Snyk vulnerabilities"
+          if [ "$BLOCKING" -gt 0 ]; then
+            echo "Failing because Snyk found high/critical vulnerabilities WITH a published fix:"
+            jq -r "[.. | .vulnerabilities? // [] | .[]? | select((($SEV) and ($FIX)))] | unique_by(.id) | .[] | .id + \" \" + (.packageName // \"?\") + \" \" + (.version // \"?\")" snyk-container.json
             exit 1
           fi
 

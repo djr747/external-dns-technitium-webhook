@@ -345,8 +345,14 @@ jobs:
 
       - name: Pull and load Technitium image into Kind
         run: |
-          docker pull technitium/dns-server:15.4.0
-          kind load docker-image technitium/dns-server:15.4.0 --name integration-test
+          # Docker 29's containerd-backed image store breaks `kind load` for
+          # registry-pulled images (kubernetes-sigs/kind#3795: ctr import fails
+          # with "content digest ... not found"). Pull the pinned image
+          # directly inside the Kind node instead, and retag it as :latest,
+          # which is the reference tests/integration/k8s/technitium-deployment.yaml
+          # uses with imagePullPolicy: IfNotPresent.
+          docker exec integration-test-control-plane ctr --namespace=k8s.io images pull docker.io/technitium/dns-server:15.4.0
+          docker exec integration-test-control-plane ctr --namespace=k8s.io images tag docker.io/technitium/dns-server:15.4.0 docker.io/technitium/dns-server:latest
 
       - name: Generate test credentials
         run: |
