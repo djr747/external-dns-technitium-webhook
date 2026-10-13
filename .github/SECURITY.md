@@ -9,7 +9,7 @@ and how we maintain secure base images and dependencies.
 
 We run continuous security scanning (CodeQL, Snyk, Grype) in CI and aim
 to keep the container base image minimal and up-to-date. The project uses a
-Chainguard Python base image for runtime to reduce OS-level CVEs.
+Docker Hardened Image (DHI) Python base image for runtime to reduce OS-level CVEs.
 
 ## Reporting a Vulnerability
 
@@ -32,7 +32,7 @@ the advisory.
 
 ## Base image & dependency updates
 
-We use the Chainguard minimal Python base image. Dependabot is configured to
+We use the Docker Hardened Images Python base image. Dependabot is configured to
 monitor Dockerfile base-image updates and will open PRs for image updates. We
 also run daily dependency scans and will triage new findings in priority order.
 

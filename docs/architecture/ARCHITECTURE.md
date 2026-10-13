@@ -278,7 +278,7 @@ graph TD
 
 ```mermaid
 graph TB
-    subgraph Container["Container: technitium-webhook<br/>Chainguard Python latest"]
+    subgraph Container["Container: technitium-webhook<br/>DHI python:3.14-debian13"]
         NonRoot["Non-root user<br/>UID 65532"]
         Work["Workdir: /app"]
         
@@ -377,9 +377,9 @@ graph TB
 graph TB
     subgraph SecurityLayers["Security Layers"]
         subgraph Container["1. Container Security"]
-            NonRoot["Non-root user<br/>UID 65532<br/>Chainguard default"]
+            NonRoot["Non-root user<br/>UID 65532<br/>DHI default"]
             ReadOnly["Read-only filesystem<br/>recommended"]
-            Minimal["Chainguard base image<br/>Python 3.14<br/>Zero CVEs"]
+            Minimal["DHI base image<br/>Python 3.14<br/>Docker-patched"]
             SLSA["SLSA Level 3<br/>Reproducible builds"]
         end
         

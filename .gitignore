@@ -96,6 +96,13 @@ poetry.lock
 .pdm-python
 .pdm-build/
 
+# uv
+#   The PEP 751 lock is committed as pylock.toml (generated via
+#   `uv export --format pylock.toml --no-emit-project`). `uv.lock` is an
+#   intermediate artifact of that export and is NOT a second lock file —
+#   keep it out of version control.
+uv.lock
+
 # PEP 582
 __pypackages__/
 

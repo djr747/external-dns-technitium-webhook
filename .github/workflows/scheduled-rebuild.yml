@@ -2,7 +2,7 @@ name: Scheduled Security Rebuild
 
 on:
   schedule:
-    # Daily rebuild every day at 02:00 UTC to pick up Chainguard base updates
+    # Daily rebuild every day at 02:00 UTC to pick up Docker Hardened Images base updates
     - cron: '0 2 * * *'
   workflow_dispatch:  # Allow manual trigger
 
@@ -13,19 +13,27 @@ env:
 jobs:
   check-for-updates:
     name: Check for Base Image Updates
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     outputs:
       rebuild-needed: ${{ steps.check.outputs.rebuild }}
       base-image-digest: ${{ steps.base-digest.outputs.digest }}
 
     steps:
+      # dhi.io requires a login even for manifest inspection.
+      - name: Log in to Docker Hardened Images registry
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: dhi.io
+          username: ${{ secrets.DOCKER_HUB_RO_USER }}
+          password: ${{ secrets.DOCKER_HUB_RO_PAT }}
+
       - name: Check base image for updates
         id: base-digest
         run: |
-          # Pull latest Chainguard Python 3.14 digest
-          DIGEST=$(docker manifest inspect cgr.dev/chainguard/python:latest | jq -r '.digest') || true
+          # Pull latest DHI Python 3.14 (Debian 13) digest
+          DIGEST=$(docker manifest inspect dhi.io/python:3.14-debian13 | jq -r '.digest') || true
           echo "digest=$DIGEST" >> $GITHUB_OUTPUT
-          echo "Current Chainguard python:3.14 digest: $DIGEST"
+          echo "Current dhi.io/python:3.14-debian13 digest: $DIGEST"
 
       - name: Compare with last build
         id: check
@@ -36,7 +44,7 @@ jobs:
 
   rebuild-image:
     name: Rebuild and Push Updated Image
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     needs: check-for-updates
     if: needs.check-for-updates.outputs.rebuild-needed == 'true'
     permissions:
@@ -73,6 +81,14 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "rebuild-tag=$REBUILD_TAG" >> $GITHUB_OUTPUT
 
+      # DHI base image requires a registry login to pull.
+      - name: Log in to Docker Hardened Images registry
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: dhi.io
+          username: ${{ secrets.DOCKER_HUB_RO_USER }}
+          password: ${{ secrets.DOCKER_HUB_RO_PAT }}
+
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
@@ -85,7 +101,7 @@ jobs:
           labels: |
             org.opencontainers.image.title=ExternalDNS Technitium Webhook
             org.opencontainers.image.description=ExternalDNS webhook provider for Technitium DNS Server (Security Patched)
-            org.opencontainers.image.vendor=Chainguard
+            org.opencontainers.image.vendor=Docker Hardened Images
             org.opencontainers.image.version=${{ steps.version.outputs.rebuild-tag }}
             io.github.rebuild-date=${{ github.event.repository.updated_at }}
             io.github.base-image-digest=${{ needs.check-for-updates.outputs.base-image-digest }}
@@ -131,7 +147,7 @@ jobs:
           fi
 
       - name: Upload Snyk SARIF results
-        uses: github/codeql-action/upload-sarif@1c5b675653bb5c22dbe9b12b556ec555138e09fd # v4.38.1
+        uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
         if: always()
         continue-on-error: true
         with:
@@ -212,7 +228,7 @@ jobs:
 
   snyk-monitor:
     name: Snyk Container Monitoring
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     needs: [check-for-updates, rebuild-image]
     if: ${{ needs.check-for-updates.outputs.rebuild-needed == 'true' && needs.rebuild-image.result == 'success' }}
     

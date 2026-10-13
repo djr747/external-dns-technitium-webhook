@@ -11,13 +11,14 @@ on:
     branches-ignore: [ main ]
     paths:
       - pyproject.toml
+      - pylock.toml
       - '**/*.py'
       - 'Dockerfile'
 
 jobs:
   check-open-pr:
     name: Check for open pull request
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     outputs:
       should-run: ${{ steps.open-pr.outputs.should-run }}
     permissions:
@@ -47,7 +48,7 @@ jobs:
     name: CodeQL Security Analysis
     needs: check-open-pr
     if: ${{ needs.check-open-pr.outputs.should-run == 'true' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     permissions:
       actions: read
       contents: read
@@ -63,7 +64,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@1c5b675653bb5c22dbe9b12b556ec555138e09fd # v4.38.1
+        uses: github/codeql-action/init@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
         with:
           languages: ${{ matrix.language }}
           queries: security-extended,security-and-quality
@@ -77,10 +78,10 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+          python -m pip install --only-binary=:all: '.[dev]'
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@1c5b675653bb5c22dbe9b12b556ec555138e09fd # v4.38.1
+        uses: github/codeql-action/analyze@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
         with:
           category: "/language:${{matrix.language}}"
 
@@ -89,12 +90,22 @@ jobs:
     needs: check-open-pr
     if: ${{ needs.check-open-pr.outputs.should-run == 'true' && github.actor != 'dependabot[bot]' }}
     name: Container Scan (Snyk)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
       security-events: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # The base image lives in Docker's Hardened Images registry, which
+      # requires a login to pull. Read-only Docker Hub credentials are
+      # sufficient (pull scope only).
+      - name: Log in to Docker Hardened Images registry
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: dhi.io
+          username: ${{ secrets.DOCKER_HUB_RO_USER }}
+          password: ${{ secrets.DOCKER_HUB_RO_PAT }}
 
       - name: Build Docker image for scanning
         run: docker build -t external-dns-technitium-webhook:${{ github.sha }} .
@@ -123,14 +134,14 @@ jobs:
           fi
 
       - name: Upload Snyk container SARIF to GitHub Security
-        uses: github/codeql-action/upload-sarif@1c5b675653bb5c22dbe9b12b556ec555138e09fd # v4.38.1
+        uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
         if: always()
         continue-on-error: true
         with:
           sarif_file: snyk-container.sarif
 
       - name: Upload Snyk JSON results
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: snyk-container-json
@@ -173,7 +184,7 @@ jobs:
     name: Dependency Security Scan
     needs: check-open-pr
     if: ${{ needs.check-open-pr.outputs.should-run == 'true' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
       security-events: write
@@ -188,7 +199,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e .
+          python -m pip install --only-binary=:all: .
 
       - name: Run pip-audit for CVE scanning
         run: |
@@ -197,7 +208,7 @@ jobs:
           pip-audit --desc --format markdown --output pip-audit-report.md || true
 
       - name: Upload pip-audit results
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: pip-audit-report
@@ -218,7 +229,7 @@ jobs:
     name: Code Security Analysis
     needs: check-open-pr
     if: ${{ needs.check-open-pr.outputs.should-run == 'true' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
       security-events: write
@@ -235,7 +246,7 @@ jobs:
           python -m pip install --upgrade pip
           # Install a pinned Bandit version and Semgrep. Use the same Bandit
           # version we validate locally (compatible with Python 3.14).
-          pip install 'bandit[toml]==1.8.6' semgrep
+          pip install 'bandit[toml]==1.8.6' 'semgrep==1.180.0'
 
       - name: Run Bandit security linter
         run: |
@@ -243,7 +254,7 @@ jobs:
           bandit -r external_dns_technitium_webhook -f txt -o bandit-report.txt || true
 
       - name: Upload Bandit results
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: bandit-report
@@ -257,7 +268,7 @@ jobs:
           semgrep --config=auto --json --output=semgrep-report.json external_dns_technitium_webhook/ || true
 
       - name: Upload Semgrep results
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: semgrep-report
@@ -269,7 +280,7 @@ jobs:
     needs: check-open-pr
     if: ${{ needs.check-open-pr.outputs.should-run == 'true' && github.actor != 'dependabot[bot]' }}
     name: Snyk Security Analysis
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
       security-events: write
@@ -284,7 +295,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e .
+          python -m pip install --only-binary=:all: .
 
       - name: Run Snyk to check for vulnerabilities
         uses: snyk/actions/python@9adf32b1121593767fc3c057af55b55db032dc04 # v1.0.0
@@ -294,7 +305,7 @@ jobs:
           args: --severity-threshold=medium --sarif-file-output=snyk-code.sarif
 
       - name: Upload Snyk results to GitHub Security
-        uses: github/codeql-action/upload-sarif@1c5b675653bb5c22dbe9b12b556ec555138e09fd # v4.38.1
+        uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
         if: always()
         with:
           sarif_file: snyk-code.sarif
@@ -309,6 +320,16 @@ jobs:
           args: --project-name=${{ github.repository }}
 
       # Container scanning with Snyk
+      # The base image lives in Docker's Hardened Images registry, which
+      # requires a login to pull. Read-only Docker Hub credentials are
+      # sufficient (pull scope only).
+      - name: Log in to Docker Hardened Images registry
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: dhi.io
+          username: ${{ secrets.DOCKER_HUB_RO_USER }}
+          password: ${{ secrets.DOCKER_HUB_RO_PAT }}
+
       - name: Build Docker image for Snyk container scan
         run: docker build -t external-dns-technitium-webhook:${{ github.sha }} .
 
@@ -335,7 +356,7 @@ jobs:
           fi
 
       - name: Upload Snyk container SARIF to GitHub Security
-        uses: github/codeql-action/upload-sarif@1c5b675653bb5c22dbe9b12b556ec555138e09fd # v4.38.1
+        uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
         if: always()
         continue-on-error: true
         with:
@@ -360,7 +381,7 @@ jobs:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
 
       - name: Upload Snyk JSON results
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: snyk-container-json
           path: snyk-container.json
@@ -389,32 +410,42 @@ jobs:
     name: SBOM Generation and Analysis
     needs: check-open-pr
     if: ${{ needs.check-open-pr.outputs.should-run == 'true' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
       security-events: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # The base image lives in Docker's Hardened Images registry, which
+      # requires a login to pull. Read-only Docker Hub credentials are
+      # sufficient (pull scope only).
+      - name: Log in to Docker Hardened Images registry
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: dhi.io
+          username: ${{ secrets.DOCKER_HUB_RO_USER }}
+          password: ${{ secrets.DOCKER_HUB_RO_PAT }}
+
       - name: Build Docker image
         run: docker build -t external-dns-technitium-webhook:${{ github.sha }} .
 
       - name: Generate SBOM with Syft
-        uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
         with:
           image: external-dns-technitium-webhook:${{ github.sha }}
           format: spdx-json
           output-file: sbom.spdx.json
 
       - name: Generate SBOM in CycloneDX format
-        uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
         with:
           image: external-dns-technitium-webhook:${{ github.sha }}
           format: cyclonedx-json
           output-file: sbom.cyclonedx.json
 
       - name: Upload SBOM artifacts
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: sbom-reports
           path: |
@@ -435,14 +466,14 @@ jobs:
           severity-cutoff: high
 
       - name: Upload Grype results
-        uses: github/codeql-action/upload-sarif@1c5b675653bb5c22dbe9b12b556ec555138e09fd # v4.38.1
+        uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
         if: always()
         with:
           sarif_file: ${{ steps.grype.outputs.sarif }}
 
   security-summary:
     name: Security Summary Report
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     needs: [check-open-pr, container-scan, dependency-scan, code-scan, sbom-generation]
     if: ${{ always() && needs.check-open-pr.outputs.should-run == 'true' }}
     permissions:

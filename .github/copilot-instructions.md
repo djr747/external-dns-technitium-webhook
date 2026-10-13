@@ -177,7 +177,7 @@ The project uses **three** type checkers to ensure type safety:
 ## Deployment Context
 - **Sidecar deployment**: Runs alongside ExternalDNS in same pod
 - **Health checks**: `/healthz` endpoint for Kubernetes probes
-- **Container image**: Multi-stage build using Chainguard Python latest base images (minimal, non-root, curated by Chainguard)
+- **Container image**: Multi-stage build using Docker Hardened Images Python base images (Docker-patched, non-root)
 - **Middleware**: Rate limiting (1000 req/min, 10 burst) and request size limits (1MB default)
 
 Note: We require the security workflow (`.github/workflows/security.yml`) to run on every pull request and on a schedule. Protect the `main` branch with branch protection rules that require the security workflow to pass before merging.

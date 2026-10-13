@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "external-dns-technitium-webhook"
-version = "1.1.1"
+version = "2.0.0"
 description = "ExternalDNS webhook provider for Technitium DNS"
 readme = "README.md"
 requires-python = ">=3.14,<3.15"
@@ -39,21 +39,26 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    # Keep pytest compatible with modern versions
-    "pytest>=9.0,<10",
+    # Pinned exactly (with the transitive runtime set in uv.lock) so CI,
+    # local dev and the image build all resolve identically. Refresh with
+    # `uv lock --upgrade && uv lock` and commit both files together.
+    "pytest==9.1.1",
     "pytest-cov==7.1.0",
-    "coverage>=7.13.5",
+    "coverage==7.16.2",
     "pytest-asyncio==1.4.0",
-    "pytest-mock==3.15.1",
+    "pytest-mock==3.16.0",
     "httpx2==2.13.0",
-    "kubernetes==36.0.3",
-    "ruff==0.16.9",
-    "mypy==2.3.1",
+    "kubernetes==37.0.1",
+    "ruff==0.17.0",
+    "mypy==2.4.0",
     "pyright==1.1.414",
-    "semgrep",
-    "tox>=4.0",
+    "semgrep==1.180.0",
+    "tox==4.65.4",
     "types-urllib3",
     "prometheus-client==0.26.0",
+    # Pin the transitive HTTP primitive to a release that declares support
+    # for modern Python (>=3.9); semgrep pulls an older one transitively.
+    "multidict==6.9.1",
 ]
 
 [project.urls]
