@@ -78,7 +78,11 @@ When Dependabot creates a PR for production dependencies:
    - Update `CHANGELOG.md`
    - Commit and push to trigger release
 
-### Development Dependencies (pytest, ruff, mypy, semgrep)
+### Development Dependencies (pytest, ruff, mypy)
+
+`semgrep` is not a dev dependency (its `opentelemetry-api` pin conflicts with
+`fastapi`'s floor in the single universal lock); it runs standalone, pinned in
+`security.yml` and via `uvx` in `make security`.
 
 When dev/test dependencies update:
 

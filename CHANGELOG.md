@@ -15,6 +15,10 @@ All notable changes to this project will be documented in this file.
   generated with `uv export` from `pyproject.toml` as the single source of
   truth; CI fails on a stale lock. `uv.lock` remains a local intermediate
   and stays gitignored.
+- `semgrep` moved out of the `dev` extra into standalone pinned invocations
+  (CI `pip install` in `security.yml`, `uvx` in `make security`): its
+  `opentelemetry-api<1.38.dev0` pin made `fastapi>=0.142` unresolvable in the
+  single universal lock.
 - CI runners pinned to `ubuntu-26.04`; GitHub Actions, CodeQL, semgrep and
   SBOM tooling updated to current pins; dev dependencies pinned exactly.
 
