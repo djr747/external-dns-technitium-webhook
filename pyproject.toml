@@ -59,7 +59,7 @@ dev = [
     "prometheus-client==0.26.0",
     # Pin the transitive HTTP primitive to a release that declares support
     # for modern Python (>=3.9); semgrep pulls an older one transitively.
-    "multidict==6.9.1",
+    "multidict==7.0.0",
 ]
 
 [project.urls]
