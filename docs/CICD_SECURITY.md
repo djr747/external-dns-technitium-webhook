@@ -21,12 +21,14 @@ The project employs **multi-layer security scanning** for defense-in-depth:
 2. **mypy & pyright** (CI) - Strict static type checking to catch type-related bugs
 3. **CodeQL** (Security.yml) - Semantic code analysis for security vulnerabilities in Python
 4. **Snyk** (Security.yml & Release.yml) - Container image and SBOM vulnerability scanner for CVEs
-5. **Docker build provenance** (CI & Release) - SBOM and attestation generation with build signatures
+5. **SonarCloud** (CI) - Code quality and security-hotspot analysis; runs on `main` pushes and decorates same-repo pull requests
+6. **Docker build provenance** (CI & Release) - SBOM and attestation generation with build signatures
 
 ### Code & Supply Chain Security
 
 - **CodeQL** - GitHub's semantic analysis tool for security vulnerabilities
 - **Snyk scanning** - Multi-stage: SARIF format for GitHub Security integration + JSON for detailed analysis
+- **Snyk gate policy** - Only fixable critical/high findings block the pipeline; unfixable findings are listed in the job summary for triage
 - **Build provenance** - SBOM generation and artifact attestation tracking in Release workflow
 - **GitHub Dependabot** - Automated dependency update suggestions (not automated in CI)
 
@@ -34,7 +36,15 @@ Snyk scans upload SARIF results to GitHub's Security tab for visibility and trac
 
 ## Required Secrets & Configuration
 
-The CI/CD workflows use GitHub's built-in features and do not require additional secrets to be configured:
+Core CI/CD runs on GitHub's built-in features plus a small set of repository secrets for the hardened-image and quality-scan integrations:
+
+### Repository Secrets
+
+| Secret | Required | Purpose |
+|--------|----------|---------|
+| `DOCKER_HUB_RO_USER` / `DOCKER_HUB_RO_PAT` | Yes | Read-only Docker Hub credentials for pulling the `dhi.io` Hardened Python base image (CI builds, scheduled rebuilds, release builds) |
+| `SONAR_TOKEN` | Recommended | SonarCloud analysis on `main` pushes and PR-decorating scans (steps skip gracefully when unset) |
+| `SNYK_TOKEN` | Recommended | Snyk container/SBOM scanning |
 
 ### GitHub Actions Built-ins
 
@@ -48,8 +58,6 @@ The CI/CD workflows use GitHub's built-in features and do not require additional
 - **Repository branch protection rules** - Require CI workflow success before merging to `main`
 - **GitHub Security settings** - Enable "Require status checks to pass before merging"
 - **Dependabot alerts** - Enable in repository settings for automated vulnerability notifications
-
-No additional tokens or API credentials are required for core CI/CD operation.
 
 ## Local CI Simulation
 

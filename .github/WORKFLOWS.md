@@ -11,7 +11,7 @@ This repository uses a comprehensive CI/CD pipeline with security best practices
 **Jobs:**
 - **Open PR check**: Skips duplicate push jobs when the source branch has an open PR
 - **Lint and type checking**: Ruff, mypy, and pyright on Python 3.14
-- **Unit tests**: tox coverage gate (95%) and Codecov upload
+- **Unit tests**: tox coverage gate (95%), Codecov upload, and SonarCloud analysis (main-branch pushes; same-repo pull requests run a PR-decorating scan)
 - **Image build and integration**: amd64 and arm64 builds plus Kind integration tests
 
 **Key Features:**
@@ -37,6 +37,7 @@ This repository uses a comprehensive CI/CD pipeline with security best practices
 - SARIF uploads to GitHub Security tab
 - Artifact retention (90 days)
 - Comprehensive summary reports
+- Snyk gate policy: only **fixable** critical/high findings block the pipeline; unfixable findings are listed in the job summary for triage
 
 ### 🔄 Scheduled Rebuild (`scheduled-rebuild.yml`)
 
@@ -127,6 +128,7 @@ Add these secrets to your repository settings:
 | Secret | Required | Purpose |
 |--------|----------|---------|
 | `SNYK_TOKEN` | Recommended | Snyk security scanning |
+| `SONAR_TOKEN` | Recommended | SonarCloud analysis and PR decoration (scans skip gracefully when unset) |
 | `DOCKER_HUB_RO_USER` / `DOCKER_HUB_RO_PAT` | Yes | Read-only Docker Hub credentials for pulling the `dhi.io` Hardened base image |
 
 **Note:** No PyPI token needed - this project uses container deployment only.

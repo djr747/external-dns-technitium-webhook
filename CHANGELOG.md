@@ -2,7 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
-## [v2.0.0] - 2026-10-13
+## [v2.0.0] - 2026-10-14
+
+### Added
+
+- SonarCloud analysis now runs on same-repo pull requests with PR
+  decoration, in addition to the existing `main`-branch scan.
 
 ### Changed
 
@@ -17,6 +22,17 @@ All notable changes to this project will be documented in this file.
   and stays gitignored.
 - CI runners pinned to `ubuntu-26.04`; GitHub Actions, CodeQL, semgrep and
   SBOM tooling updated to current pins; dev dependencies pinned exactly.
+- Runtime and development dependencies refreshed to current pins:
+  `uvicorn[standard]` 0.54.0, `httpx2` 2.13.1, `ruff` 0.17.0 (transitive
+  `starlette` 1.8.0 via the lock).
+- Snyk gate policy aligned with the sibling project: only **fixable**
+  critical/high findings block the pipeline; unfixable findings are
+  listed in the job summary for triage.
+
+### Fixed
+
+- Kind integration tests now pull the node image on the Kind side
+  (`ctr -n k8s.io pull`), removing the fragile daemon-side retag.
 
 ### Removed
 
