@@ -45,7 +45,7 @@ This repository uses a comprehensive CI/CD pipeline with security best practices
 **Purpose:** Automated security patching from base image updates
 
 **Jobs:**
-- **Check for Updates**: Inspect the Chainguard Python base image
+- **Check for Updates**: Inspect the DHI Python base image
 - **Rebuild Image**: Force a multi-architecture rebuild with the latest base-image patches
 - **Vulnerability Scan**: Post-rebuild security check
 - **Snyk Monitor**: Track vulnerabilities over time
@@ -127,6 +127,7 @@ Add these secrets to your repository settings:
 | Secret | Required | Purpose |
 |--------|----------|---------|
 | `SNYK_TOKEN` | Recommended | Snyk security scanning |
+| `DOCKER_HUB_RO_USER` / `DOCKER_HUB_RO_PAT` | Yes | Read-only Docker Hub credentials for pulling the `dhi.io` Hardened base image |
 
 **Note:** No PyPI token needed - this project uses container deployment only.
 
@@ -141,7 +142,7 @@ Add these secrets to your repository settings:
 
 Release builds create `1.2.3`, `1.2`, and `1` tags. The exact version tag is the stable release-specific image; the minor and major tags move only when a newer matching release is published.
 
-The scheduled security rebuild publishes `latest`, `latest-patched`, and a dated `latest-patched-<YYYYMMDD>` tag for both `linux/amd64` and `linux/arm64`. The first two are mutable and rebuilt daily from `main` to incorporate the latest Chainguard base-image patches. They do not retag release-version images.
+The scheduled security rebuild publishes `latest`, `latest-patched`, and a dated `latest-patched-<YYYYMMDD>` tag for both `linux/amd64` and `linux/arm64`. The first two are mutable and rebuilt daily from `main` to incorporate the latest Docker Hardened Images base-image patches. They do not retag release-version images.
 
 Pin an exact version tag (for example, `1.2.3`) or a digest for reproducible production deployments.
 
@@ -193,7 +194,7 @@ You can add these badges to your README:
 
 ### Container
 - ✅ Multi-architecture builds (AMD64, ARM64)
-- ✅ Chainguard minimal Python base image (low CVE footprint)
+- ✅ Docker Hardened Images Python base image (Docker-patched, low CVE footprint)
 - ✅ Layer caching for fast builds
 - ✅ Provenance and SBOM attestation
 - ✅ Non-root user execution

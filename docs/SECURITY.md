@@ -38,7 +38,7 @@ This project implements several security measures:
 ### Container Security
 
 - **Snyk**: Container image vulnerability scanning
-- **Chainguard Python**: Ultra-minimal base image with zero CVEs, daily security updates, SLSA Level 3 provenance
+- **Docker Hardened Images (DHI)**: Docker-patched Python 3.14 (Debian 13) base image, rebuilt on a security cadence
 - Multi-stage Docker builds to minimize attack surface
 - Non-root user in container
 - Distroless runtime image (no shell, package managers, or unnecessary tools)

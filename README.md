@@ -118,13 +118,13 @@ For Technitium cluster background and API details, see:
 
 ## Security & Container Image
 
-This project uses **Chainguard Python** base images for maximum security:
+This project uses **Docker Hardened Images (DHI)** Python base images:
 
-- 🔒 **Zero CVEs** - Ultra-minimal images with no unnecessary packages
-- 🔄 **Daily Updates** - Automated security patches within 24 hours
-- 📋 **SLSA Level 3** - Supply chain security with signed provenance
+- 🔒 **Docker-patched** - OS and Python security fixes rebuilt into the base on Docker's patch cadence
+- 🔄 **Scheduled rebuilds** - `latest` images rebuilt daily from the newest patched base
+- 📋 **Signed & scanned** - Cosign signatures, SBOMs and Snyk scanning in CI
 - 🚫 **Non-root** - Runs as UID 65532 (`nonroot`) by default
-- 📦 **Minimal** - ~40MB final image (vs 100MB+ for typical Python containers)
+- 📦 **Debian 13 userland** - familiar, fully patched base (larger than distroless alternatives)
 
 For security disclosures, see [docs/SECURITY.md](docs/SECURITY.md).
 
@@ -134,7 +134,7 @@ The image is published to `ghcr.io/djr747/external-dns-technitium-webhook` for b
 
 | Tag | Updated by | Intended use |
 | --- | --- | --- |
-| `latest`, `latest-patched` | The scheduled security rebuild, daily at 02:00 UTC | Receive the latest Chainguard base-image security updates. These tags are mutable and should not be used when a fixed deployment is required. |
+| `latest`, `latest-patched` | The scheduled security rebuild, daily at 02:00 UTC | Receive the latest Docker Hardened Images base-image security updates. These tags are mutable and should not be used when a fixed deployment is required. |
 | `latest-patched-<YYYYMMDD>` (for example, `latest-patched-20260725`) | The scheduled security rebuild | A dated record of a particular nightly rebuild. It is not a release tag and may contain newer base-image layers than a released image. |
 | `<version>` (for example, `1.1.0`) | The release workflow only | A stable, release-specific image. Scheduled rebuilds never retag these images. Use this tag to pin a deployment. |
 | `<major>.<minor>` (for example, `1.0`) | The release workflow only | Stable release channel for that minor version. It moves only when a new patch release in that minor line is published—not during scheduled rebuilds. |
