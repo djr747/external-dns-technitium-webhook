@@ -47,7 +47,7 @@ provider:
   webhook:
     image:
       repository: ghcr.io/djr747/external-dns-technitium-webhook
-      tag: 1.1.0  # Use an exact released version
+      tag: 2.0.0  # Use an exact released version
       pullPolicy: IfNotPresent
     env:
       - name: TECHNITIUM_URL
@@ -159,7 +159,7 @@ spec:
       automountServiceAccountToken: false  # Webhook does not need K8s API access
       containers:
       - name: webhook
-        image: ghcr.io/djr747/external-dns-technitium-webhook:1.1.0
+        image: ghcr.io/djr747/external-dns-technitium-webhook:2.0.0
         ports:
         - containerPort: 8888
           name: webhook

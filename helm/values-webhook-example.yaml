@@ -38,7 +38,7 @@ provider:
   webhook:
     image:
       repository: ghcr.io/djr747/external-dns-technitium-webhook
-      tag: 1.1.0 # Pin an exact release tag for reproducible deployments
+      tag: 2.0.0 # Pin an exact release tag for reproducible deployments
       pullPolicy: IfNotPresent # Avoid cold-start pull delays that can race ExternalDNS webhook startup checks
     resources:
       requests:

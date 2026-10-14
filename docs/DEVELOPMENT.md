@@ -158,7 +158,7 @@ external-dns-technitium-webhook/
 │   │   ├── test_server.py     # Server thread tests
 │   │   ├── test_health.py     # Health endpoint tests
 │   │   ├── test_main.py       # Main app tests
-│   │   └── test_python_version.py # Python version compatibility test
+│   │   └── test_record_types.py # DNS record-type parsing tests
 │   ├── integration/           # Integration tests with real services
 │   │   ├── conftest.py        # Pytest configuration for integration tests
 │   │   ├── test_webhook_integration.py  # End-to-end webhook tests
@@ -222,7 +222,7 @@ external-dns-technitium-webhook/
 
 ### `technitium_client.py`
 
-- Async HTTP client using httpx
+- Async HTTP client using httpx2
 - Auto-authentication with token refresh
 - All 17 DNS record types supported: A, AAAA, NS, CNAME, PTR, MX, TXT, SRV, NAPTR, DNAME, TLSA, ANAME, CAA, URI, SSHFP, SVCB, and HTTPS
 - TLS certificate verification support
@@ -418,7 +418,7 @@ pytest tests/ -x   # Stop at first failure
 
 - [FastAPI Documentation](https://fastapi.tiangolo.com/)
 - [Pydantic Documentation](https://docs.pydantic.dev/)
-- [httpx Documentation](https://www.python-httpx.org/)
+- [httpx2 Documentation](https://github.com/pydantic/httpx2)
 - [pytest Documentation](https://docs.pytest.org/)
 - [Technitium DNS API](https://github.com/TechnitiumSoftware/DnsServer/blob/master/APIDOCS.md)
 - [ExternalDNS Documentation](https://external-dns.readthedocs.io/)
