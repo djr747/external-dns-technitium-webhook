@@ -154,7 +154,7 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
       - name: Upload coverage report
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: coverage-report
           # tox generates HTML into "coverage_html" directory (see tox.ini)
@@ -198,7 +198,7 @@ jobs:
           provenance: false
 
       - name: Upload image artifact (for integration tests)
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: webhook-image-amd64
           path: /tmp/webhook-image-amd64.tar
@@ -238,7 +238,7 @@ jobs:
           cache-to: type=gha,mode=max
           provenance: false
       - name: Upload image artifact (for integration tests)
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: webhook-image-arm64
           path: /tmp/webhook-image-arm64.tar
