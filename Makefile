@@ -72,7 +72,7 @@ type-check: ## Run type checking
 	$(VENV_PYTHON) -m pyright
 
 security: ## Run security scans
-	uvx 'semgrep==1.180.0' scan --config auto
+	$(VENV_DIR)/bin/semgrep scan --config auto
 
 check-deps: ## Check for outdated dependencies and vulnerabilities
 	@echo "Checking dependencies..."
