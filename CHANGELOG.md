@@ -2,6 +2,43 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v2.0.0] - 2026-10-14
+
+### Added
+
+- SonarCloud analysis now runs on same-repo pull requests with PR
+  decoration, in addition to the existing `main`-branch scan.
+
+### Changed
+
+- **Breaking (source builds):** the container base image migrated from
+  Chainguard Python to Docker Hardened Images `dhi.io/python:3.14-debian13`.
+  Building from source (or running the CI/rebuild workflows) now requires
+  read-only DHI registry credentials (`DOCKER_HUB_RO_USER` /
+  `DOCKER_HUB_RO_PAT`). Published GHCR images are unaffected.
+- Dependency management now uses a committed PEP 751 lock (`pylock.toml`)
+  generated with `uv export` from `pyproject.toml` as the single source of
+  truth; CI fails on a stale lock. `uv.lock` remains a local intermediate
+  and stays gitignored.
+- CI runners pinned to `ubuntu-26.04`; GitHub Actions, CodeQL, semgrep and
+  SBOM tooling updated to current pins; dev dependencies pinned exactly.
+- Runtime and development dependencies refreshed to current pins:
+  `uvicorn[standard]` 0.54.0, `httpx2` 2.13.1, `ruff` 0.17.0 (transitive
+  `starlette` 1.8.0 via the lock).
+- Snyk gate policy aligned with the sibling project: only **fixable**
+  critical/high findings block the pipeline; unfixable findings are
+  listed in the job summary for triage.
+
+### Fixed
+
+- Kind integration tests now pull the node image on the Kind side
+  (`ctr -n k8s.io pull`), removing the fragile daemon-side retag.
+
+### Removed
+
+- Nightly Chainguard Python version-check workflow (obsolete with the
+  floating DHI base tag).
+
 ## [v1.1.1] - 2026-09-19
 
 ### Fixed

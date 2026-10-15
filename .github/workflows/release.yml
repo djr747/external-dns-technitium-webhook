@@ -16,7 +16,7 @@ on:
 jobs:
   check-version-changed:
     name: Check if Version Changed
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
     outputs:
@@ -48,7 +48,7 @@ jobs:
 
   validate-version:
     name: Validate Version
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     needs: check-version-changed
     if: needs.check-version-changed.outputs.version-changed == 'true'
     permissions:
@@ -92,7 +92,7 @@ jobs:
 
   create-git-tag:
     name: Create Git Tag
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     needs: validate-version
     permissions:
       contents: write
@@ -127,7 +127,7 @@ jobs:
 
   create-release:
     name: Create GitHub Release
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     needs: [validate-version, create-git-tag]
     permissions:
       contents: write
@@ -185,7 +185,7 @@ jobs:
           echo '```' >> RELEASE_NOTES.md
           echo "" >> RELEASE_NOTES.md
           echo "**Image Details:**" >> RELEASE_NOTES.md
-          echo "- Base: Chainguard Python (zero CVEs, updated daily, SLSA Level 3)" >> RELEASE_NOTES.md
+          echo "- Base: Docker Hardened Image dhi.io/python:3.14-debian13 (Docker-patched, rebuilt on schedule)" >> RELEASE_NOTES.md
           echo "- Architectures: linux/amd64, linux/arm64" >> RELEASE_NOTES.md
           echo "- Signed with Cosign" >> RELEASE_NOTES.md
           echo "- SBOM included (SPDX format)" >> RELEASE_NOTES.md
@@ -205,7 +205,7 @@ jobs:
 
   build-and-publish-container:
     name: Build and Publish Container (Primary)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     needs: [validate-version, create-release]
     # Container is the primary deployment method - always runs
     permissions:
@@ -234,6 +234,14 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+
+      # DHI base image requires a registry login to pull.
+      - name: Log in to Docker Hardened Images registry
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: dhi.io
+          username: ${{ secrets.DOCKER_HUB_RO_USER }}
+          password: ${{ secrets.DOCKER_HUB_RO_PAT }}
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
@@ -247,7 +255,7 @@ jobs:
           labels: |
             org.opencontainers.image.title=ExternalDNS Technitium Webhook
             org.opencontainers.image.description=ExternalDNS webhook provider for Technitium DNS Server
-            org.opencontainers.image.vendor=Chainguard
+            org.opencontainers.image.vendor=Docker Hardened Images
             org.opencontainers.image.version=${{ needs.validate-version.outputs.version }}
             org.opencontainers.image.created=${{ github.event.repository.updated_at }}
             org.opencontainers.image.revision=${{ github.sha }}
@@ -267,7 +275,7 @@ jobs:
           sbom: true
 
       - name: Generate SBOM
-        uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
         with:
           image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
           format: spdx-json
@@ -305,7 +313,7 @@ jobs:
           fi
 
       - name: Upload Snyk results
-        uses: github/codeql-action/upload-sarif@1c5b675653bb5c22dbe9b12b556ec555138e09fd # v4.38.1
+        uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
         with:
           sarif_file: 'snyk-release-scan.sarif'
           category: 'release-snyk'
