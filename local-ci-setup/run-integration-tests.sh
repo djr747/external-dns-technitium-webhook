@@ -73,6 +73,7 @@ export TECHNITIUM_CA_BUNDLE_FILE="${CA_BUNDLE}"
 export TECHNITIUM_USERNAME
 export TECHNITIUM_PASSWORD
 export ZONE
+export CATALOG_ZONE="${CATALOG_ZONE:-catalog.invalid}"
 
 # Clean up trap
 cleanup() {
@@ -105,11 +106,24 @@ EXTERNAL_DNS_LOG_PID=$!
 sleep 1
 
 # Run tests using absolute path to pytest (ensures venv site-packages are used)
+set +e
 "$PYTEST_BIN" tests/integration/test_webhook_integration.py \
+    --junitxml=/tmp/integration-junit.xml \
+    -W error \
     -v \
+    -rs \
     --tb=short \
     -m "integration"
 TEST_RESULT=$?
+set -e
+
+if [ -s /tmp/integration-junit.xml ]; then
+    SKIPPED=$(python3 -c 'import xml.etree.ElementTree as ET; print(sum(1 for node in ET.parse("/tmp/integration-junit.xml").getroot().iter("skipped")))')
+    if [ "$SKIPPED" -ne 0 ]; then
+        echo "ERROR: ${SKIPPED} integration test(s) were skipped."
+        TEST_RESULT=1
+    fi
+fi
 
 # Stop log streams
 kill $EXTERNAL_DNS_LOG_PID 2>/dev/null || true

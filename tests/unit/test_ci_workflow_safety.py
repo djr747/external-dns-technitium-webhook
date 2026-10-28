@@ -45,6 +45,30 @@ def test_snyk_monitor_reads_outputs_from_declared_dependencies() -> None:
     ) in workflow
 
 
+def test_scheduled_rebuild_uses_snyk_native_copa_and_tests_before_promotion() -> None:
+    workflow = SCHEDULED_REBUILD_WORKFLOW.read_text(encoding="utf-8")
+    assert "--scanner native" in workflow
+    assert "scripts/snyk_to_copa.py" in workflow
+    assert "snyk-final-amd64.json" in workflow
+    assert "snyk-final-arm64.json" in workflow
+    assert "trivy" not in workflow.lower()
+
+    gate = workflow.index("- name: Enforce final Snyk fixable high/critical gate")
+    integration = workflow.index("bash local-ci-setup/run-integration-tests.sh")
+    promotion = workflow.index("- name: Promote tested image tags")
+    assert gate < integration < promotion
+
+
+def test_scheduled_rebuild_attests_tested_image_before_tag_promotion() -> None:
+    workflow = SCHEDULED_REBUILD_WORKFLOW.read_text(encoding="utf-8")
+    sbom = workflow.index("- name: Generate SBOM for tested image")
+    provenance = workflow.index("- name: Attest tested image provenance")
+    sbom_attestation = workflow.index("- name: Attest tested image SBOM")
+    promotion = workflow.index("- name: Promote tested image tags")
+    assert sbom < provenance < promotion
+    assert sbom_attestation < promotion
+
+
 def test_external_dns_v023_helm_values_are_explicit_and_supported() -> None:
     expected = [
         "A",
