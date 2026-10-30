@@ -45,7 +45,7 @@ dev = [
     # and commit pyproject.toml and pylock.toml together.
     "pytest==9.1.1",
     "pytest-cov==7.1.0",
-    "coverage==7.16.2",
+    "coverage==7.17.0",
     "pytest-asyncio==1.4.0",
     "pytest-mock==3.16.0",
     "httpx2==2.13.1",
