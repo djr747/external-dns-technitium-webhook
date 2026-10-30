@@ -8,7 +8,7 @@ set -e
 # --- Configuration ---
 : "${HOST_PORT_WEB:=5380}"
 : "${HOST_PORT_DNS:=5335}"
-CLUSTER_NAME="local-integration-test"
+CLUSTER_NAME="${CLUSTER_NAME:-local-integration-test}"
 KIND_CONTEXT="kind-${CLUSTER_NAME}"
 
 # --- Dependency Check ---
@@ -38,17 +38,27 @@ fi
 
 # --- Check for existing cluster ---
 echo "--- Checking for existing cluster ---"
-if kind get clusters | grep -q "^${CLUSTER_NAME}$"; then
+if [ "${KIND_USE_EXISTING_CLUSTER:-false}" = "true" ]; then
+    if ! kind get clusters | grep -q "^${CLUSTER_NAME}$"; then
+        echo "Expected existing kind cluster '${CLUSTER_NAME}' was not found."
+        exit 1
+    fi
+    echo "Using existing kind cluster '${CLUSTER_NAME}'."
+elif kind get clusters | grep -q "^${CLUSTER_NAME}$"; then
     echo "Found existing cluster '${CLUSTER_NAME}'. Deleting it..."
     kind delete cluster --name "${CLUSTER_NAME}"
-else
-    echo "No existing cluster found. Proceeding with setup."
 fi
 
-echo "--- Building local webhook Docker image ---"
-COMMIT_SHA=$(git rev-parse --short HEAD)
-export IMAGE_TAG="external-dns-technitium-webhook:${COMMIT_SHA}"
-docker build -t "${IMAGE_TAG}" .
+echo "--- Preparing webhook Docker image ---"
+if [ -n "${WEBHOOK_IMAGE:-}" ]; then
+    IMAGE_TAG="${WEBHOOK_IMAGE}"
+    docker image inspect "${IMAGE_TAG}" >/dev/null
+    echo "Using supplied image: ${IMAGE_TAG}"
+else
+    COMMIT_SHA=$(git rev-parse --short HEAD)
+    IMAGE_TAG="external-dns-technitium-webhook:${COMMIT_SHA}"
+    docker build -t "${IMAGE_TAG}" .
+fi
 
 echo "--- Creating kind cluster (this will switch your kubectl context) ---"
 # Note: On macOS with Docker Desktop, extraPortMappings don't work reliably in kind.
@@ -59,11 +69,14 @@ apiVersion: kind.x-k8s.io/v1alpha4
 nodes:
   - role: control-plane
 EOF
-kind create cluster --name "${CLUSTER_NAME}" --config /tmp/kind-config.yaml
+if [ "${KIND_USE_EXISTING_CLUSTER:-false}" != "true" ]; then
+    kind create cluster --name "${CLUSTER_NAME}" --config /tmp/kind-config.yaml
+fi
 
 echo "--- Loading images into kind cluster ---"
 kind load docker-image "${IMAGE_TAG}" --name "${CLUSTER_NAME}"
-docker pull technitium/dns-server:latest
+docker pull technitium/dns-server:15.4.0
+docker tag technitium/dns-server:15.4.0 technitium/dns-server:latest
 kind load docker-image technitium/dns-server:latest --name "${CLUSTER_NAME}"
 
 echo "--- Deploying Technitium DNS ---"
@@ -74,7 +87,7 @@ kubectl --context "${KIND_CONTEXT}" create secret generic technitium-secret \
   -n default
 
 if ! kubectl --context "${KIND_CONTEXT}" get crd certificates.cert-manager.io >/dev/null 2>&1; then
-    kubectl --context "${KIND_CONTEXT}" apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.16.3/cert-manager.yaml
+    kubectl --context "${KIND_CONTEXT}" apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.21.2/cert-manager.yaml
 fi
 kubectl --context "${KIND_CONTEXT}" wait --for=condition=Available deployment --all --namespace cert-manager --timeout=300s
 

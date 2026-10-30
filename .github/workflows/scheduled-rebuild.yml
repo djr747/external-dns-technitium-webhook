@@ -2,9 +2,9 @@ name: Scheduled Security Rebuild
 
 on:
   schedule:
-    # Daily rebuild every day at 02:00 UTC to pick up Docker Hardened Images base updates
+    # Daily rebuild every day at 02:00 UTC to pick up Docker Hardened Images updates
     - cron: '0 2 * * *'
-  workflow_dispatch:  # Allow manual trigger
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
@@ -17,9 +17,7 @@ jobs:
     outputs:
       rebuild-needed: ${{ steps.check.outputs.rebuild }}
       base-image-digest: ${{ steps.base-digest.outputs.digest }}
-
     steps:
-      # dhi.io requires a login even for manifest inspection.
       - name: Log in to Docker Hardened Images registry
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
@@ -30,25 +28,25 @@ jobs:
       - name: Check base image for updates
         id: base-digest
         run: |
-          # Pull latest DHI Python 3.14 (Debian 13) digest
-          DIGEST=$(docker manifest inspect dhi.io/python:3.14-debian13 | jq -r '.digest') || true
-          echo "digest=$DIGEST" >> $GITHUB_OUTPUT
-          echo "Current dhi.io/python:3.14-debian13 digest: $DIGEST"
+          DIGEST=$(docker manifest inspect dhi.io/python:3.14-debian13 | jq -r '.digest')
+          test -n "$DIGEST" && test "$DIGEST" != "null"
+          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+          echo "Current DHI Python 3.14 Debian 13 digest: $DIGEST"
 
       - name: Compare with last build
         id: check
-        run: |
-          # This is a simple approach - in production you'd store the last digest
-          # For now, always rebuild on schedule
-          echo "rebuild=true" >> $GITHUB_OUTPUT
+        run: echo "rebuild=true" >> "$GITHUB_OUTPUT"
 
   rebuild-image:
-    name: Rebuild and Push Updated Image
+    name: Rebuild, Patch, Test, and Promote
     runs-on: ubuntu-26.04
     needs: check-for-updates
     if: needs.check-for-updates.outputs.rebuild-needed == 'true'
     permissions:
+      actions: read
+      attestations: write
       contents: read
+      issues: write
       packages: write
       security-events: write
       id-token: write
@@ -58,6 +56,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: main
+          fetch-depth: 0
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
@@ -72,16 +71,6 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Get current version
-        id: version
-        run: |
-          # Get latest tag or use commit sha
-          VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "latest")
-          REBUILD_TAG="${VERSION}-patched-$(date +%Y%m%d)"
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "rebuild-tag=$REBUILD_TAG" >> $GITHUB_OUTPUT
-
-      # DHI base image requires a registry login to pull.
       - name: Log in to Docker Hardened Images registry
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
@@ -89,24 +78,33 @@ jobs:
           username: ${{ secrets.DOCKER_HUB_RO_USER }}
           password: ${{ secrets.DOCKER_HUB_RO_PAT }}
 
-      - name: Extract metadata
+      - name: Get image tags
+        id: version
+        run: |
+          VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "latest")
+          DATE_TAG="${VERSION}-patched-$(date +%Y%m%d)"
+          CANDIDATE_TAG="security-candidate-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          COPA_TAG="${CANDIDATE_TAG}-copa"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "date-tag=$DATE_TAG" >> "$GITHUB_OUTPUT"
+          echo "candidate-tag=$CANDIDATE_TAG" >> "$GITHUB_OUTPUT"
+          echo "copa-tag=$COPA_TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Extract candidate metadata
         id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=raw,value=latest-patched
-            type=raw,value=${{ steps.version.outputs.rebuild-tag }}
-            type=raw,value=latest
+          tags: type=raw,value=${{ steps.version.outputs.candidate-tag }}
           labels: |
             org.opencontainers.image.title=ExternalDNS Technitium Webhook
-            org.opencontainers.image.description=ExternalDNS webhook provider for Technitium DNS Server (Security Patched)
+            org.opencontainers.image.description=Nightly security rebuild candidate
             org.opencontainers.image.vendor=Docker Hardened Images
-            org.opencontainers.image.version=${{ steps.version.outputs.rebuild-tag }}
+            org.opencontainers.image.version=${{ steps.version.outputs.date-tag }}
             io.github.rebuild-date=${{ github.event.repository.updated_at }}
             io.github.base-image-digest=${{ needs.check-for-updates.outputs.base-image-digest }}
 
-      - name: Build and push patched image
+      - name: Build and push isolated candidate image
         id: build
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
@@ -119,119 +117,297 @@ jobs:
           cache-to: type=gha,mode=max
           provenance: true
           sbom: true
-          no-cache: true  # Force rebuild to pull latest base image
+          no-cache: true
 
-      - name: Run Snyk container test (SARIF + JSON)
+      - name: Scan candidate with Snyk (amd64)
         uses: snyk/actions/docker@9adf32b1121593767fc3c057af55b55db032dc04 # v1.0.0
-        # Snyk exits non-zero when findings are present. Keep the report steps
-        # reachable so the explicit high/critical gate below can inspect JSON.
         continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
           image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
           command: test
-          args: --sarif-file-output=snyk-results.sarif --json-file-output=snyk-report.json
+          args: --platform=linux/amd64 --sarif-file-output=snyk-amd64.sarif --json-file-output=snyk-amd64.json
 
-      - name: Normalize Snyk SARIF
+      - name: Scan candidate with Snyk (arm64)
+        uses: snyk/actions/docker@9adf32b1121593767fc3c057af55b55db032dc04 # v1.0.0
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
+          command: test
+          args: --platform=linux/arm64 --sarif-file-output=snyk-arm64.sarif --json-file-output=snyk-arm64.json
+
+      - name: Convert Snyk findings to Copa native reports
+        id: reports
+        run: |
+          test -s snyk-amd64.json
+          test -s snyk-arm64.json
+          python3 scripts/snyk_to_copa.py snyk-amd64.json --arch amd64 --os-version 13 --output copa-reports/linux-amd64.json
+          python3 scripts/snyk_to_copa.py snyk-arm64.json --arch arm64 --os-version 13 --output copa-reports/linux-arm64.json
+          PATCH_COUNT=$(jq -s '[.[].updates | length] | add' copa-reports/linux-*.json)
+          echo "patch-count=$PATCH_COUNT" >> "$GITHUB_OUTPUT"
+          if [ "$PATCH_COUNT" -gt 0 ]; then
+            echo "patch-required=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "patch-required=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "Copa eligible Debian package updates: $PATCH_COUNT"
+
+      - name: Install pinned Copa release
+        if: steps.reports.outputs.patch-required == 'true'
+        run: |
+          curl --fail --location --silent --show-error \
+            https://github.com/project-copacetic/copacetic/releases/download/v0.15.0/copa_0.15.0_linux_amd64.tar.gz \
+            --output /tmp/copa_0.15.0_linux_amd64.tar.gz
+          echo "cff3fe9320f3bd24bafcfd0ce877ef57e23acad0836da0ac6c253919f71c9cad  /tmp/copa_0.15.0_linux_amd64.tar.gz" | sha256sum --check
+          mkdir -p /tmp/copa-release
+          tar -xzf /tmp/copa_0.15.0_linux_amd64.tar.gz -C /tmp/copa-release
+          sudo install /tmp/copa-release/copa /usr/local/bin/copa
+          copa version
+
+      - name: Patch eligible OS packages with Copa
+        id: patched-image
+        if: steps.reports.outputs.patch-required == 'true'
+        env:
+          SOURCE_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
+          PATCHED_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.copa-tag }}
+        run: |
+          copa patch \
+            --image "$SOURCE_IMAGE" \
+            --report copa-reports \
+            --scanner native \
+            --tag "$PATCHED_IMAGE" \
+            --addr buildx:// \
+            --push
+          docker buildx imagetools inspect "$PATCHED_IMAGE"
+          echo "IMAGE_TO_TEST=$PATCHED_IMAGE" >> "$GITHUB_ENV"
+          echo "image=$PATCHED_IMAGE" >> "$GITHUB_OUTPUT"
+
+      - name: Select unpatched candidate when no OS updates are available
+        id: candidate-image
+        if: steps.reports.outputs.patch-required != 'true'
+        run: |
+          IMAGE_TO_TEST="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}"
+          echo "IMAGE_TO_TEST=$IMAGE_TO_TEST" >> "$GITHUB_ENV"
+          echo "image=$IMAGE_TO_TEST" >> "$GITHUB_OUTPUT"
+
+      - name: Scan tested candidate with Snyk (amd64)
+        uses: snyk/actions/docker@9adf32b1121593767fc3c057af55b55db032dc04 # v1.0.0
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          image: ${{ steps.patched-image.outputs.image || steps.candidate-image.outputs.image }}
+          command: test
+          args: --platform=linux/amd64 --sarif-file-output=snyk-final-amd64.sarif --json-file-output=snyk-final-amd64.json
+
+      - name: Scan tested candidate with Snyk (arm64)
+        uses: snyk/actions/docker@9adf32b1121593767fc3c057af55b55db032dc04 # v1.0.0
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          image: ${{ steps.patched-image.outputs.image || steps.candidate-image.outputs.image }}
+          command: test
+          args: --platform=linux/arm64 --sarif-file-output=snyk-final-arm64.sarif --json-file-output=snyk-final-arm64.json
+
+      - name: Normalize Snyk SARIF reports
         if: always()
         run: |
-          if [ -f snyk-results.sarif ]; then
-            if jq 'walk(if type == "object" then with_entries(select(.key != "security-severity" or .value != null)) else . end)' \
-                snyk-results.sarif > snyk-results.normalized.sarif; then
-              mv snyk-results.normalized.sarif snyk-results.sarif
-            else
-              echo "Snyk SARIF normalization failed; preserving the original report"
-              rm -f snyk-results.normalized.sarif
+          for report in snyk-amd64.sarif snyk-arm64.sarif snyk-final-amd64.sarif snyk-final-arm64.sarif; do
+            if [ -f "$report" ]; then
+              jq 'walk(if type == "object" then with_entries(select(.key != "security-severity" or .value != null)) else . end)' \
+                "$report" > "$report.normalized" && mv "$report.normalized" "$report"
             fi
-          fi
+          done
 
-      - name: Upload Snyk SARIF results
+      - name: Upload candidate Snyk SARIF (amd64)
+        if: always() && hashFiles('snyk-amd64.sarif') != ''
         uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
-        if: always()
         continue-on-error: true
         with:
-          sarif_file: 'snyk-results.sarif'
-          category: 'rebuild-image-snyk'
+          sarif_file: snyk-amd64.sarif
+          category: rebuild-candidate-amd64
 
-      - name: Check vulnerability status (Snyk JSON)
+      - name: Upload candidate Snyk SARIF (arm64)
+        if: always() && hashFiles('snyk-arm64.sarif') != ''
+        uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+        continue-on-error: true
+        with:
+          sarif_file: snyk-arm64.sarif
+          category: rebuild-candidate-arm64
+
+      - name: Upload final Snyk SARIF (amd64)
+        if: always() && hashFiles('snyk-final-amd64.sarif') != ''
+        uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+        continue-on-error: true
+        with:
+          sarif_file: snyk-final-amd64.sarif
+          category: rebuild-final-amd64
+
+      - name: Upload final Snyk SARIF (arm64)
+        if: always() && hashFiles('snyk-final-arm64.sarif') != ''
+        uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+        continue-on-error: true
+        with:
+          sarif_file: snyk-final-arm64.sarif
+          category: rebuild-final-arm64
+
+      - name: Enforce final Snyk fixable high/critical gate
         id: vuln-check
         run: |
-          if [ ! -s snyk-report.json ]; then
-            echo "snyk-report.json not found or empty"
-            echo "scan-error=true" >> "$GITHUB_OUTPUT"
-            echo "critical=0" >> "$GITHUB_OUTPUT"
-            echo "high=0" >> "$GITHUB_OUTPUT"
-            echo "medium=0" >> "$GITHUB_OUTPUT"
-            exit 0
+          test -s snyk-final-amd64.json
+          test -s snyk-final-arm64.json
+          FIX='(((.fixedIn // []) | length) > 0) or ((.fixInfo.name // "") != "") or ((.fixInfo.version // "") != "") or (.isPatchable // false) or (.isUpgradable // false)'
+          SEVERITY='(((.severity // "") | ascii_downcase) == "high") or (((.severity // "") | ascii_downcase) == "critical")'
+          CRITICAL=$(jq '[.. | .vulnerabilities? // [] | .[]? | select((.severity // "" | ascii_downcase) == "critical")] | unique_by(.id) | length' snyk-final-amd64.json)
+          CRITICAL_ARM64=$(jq '[.. | .vulnerabilities? // [] | .[]? | select((.severity // "" | ascii_downcase) == "critical")] | unique_by(.id) | length' snyk-final-arm64.json)
+          HIGH=$(jq '[.. | .vulnerabilities? // [] | .[]? | select((.severity // "" | ascii_downcase) == "high")] | unique_by(.id) | length' snyk-final-amd64.json)
+          HIGH_ARM64=$(jq '[.. | .vulnerabilities? // [] | .[]? | select((.severity // "" | ascii_downcase) == "high")] | unique_by(.id) | length' snyk-final-arm64.json)
+          BLOCKING=$(jq "[.. | .vulnerabilities? // [] | .[]? | select(($SEVERITY) and ($FIX))] | unique_by(.id) | length" snyk-final-amd64.json)
+          BLOCKING_ARM64=$(jq "[.. | .vulnerabilities? // [] | .[]? | select(($SEVERITY) and ($FIX))] | unique_by(.id) | length" snyk-final-arm64.json)
+          TOTAL_BLOCKING=$((BLOCKING + BLOCKING_ARM64))
+          echo "critical=$((CRITICAL + CRITICAL_ARM64))" >> "$GITHUB_OUTPUT"
+          echo "high=$((HIGH + HIGH_ARM64))" >> "$GITHUB_OUTPUT"
+          echo "blocking=$TOTAL_BLOCKING" >> "$GITHUB_OUTPUT"
+          echo "### Final Snyk Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Critical findings: $((CRITICAL + CRITICAL_ARM64))" >> "$GITHUB_STEP_SUMMARY"
+          echo "- High findings: $((HIGH + HIGH_ARM64))" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Fixable high/critical findings: $TOTAL_BLOCKING" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$TOTAL_BLOCKING" -gt 0 ]; then
+            echo "Fixable high/critical vulnerabilities remain; candidate will not be promoted."
+            exit 1
           fi
-          CRITICAL=$(jq '[.. | .vulnerabilities? // [] | .[]? | select((.severity // "") | ascii_downcase=="critical")] | length' snyk-report.json)
-          HIGH=$(jq '[.. | .vulnerabilities? // [] | .[]? | select((.severity // "") | ascii_downcase=="high")] | length' snyk-report.json)
-          MEDIUM=$(jq '[.. | .vulnerabilities? // [] | .[]? | select((.severity // "") | ascii_downcase=="medium")] | length' snyk-report.json)
-          echo "critical=$CRITICAL" >> $GITHUB_OUTPUT
-          echo "high=$HIGH" >> $GITHUB_OUTPUT
-          echo "medium=$MEDIUM" >> $GITHUB_OUTPUT
-          echo "scan-error=false" >> "$GITHUB_OUTPUT"
-          echo "### Vulnerability Summary" >> $GITHUB_STEP_SUMMARY
-          echo "- **Critical**: $CRITICAL" >> $GITHUB_STEP_SUMMARY
-          echo "- **High**: $HIGH" >> $GITHUB_STEP_SUMMARY
-          echo "- **Medium**: $MEDIUM" >> $GITHUB_STEP_SUMMARY
 
-      - name: Enforce Snyk vulnerability gate
-        if: always()
+      - name: Upload image to integration test runner
+        env:
+          IMAGE_TO_TEST: ${{ steps.patched-image.outputs.image || steps.candidate-image.outputs.image }}
         run: |
-          if [ "${{ steps.vuln-check.outputs.scan-error }}" != "false" ]; then
-            echo "Snyk did not produce a readable JSON report"
-            exit 1
-          fi
-          if [ "${{ steps.vuln-check.outputs.critical }}" -gt 0 ] || [ "${{ steps.vuln-check.outputs.high }}" -gt 0 ]; then
-            echo "Failing because Snyk found high or critical vulnerabilities"
-            exit 1
-          fi
+          docker pull "$IMAGE_TO_TEST"
+          docker tag "$IMAGE_TO_TEST" external-dns-technitium-webhook:security-rebuild
+
+      - name: Set up Kind cluster
+        uses: helm/kind-action@06c1ae10762d3b9c1644e7fe69596ae519e015a2 # v1.15.0
+        with:
+          version: v0.33.0
+          cluster_name: security-rebuild
+
+      - name: Set up Python for integration tests
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.14'
+          cache: pip
+
+      - name: Install integration test dependencies
+        run: >-
+          python -m pip install --only-binary=:all: '.[dev]'
+
+      - name: Deploy patched candidate and run integration tests
+        env:
+          CLUSTER_NAME: security-rebuild
+          KIND_USE_EXISTING_CLUSTER: 'true'
+          WEBHOOK_IMAGE: external-dns-technitium-webhook:security-rebuild
+          IMAGE_TO_TEST: ${{ steps.patched-image.outputs.image || steps.candidate-image.outputs.image }}
+        run: |
+          bash local-ci-setup/setup.sh
+          bash local-ci-setup/run-integration-tests.sh
+
+      - name: Generate SBOM for tested image
+        id: sbom
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+        with:
+          image: ${{ steps.patched-image.outputs.image || steps.candidate-image.outputs.image }}
+          format: spdx-json
+          output-file: security-rebuild.spdx.json
+
+      - name: Calculate tested image digest
+        id: tested-image
+        env:
+          IMAGE_TO_TEST: ${{ steps.patched-image.outputs.image || steps.candidate-image.outputs.image }}
+        run: |
+          DIGEST=$(docker buildx imagetools inspect --raw "$IMAGE_TO_TEST" | sha256sum | cut -d' ' -f1)
+          echo "digest=sha256:$DIGEST" >> "$GITHUB_OUTPUT"
+
+      - name: Attest tested image provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.tested-image.outputs.digest }}
+          push-to-registry: true
+
+      - name: Attest tested image SBOM
+        uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.tested-image.outputs.digest }}
+          sbom-path: security-rebuild.spdx.json
+          push-to-registry: true
+
+      - name: Promote tested image tags
+        env:
+          IMAGE_TO_TEST: ${{ steps.patched-image.outputs.image || steps.candidate-image.outputs.image }}
+          DATE_TAG: ${{ steps.version.outputs.date-tag }}
+        run: |
+          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
+          for tag in latest latest-patched "$DATE_TAG"; do
+            docker buildx imagetools create --tag "$IMAGE:$tag" "$IMAGE_TO_TEST"
+          done
+          echo "Promoted tested image: $IMAGE_TO_TEST"
+
+      - name: Create issue if critical findings remain
+        if: always() && github.event_name == 'schedule' && steps.vuln-check.outputs.critical != '0'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const critical = Number('${{ steps.vuln-check.outputs.critical }}' || '0');
+            const high = Number('${{ steps.vuln-check.outputs.high }}' || '0');
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: 'Critical vulnerabilities remain after scheduled rebuild',
+              body: `Snyk found ${critical} critical and ${high} high findings in the nightly candidate. See run ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}.`,
+              labels: ['security', 'critical']
+            });
 
       - name: Comment on latest commit
-        if: github.event_name == 'schedule'
+        if: success() && github.event_name == 'schedule'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
             const critical = ${{ steps.vuln-check.outputs.critical }};
             const high = ${{ steps.vuln-check.outputs.high }};
-            const medium = ${{ steps.vuln-check.outputs.medium }};
-            
-            let emoji = '✅';
-            if (critical > 0) emoji = '🔴';
-            else if (high > 0) emoji = '🟡';
-            
-            const body = `${emoji} **Scheduled Security Rebuild Complete**
-            
-            Built image: \`${{ steps.version.outputs.rebuild-tag }}\`
-            
-            **Vulnerability Scan Results:**
-            - Critical: ${critical}
-            - High: ${high}
-            - Medium: ${medium}
-            
-            Base Image Digest: \`${{ needs.check-for-updates.outputs.base-image-digest }}\`
-            
-            [View full scan results](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})`;
-            
-            // Create an issue if critical vulnerabilities found
-            if (critical > 0) {
-              github.rest.issues.create({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                title: `🔴 Critical Vulnerabilities Found in Scheduled Rebuild`,
-                body: body,
-                labels: ['security', 'critical']
-              });
-            }
+            const body = `✅ **Scheduled security rebuild passed**\n\nPromoted image tag: \`${{ steps.version.outputs.date-tag }}\`\nCopa package updates: ${{ steps.reports.outputs.patch-count }}\nFinal Snyk findings: ${critical} critical, ${high} high\nBase image digest: \`${{ needs.check-for-updates.outputs.base-image-digest }}\`\n\n[View run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})`;
+            await github.rest.repos.createCommitComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              commit_sha: context.sha,
+              body
+            });
+
+      - name: Upload security rebuild reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: security-rebuild-reports-${{ github.run_id }}
+          path: |
+            snyk-*.json
+            snyk-*.sarif
+            copa-reports/*.json
+            security-rebuild.spdx.json
+          if-no-files-found: ignore
+          retention-days: 90
+
+      - name: Delete Kind cluster
+        if: always()
+        run: kind delete cluster --name security-rebuild
 
   snyk-monitor:
     name: Snyk Container Monitoring
     runs-on: ubuntu-26.04
     needs: [check-for-updates, rebuild-image]
     if: ${{ needs.check-for-updates.outputs.rebuild-needed == 'true' && needs.rebuild-image.result == 'success' }}
-    
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
