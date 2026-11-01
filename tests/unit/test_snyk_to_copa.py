@@ -105,3 +105,43 @@ def test_rejects_conflicting_fixes_for_the_same_installed_package() -> None:
 def test_rejects_missing_snyk_vulnerability_list() -> None:
     with pytest.raises(ValueError, match="vulnerabilities array"):
         convert_report({}, architecture="amd64", os_version="13")
+
+
+def test_converts_distro_qualified_debian_package_managers() -> None:
+    manifest = convert_report(
+        {
+            "vulnerabilities": [
+                {
+                    "id": "SNYK-DEBIAN13-ZLIB-123",
+                    "packageManager": "debian:13",
+                    "packageName": "zlib1g",
+                    "version": "1.3-1",
+                    "fixedIn": ["1.3-2"],
+                }
+            ]
+        },
+        architecture="amd64",
+        os_version="13",
+    )
+
+    assert manifest["updates"][0]["name"] == "zlib1g"
+
+
+def test_ignores_non_debian_distro_qualified_package_managers() -> None:
+    manifest = convert_report(
+        {
+            "vulnerabilities": [
+                {
+                    "id": "SNYK-UBUNTU-ZLIB-123",
+                    "packageManager": "ubuntu:22.04",
+                    "packageName": "zlib1g",
+                    "version": "1.3-1",
+                    "fixedIn": ["1.3-2"],
+                }
+            ]
+        },
+        architecture="amd64",
+        os_version="13",
+    )
+
+    assert manifest["updates"] == []

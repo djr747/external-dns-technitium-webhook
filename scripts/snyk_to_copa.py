@@ -11,6 +11,22 @@ from typing import Any
 DEBIAN_PACKAGE_MANAGERS = {"apt", "deb", "debian", "dpkg"}
 
 
+def is_debian_package_manager(value: str) -> bool:
+    """Recognize Debian's plain and distro-qualified Snyk package managers."""
+    package_manager = value.strip().lower()
+    if package_manager in DEBIAN_PACKAGE_MANAGERS:
+        return True
+
+    distro, separator, version = package_manager.partition(":")
+    return (
+        distro == "debian"
+        and bool(separator)
+        and bool(version)
+        and all(character.isalnum() or character in ". _+-" for character in version)
+        and " " not in version
+    )
+
+
 def convert_report(report: dict[str, Any], *, architecture: str, os_version: str) -> dict[str, Any]:
     """Map unambiguous, fixable Debian OS findings to Copa v1alpha1."""
     vulnerabilities = report.get("vulnerabilities")
@@ -25,7 +41,7 @@ def convert_report(report: dict[str, Any], *, architecture: str, os_version: str
         package_manager = item.get("packageManager", "")
         if not isinstance(package_manager, str):
             raise ValueError("packageManager must be a string when present")
-        if package_manager.lower() not in DEBIAN_PACKAGE_MANAGERS:
+        if not is_debian_package_manager(package_manager):
             continue
 
         name = item.get("packageName") or item.get("pkgName")

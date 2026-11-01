@@ -37,6 +37,15 @@ def test_security_workflow_uses_one_codeql_action_revision() -> None:
     assert all(f"@{codeql_action_sha}" in line for line in codeql_lines)
 
 
+def test_snyk_python_scan_uses_the_committed_lock_with_supported_cli() -> None:
+    workflow = SECURITY_WORKFLOW.read_text(encoding="utf-8")
+    assert "uses: snyk/actions/setup@9adf32b1121593767fc3c057af55b55db032dc04" in workflow
+    assert "scripts/pylock_to_requirements.py pylock.toml snyk-requirements.txt" in workflow
+    assert "python -m pip install --only-binary=:all: -r snyk-requirements.txt" in workflow
+    assert "snyk test --file=snyk-requirements.txt --package-manager=pip" in workflow
+    assert "uses: snyk/actions/python@" not in workflow
+
+
 def test_snyk_monitor_reads_outputs_from_declared_dependencies() -> None:
     workflow = SCHEDULED_REBUILD_WORKFLOW.read_text(encoding="utf-8")
     assert "needs: [check-for-updates, rebuild-image]" in workflow

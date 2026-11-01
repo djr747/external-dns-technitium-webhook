@@ -318,29 +318,28 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install --only-binary=:all: .
+          python scripts/pylock_to_requirements.py pylock.toml snyk-requirements.txt
+          python -m pip install --only-binary=:all: -r snyk-requirements.txt
+
+      - name: Set up Snyk CLI
+        uses: snyk/actions/setup@9adf32b1121593767fc3c057af55b55db032dc04 # v1.0.0
 
       - name: Run Snyk to check for vulnerabilities
-        uses: snyk/actions/python@9adf32b1121593767fc3c057af55b55db032dc04 # v1.0.0
+        run: snyk test --file=snyk-requirements.txt --package-manager=pip --severity-threshold=medium --sarif-file-output=snyk-code.sarif
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        with:
-          args: --severity-threshold=medium --sarif-file-output=snyk-code.sarif
 
       - name: Upload Snyk results to GitHub Security
         uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
-        if: always()
+        if: always() && hashFiles('snyk-code.sarif') != ''
         with:
           sarif_file: snyk-code.sarif
 
       - name: Run Snyk monitor (track over time)
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: snyk/actions/python@9adf32b1121593767fc3c057af55b55db032dc04 # v1.0.0
+        run: snyk monitor --file=snyk-requirements.txt --package-manager=pip --project-name=${{ github.repository }}
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        with:
-          command: monitor
-          args: --project-name=${{ github.repository }}
 
       # Container scanning with Snyk
       # The base image lives in Docker's Hardened Images registry, which
