@@ -78,7 +78,12 @@ When Dependabot creates a PR for production dependencies:
    - Update `CHANGELOG.md`
    - Commit and push to trigger release
 
-### Development Dependencies (pytest, ruff, mypy, semgrep)
+### Development Dependencies (pytest, ruff, mypy)
+
+`semgrep` is intentionally installed separately from the shared development
+environment because its OpenTelemetry constraint conflicts with newer FastAPI
+releases. CI runs it in the isolated security workflow, and `make security`
+uses the pinned version through `uvx`.
 
 When dev/test dependencies update:
 

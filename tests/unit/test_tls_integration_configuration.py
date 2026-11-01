@@ -80,16 +80,16 @@ def test_local_runner_uses_direct_technitium_tls_and_http_health() -> None:
     assert "pkill -f" not in runner
     assert "HEALTH_FORWARD_PID=$!" in runner
     assert "TECHNITIUM_FORWARD_PID=$!" in runner
-    assert 'kill "${HEALTH_FORWARD_PID}"' in runner
-    assert 'kill "${TECHNITIUM_FORWARD_PID}"' in runner
-    assert 'kill "${EXTERNAL_DNS_LOG_PID}"' in runner
+    assert 'kill "$HEALTH_FORWARD_PID"' in runner
+    assert 'kill "$TECHNITIUM_FORWARD_PID"' in runner
+    assert 'kill "$EXTERNAL_DNS_LOG_PID"' in runner
     assert "TECHNITIUM_USERNAME=$TECHNITIUM_USERNAME" not in runner
 
 
 def test_local_setup_provisions_native_technitium_tls_without_proxy() -> None:
     setup = (REPOSITORY_ROOT / "local-ci-setup/setup.sh").read_text()
 
-    assert "cert-manager/releases/download/v1.16.3/cert-manager.yaml" in setup
+    assert "cert-manager/releases/download/v1.21.2/cert-manager.yaml" in setup
     assert "technitium-pkcs12-password" in setup
     assert "certificate/technitium-https" in setup
     assert "technitium-tls-proxy" not in setup

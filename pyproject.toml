@@ -29,10 +29,10 @@ dependencies = [
     # Bumped to releases that declare support for modern Python (>=3.8) and
     # are known to be compatible with CPython 3.14 when no upper bound
     # is present in their metadata.
-    "fastapi==0.141.1",
+    "fastapi==0.143.0",
     "uvicorn[standard]==0.54.0",
     "httpx2==2.13.1",
-    "pydantic==2.13.5",
+    "pydantic==2.14.0",
     "pydantic-settings==2.15.0",
     "prometheus-client==0.26.0",
 ]
@@ -53,13 +53,15 @@ dev = [
     "ruff==0.17.0",
     "mypy==2.4.0",
     "pyright==1.1.414",
-    "semgrep==1.180.0",
-    "tox==4.65.4",
+    "tox==4.65.5",
     "types-urllib3",
     "prometheus-client==0.26.0",
     # Pin the transitive HTTP primitive to a release that declares support
-    # for modern Python (>=3.9); semgrep pulls an older one transitively.
-    "multidict==6.9.1",
+    # for modern Python (>=3.9).
+    "multidict==7.1.0",
+    # Semgrep stays out of this shared environment because its pinned
+    # OpenTelemetry range conflicts with FastAPI's supported range. CI runs
+    # Semgrep in the isolated security workflow; `make security` uses uvx.
 ]
 
 [project.urls]

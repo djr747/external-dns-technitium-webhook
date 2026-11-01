@@ -10,6 +10,7 @@ HELM_EXAMPLE = Path(__file__).parents[2] / "helm" / "values-webhook-example.yaml
 INTEGRATION_HELM_VALUES = (
     Path(__file__).parents[2] / "tests" / "integration" / "helm" / "external-dns-values.yaml"
 )
+INTEGRATION_RUNNER = Path(__file__).parents[2] / "local-ci-setup" / "run-integration-tests.sh"
 
 
 def test_ci_skips_push_jobs_only_when_the_branch_has_an_open_pr() -> None:
@@ -36,6 +37,15 @@ def test_security_workflow_uses_one_codeql_action_revision() -> None:
     assert all(f"@{codeql_action_sha}" in line for line in codeql_lines)
 
 
+def test_snyk_python_scan_uses_the_committed_lock_with_supported_cli() -> None:
+    workflow = SECURITY_WORKFLOW.read_text(encoding="utf-8")
+    assert "uses: snyk/actions/setup@9adf32b1121593767fc3c057af55b55db032dc04" in workflow
+    assert "scripts/pylock_to_requirements.py pylock.toml snyk-requirements.txt" in workflow
+    assert "python -m pip install --only-binary=:all: -r snyk-requirements.txt" in workflow
+    assert "snyk test --file=snyk-requirements.txt --package-manager=pip" in workflow
+    assert "uses: snyk/actions/python@" not in workflow
+
+
 def test_snyk_monitor_reads_outputs_from_declared_dependencies() -> None:
     workflow = SCHEDULED_REBUILD_WORKFLOW.read_text(encoding="utf-8")
     assert "needs: [check-for-updates, rebuild-image]" in workflow
@@ -43,6 +53,45 @@ def test_snyk_monitor_reads_outputs_from_declared_dependencies() -> None:
         "needs.check-for-updates.outputs.rebuild-needed == 'true'"
         " && needs.rebuild-image.result == 'success'"
     ) in workflow
+
+
+def test_scheduled_rebuild_uses_snyk_native_copa_and_tests_before_promotion() -> None:
+    workflow = SCHEDULED_REBUILD_WORKFLOW.read_text(encoding="utf-8")
+    assert "--scanner native" in workflow
+    assert "scripts/snyk_to_copa.py" in workflow
+    assert "snyk-final-amd64.json" in workflow
+    assert "snyk-final-arm64.json" in workflow
+    assert "trivy" not in workflow.lower()
+
+    gate = workflow.index("- name: Enforce final Snyk fixable high/critical gate")
+    integration = workflow.index("bash local-ci-setup/run-integration-tests.sh")
+    promotion = workflow.index("- name: Promote tested image tags")
+    assert gate < integration < promotion
+
+
+def test_scheduled_rebuild_attests_tested_image_before_tag_promotion() -> None:
+    workflow = SCHEDULED_REBUILD_WORKFLOW.read_text(encoding="utf-8")
+    sbom = workflow.index("- name: Generate SBOM for tested image")
+    provenance = workflow.index("- name: Attest tested image provenance")
+    sbom_attestation = workflow.index("- name: Attest tested image SBOM")
+    promotion = workflow.index("- name: Promote tested image tags")
+    assert sbom < provenance < promotion
+    assert sbom_attestation < promotion
+
+
+def test_scheduled_rebuild_reads_base_digest_from_buildx_manifest() -> None:
+    workflow = SCHEDULED_REBUILD_WORKFLOW.read_text(encoding="utf-8")
+    assert "docker buildx imagetools inspect dhi.io/python:3.14-debian13" in workflow
+    assert "--format '{{json .Manifest}}' | jq -er '.digest'" in workflow
+    assert "^sha256:[0-9a-f]{64}$" in workflow
+
+
+def test_integration_runner_exposes_webhook_and_exports_webhook_url() -> None:
+    runner = INTEGRATION_RUNNER.read_text(encoding="utf-8")
+    assert '"${WEBHOOK_FORWARD_PORT}:8888"' in runner
+    assert 'WEBHOOK_URL="http://localhost:${WEBHOOK_FORWARD_PORT}"' in runner
+    assert "export WEBHOOK_URL" in runner
+    assert 'wait_for_forward "$WEBHOOK_URL/"' in runner
 
 
 def test_external_dns_v023_helm_values_are_explicit_and_supported() -> None:
