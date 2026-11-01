@@ -25,11 +25,14 @@ jobs:
           username: ${{ secrets.DOCKER_HUB_RO_USER }}
           password: ${{ secrets.DOCKER_HUB_RO_PAT }}
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
       - name: Check base image for updates
         id: base-digest
         run: |
-          DIGEST=$(docker manifest inspect dhi.io/python:3.14-debian13 | jq -r '.digest')
-          test -n "$DIGEST" && test "$DIGEST" != "null"
+          DIGEST=$(docker buildx imagetools inspect dhi.io/python:3.14-debian13 --format '{{json .Manifest}}' | jq -er '.digest')
+          [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
           echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
           echo "Current DHI Python 3.14 Debian 13 digest: $DIGEST"
 
