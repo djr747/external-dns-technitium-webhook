@@ -80,9 +80,9 @@ def test_local_runner_uses_direct_technitium_tls_and_http_health() -> None:
     assert "pkill -f" not in runner
     assert "HEALTH_FORWARD_PID=$!" in runner
     assert "TECHNITIUM_FORWARD_PID=$!" in runner
-    assert 'kill "${HEALTH_FORWARD_PID}"' in runner
-    assert 'kill "${TECHNITIUM_FORWARD_PID}"' in runner
-    assert 'kill "${EXTERNAL_DNS_LOG_PID}"' in runner
+    assert 'kill "$HEALTH_FORWARD_PID"' in runner
+    assert 'kill "$TECHNITIUM_FORWARD_PID"' in runner
+    assert 'kill "$EXTERNAL_DNS_LOG_PID"' in runner
     assert "TECHNITIUM_USERNAME=$TECHNITIUM_USERNAME" not in runner
 
 

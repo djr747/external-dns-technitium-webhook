@@ -10,9 +10,7 @@ HELM_EXAMPLE = Path(__file__).parents[2] / "helm" / "values-webhook-example.yaml
 INTEGRATION_HELM_VALUES = (
     Path(__file__).parents[2] / "tests" / "integration" / "helm" / "external-dns-values.yaml"
 )
-INTEGRATION_RUNNER = (
-    Path(__file__).parents[2] / "local-ci-setup" / "run-integration-tests.sh"
-)
+INTEGRATION_RUNNER = Path(__file__).parents[2] / "local-ci-setup" / "run-integration-tests.sh"
 
 
 def test_ci_skips_push_jobs_only_when_the_branch_has_an_open_pr() -> None:
@@ -82,9 +80,9 @@ def test_scheduled_rebuild_reads_base_digest_from_buildx_manifest() -> None:
 def test_integration_runner_exposes_webhook_and_exports_webhook_url() -> None:
     runner = INTEGRATION_RUNNER.read_text(encoding="utf-8")
     assert '"${WEBHOOK_FORWARD_PORT}:8888"' in runner
-    assert "WEBHOOK_URL=\"http://localhost:${WEBHOOK_FORWARD_PORT}\"" in runner
+    assert 'WEBHOOK_URL="http://localhost:${WEBHOOK_FORWARD_PORT}"' in runner
     assert "export WEBHOOK_URL" in runner
-    assert "wait_for_forward \"$WEBHOOK_URL/\"" in runner
+    assert 'wait_for_forward "$WEBHOOK_URL/"' in runner
 
 
 def test_external_dns_v023_helm_values_are_explicit_and_supported() -> None:
