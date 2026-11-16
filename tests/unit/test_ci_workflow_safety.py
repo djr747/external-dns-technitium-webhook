@@ -86,6 +86,15 @@ def test_scheduled_rebuild_reads_base_digest_from_buildx_manifest() -> None:
     assert "^sha256:[0-9a-f]{64}$" in workflow
 
 
+def test_scheduled_rebuild_only_opens_issue_for_a_positive_critical_count() -> None:
+    workflow = SCHEDULED_REBUILD_WORKFLOW.read_text(encoding="utf-8")
+    issue_step = workflow[workflow.index("- name: Create issue if critical findings remain") :]
+    condition = issue_step.split("\n        uses:", maxsplit=1)[0]
+
+    assert "steps.vuln-check.outputs.critical != ''" in condition
+    assert "fromJSON(steps.vuln-check.outputs.critical) > 0" in condition
+
+
 def test_integration_runner_exposes_webhook_and_exports_webhook_url() -> None:
     runner = INTEGRATION_RUNNER.read_text(encoding="utf-8")
     assert '"${WEBHOOK_FORWARD_PORT}:8888"' in runner
