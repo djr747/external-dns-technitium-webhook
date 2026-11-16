@@ -6,10 +6,10 @@ requires-python = "==3.14.*"
 
 [[packages]]
 name = "annotated-doc"
-version = "0.0.5"
+version = "0.0.6"
 index = "https://pypi.org/simple"
-sdist = { url = "https://files.pythonhosted.org/packages/5a/8e/38aa427ed5402449e226975b649c5dc73ccadfefeb95e6aecb8f8ea4b6b6/annotated_doc-0.0.5.tar.gz", upload-time = 2026-07-28T13:50:58Z, size = 10758, hashes = { sha256 = "c7e58ce09192557605d8bbd92836d7e1d520ac9580096042c0bfd197efacf1bb" } }
-wheels = [{ url = "https://files.pythonhosted.org/packages/3e/30/e900b21425a860e195f32e37657aa1f7c7f2b1bfb26f03ca209b90933c06/annotated_doc-0.0.5-py3-none-any.whl", upload-time = 2026-07-28T13:50:57Z, size = 5302, hashes = { sha256 = "117bac03a25ede5df5440e855b32d556049ca169ead221505badf432fed4b101" } }]
+sdist = { url = "https://files.pythonhosted.org/packages/0f/6e/a61e86e43bb6039b31a33a8f5fba76fe1cdacf3661e7b9756d4ff1b28cdc/annotated_doc-0.0.6.tar.gz", upload-time = 2026-11-10T18:17:11Z, size = 10767, hashes = { sha256 = "7969bb69912085b2285849c0dcac0b4b374fd180c13cf10a87f284ffcf347bbf" } }
+wheels = [{ url = "https://files.pythonhosted.org/packages/cd/f5/3dd85d583e55be76cd02b1fc9bbec771b12d63124b01661d9535ccf8721f/annotated_doc-0.0.6-py3-none-any.whl", upload-time = 2026-11-10T18:17:10Z, size = 5293, hashes = { sha256 = "361ca0950cc7082f53fa69e9328409f40a62c61e57e0a47e1825a08078a58a53" } }]
 
 [[packages]]
 name = "annotated-types"
@@ -20,17 +20,17 @@ wheels = [{ url = "https://files.pythonhosted.org/packages/99/91/8acff4f5e50511b
 
 [[packages]]
 name = "anyio"
-version = "4.15.1"
+version = "4.16.0"
 index = "https://pypi.org/simple"
-sdist = { url = "https://files.pythonhosted.org/packages/a9/d2/f4d173e22df740bc37b1db102b386ba719b66e95b0f0d751f556b387e6d2/anyio-4.15.1.tar.gz", upload-time = 2026-09-05T10:42:39Z, size = 276966, hashes = { sha256 = "9f28306018cbd6d329e64a36d58256edff76dd996fe423bc957326e578b82a94" } }
-wheels = [{ url = "https://files.pythonhosted.org/packages/12/b8/4bd346e22b28902df4d651910f5242c28d84e4a5c2435ca5c3f797ed7e2e/anyio-4.15.1-py3-none-any.whl", upload-time = 2026-09-05T10:42:37Z, size = 132079, hashes = { sha256 = "6152fdbbf9a77fdec97731721bebf7c4c44f7c29b424b0065826173efc7ed101" } }]
+sdist = { url = "https://files.pythonhosted.org/packages/a1/98/7e457a3b014976887a050561955c0b76e1e7e2d6e27b78ecef2ef80518f2/anyio-4.16.0.tar.gz", upload-time = 2026-11-01T11:20:07Z, size = 310971, hashes = { sha256 = "59bb03251907983d1603d27c3087ddb1e93299ea2163adcdba37899a4fb12ffb" } }
+wheels = [{ url = "https://files.pythonhosted.org/packages/a9/16/7757fb84c819accc7d7e9af5291b261e4abb8627ee040f99e7d35ef2457a/anyio-4.16.0-py3-none-any.whl", upload-time = 2026-11-01T11:20:05Z, size = 134521, hashes = { sha256 = "c66ae634e0b8228396b801741beb3294326d4b6102f7bba4041c0dfb58c29026" } }]
 
 [[packages]]
 name = "click"
-version = "8.5.0"
+version = "8.5.1"
 index = "https://pypi.org/simple"
-sdist = { url = "https://files.pythonhosted.org/packages/c7/0e/7fa0ef50764b67090eca4114772a2abf8b6148198475e54c660b97caeee6/click-8.5.0.tar.gz", upload-time = 2026-08-26T13:33:14Z, size = 382235, hashes = { sha256 = "ba0d2089de75ea0310e2dde03160e6ca10009947fb95a182f9b54021bb272e34" } }
-wheels = [{ url = "https://files.pythonhosted.org/packages/58/50/6c0d534c5f134586a8e1ba4e330569e32f057e33372ae556463212fb4cd3/click-8.5.0-py3-none-any.whl", upload-time = 2026-08-26T13:33:12Z, size = 125251, hashes = { sha256 = "255bc9599cf7748b4b1a446ccc735421bd08a2ae529a8b88597d3de5664ee360" } }]
+sdist = { url = "https://files.pythonhosted.org/packages/45/37/edbf1b0707709013c0cf2e8317e03d97ed29bf4cac709fe328904ae92a38/click-8.5.1.tar.gz", upload-time = 2026-11-06T17:37:01Z, size = 399151, hashes = { sha256 = "9bbfada76703fd1d784b83eea012e3e8c6a001a876543ef104fa56aaaeb072b4" } }
+wheels = [{ url = "https://files.pythonhosted.org/packages/31/7d/164b7ffc8624fe9efb4221bf9af485d5c1e41b9ae118045d2b6dc5457d8b/click-8.5.1-py3-none-any.whl", upload-time = 2026-11-06T17:36:59Z, size = 126163, hashes = { sha256 = "8bb5376d2006950386f8c6427613334a2acadc5f559cb80e638d00b4df957e37" } }]
 
 [[packages]]
 name = "fastapi"
@@ -234,10 +234,10 @@ wheels = [{ url = "https://files.pythonhosted.org/packages/49/d3/b8441a820a491dd
 
 [[packages]]
 name = "typing-inspection"
-version = "0.4.4"
+version = "0.4.5"
 index = "https://pypi.org/simple"
-sdist = { url = "https://files.pythonhosted.org/packages/a3/26/b09b8010994eccc3c09092e6b34058f36a460eea2d4c3e8b910c695975a0/typing_inspection-0.4.4.tar.gz", upload-time = 2026-08-12T12:37:25Z, size = 76928, hashes = { sha256 = "547274fa6b0a561ccf549cc9524b999a578e737d015d8709d021f9d0d13bea47" } }
-wheels = [{ url = "https://files.pythonhosted.org/packages/67/81/4add07e5172b7ac40d8ed5ff580409a7801a4fe26d529bdd915401dabfbe/typing_inspection-0.4.4-py3-none-any.whl", upload-time = 2026-08-12T12:37:24Z, size = 14750, hashes = { sha256 = "65b8397ba37ccbce054456aaccddfc91e6e3083c92824df348d96ca832f3f147" } }]
+sdist = { url = "https://files.pythonhosted.org/packages/ff/50/0195198eb1d75bab716bb0a813abea4cc394bfa17a92a189f021a34859af/typing_inspection-0.4.5.tar.gz", upload-time = 2026-11-04T14:13:23Z, size = 81194, hashes = { sha256 = "7f16c411e7930dc79596d42ab44672a3fe5f60eb34b781a1647e7872363120c7" } }
+wheels = [{ url = "https://files.pythonhosted.org/packages/de/0c/ea2544850a7c135e15033a5c7a8e7211136184b7ae63e2239d557c2b3019/typing_inspection-0.4.5-py3-none-any.whl", upload-time = 2026-11-04T14:13:22Z, size = 14874, hashes = { sha256 = "bc210535442b39e1bf2805e0c7a17dfd6a4ace760c84c7f7d16245d23a6b1c39" } }]
 
 [[packages]]
 name = "uvicorn"
