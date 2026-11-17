@@ -28,12 +28,12 @@ def is_debian_package_manager(value: str) -> bool:
 
 
 def convert_report(report: dict[str, Any], *, architecture: str, os_version: str) -> dict[str, Any]:
-    """Map unambiguous, fixable Debian OS findings to Copa v1alpha1."""
+    """Map fixable Debian OS findings to Copa v1alpha1."""
     vulnerabilities = report.get("vulnerabilities")
     if not isinstance(vulnerabilities, list):
         raise ValueError("Snyk report must contain a vulnerabilities array")
 
-    updates: dict[tuple[str, str], dict[str, str]] = {}
+    updates: dict[tuple[str, str, str], dict[str, str]] = {}
     for item in vulnerabilities:
         if not isinstance(item, dict):
             raise ValueError("Snyk vulnerability entries must be objects")
@@ -62,20 +62,17 @@ def convert_report(report: dict[str, Any], *, architecture: str, os_version: str
         ):
             raise ValueError("fixable Debian findings need package, installed version, and ID")
 
-        key = (name, installed)
+        fixed_version = fixed_versions[0]
+        key = (name, installed, fixed_version)
         update = {
             "name": name,
             "installedVersion": installed,
-            "fixedVersion": fixed_versions[0],
+            "fixedVersion": fixed_version,
             "vulnerabilityID": vulnerability_id,
         }
-        previous = updates.get(key)
-        if previous and previous["fixedVersion"] != update["fixedVersion"]:
-            raise ValueError(
-                f"conflicting fixed versions for {name} {installed}; refusing ambiguous patch"
-            )
-        if not previous:
-            updates[key] = update
+        # Keep different per-CVE minimum fixes. Copa collapses updates for a
+        # package using Debian version ordering and selects the highest fix.
+        updates.setdefault(key, update)
 
     return {
         "apiVersion": "v1alpha1",
@@ -83,7 +80,15 @@ def convert_report(report: dict[str, Any], *, architecture: str, os_version: str
             "os": {"type": "debian", "version": os_version},
             "config": {"arch": architecture},
         },
-        "updates": sorted(updates.values(), key=lambda item: item["name"]),
+        "updates": sorted(
+            updates.values(),
+            key=lambda item: (
+                item["name"],
+                item["installedVersion"],
+                item["fixedVersion"],
+                item["vulnerabilityID"],
+            ),
+        ),
     }
 
 

@@ -78,7 +78,7 @@ def test_deduplicates_findings_for_the_same_package_when_the_fix_agrees() -> Non
     assert manifest["updates"][0]["vulnerabilityID"] == "CVE-1"
 
 
-def test_rejects_conflicting_fixes_for_the_same_installed_package() -> None:
+def test_preserves_successive_cve_fixes_for_the_same_installed_package() -> None:
     report = {
         "vulnerabilities": [
             {
@@ -98,8 +98,28 @@ def test_rejects_conflicting_fixes_for_the_same_installed_package() -> None:
         ]
     }
 
-    with pytest.raises(ValueError, match="conflicting fixed versions"):
-        convert_report(report, architecture="amd64", os_version="13")
+    manifest = convert_report(report, architecture="amd64", os_version="13")
+
+    expected = {
+        (
+            finding["packageName"],
+            finding["version"],
+            finding["fixedIn"][0],
+            finding["id"],
+        )
+        for finding in report["vulnerabilities"]
+    }
+    actual = {
+        (
+            update["name"],
+            update["installedVersion"],
+            update["fixedVersion"],
+            update["vulnerabilityID"],
+        )
+        for update in manifest["updates"]
+    }
+
+    assert actual == expected
 
 
 def test_rejects_missing_snyk_vulnerability_list() -> None:
