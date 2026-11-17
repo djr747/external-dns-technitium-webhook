@@ -387,20 +387,25 @@ jobs:
               labels: ['security', 'critical']
             });
 
-      - name: Comment on latest commit
+      - name: Add successful rebuild details to run summary
         if: success() && github.event_name == 'schedule'
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
-        with:
-          script: |
-            const critical = ${{ steps.vuln-check.outputs.critical }};
-            const high = ${{ steps.vuln-check.outputs.high }};
-            const body = `✅ **Scheduled security rebuild passed**\n\nPromoted image tag: \`${{ steps.version.outputs.date-tag }}\`\nCopa package updates: ${{ steps.reports.outputs.patch-count }}\nFinal Snyk findings: ${critical} critical, ${high} high\nBase image digest: \`${{ needs.check-for-updates.outputs.base-image-digest }}\`\n\n[View run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})`;
-            await github.rest.repos.createCommitComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              commit_sha: context.sha,
-              body
-            });
+        env:
+          DATE_TAG: ${{ steps.version.outputs.date-tag }}
+          PATCH_COUNT: ${{ steps.reports.outputs.patch-count }}
+          CRITICAL: ${{ steps.vuln-check.outputs.critical }}
+          HIGH: ${{ steps.vuln-check.outputs.high }}
+          BASE_IMAGE_DIGEST: ${{ needs.check-for-updates.outputs.base-image-digest }}
+          TESTED_IMAGE: ${{ steps.patched-image.outputs.image || steps.candidate-image.outputs.image }}
+        run: |
+          {
+            printf '%s\n' '### Scheduled security rebuild passed' ''
+            printf -- '- Promoted image tag: **%s**\n' "$DATE_TAG"
+            printf -- '- Copa package updates: %s\n' "$PATCH_COUNT"
+            printf -- '- Final Snyk findings: %s critical, %s high\n' "$CRITICAL" "$HIGH"
+            printf -- '- Base image digest: %s\n' "$BASE_IMAGE_DIGEST"
+            printf -- '- Tested image: %s\n' "$TESTED_IMAGE"
+            printf -- '- [View run](%s/%s/actions/runs/%s)\n' "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload security rebuild reports
         if: always()
