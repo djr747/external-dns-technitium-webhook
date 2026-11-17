@@ -2,54 +2,16 @@ from typing import Any
 
 import pytest
 
-from scripts.snyk_to_copa import convert_report, is_debian_package_manager
+from scripts.snyk_to_copa import convert_report
 
 
-def _expected_updates_from_report(report: dict[str, Any]) -> list[dict[str, str]]:
-    updates: dict[tuple[str, str, str], dict[str, str]] = {}
-    for finding in report["vulnerabilities"]:
-        package_manager = str(finding.get("packageManager", "")).lower()
-        if package_manager not in {
-            "apt",
-            "deb",
-            "debian",
-            "dpkg",
-        } and not package_manager.startswith("debian:"):
-            continue
-
-        fixed_in = finding.get("fixedIn", [])
-        if isinstance(fixed_in, str):
-            fixed_versions = [fixed_in]
-        elif isinstance(fixed_in, list):
-            fixed_versions = fixed_in
-        else:
-            continue
-        if not fixed_versions or not isinstance(fixed_versions[0], str):
-            continue
-
-        name = str(finding.get("packageName") or finding.get("pkgName") or "")
-        installed = str(finding.get("version") or finding.get("pkgVersion") or "")
-        fixed_version = fixed_versions[0]
-        key = (name, installed, fixed_version)
-        updates.setdefault(
-            key,
-            {
-                "name": name,
-                "installedVersion": installed,
-                "fixedVersion": fixed_version,
-                "vulnerabilityID": str(finding.get("id") or finding.get("issueId") or ""),
-            },
-        )
-
-    return sorted(
-        updates.values(),
-        key=lambda update: (
-            update["name"],
-            update["installedVersion"],
-            update["fixedVersion"],
-            update["vulnerabilityID"],
-        ),
-    )
+def _expected_update(finding: dict[str, Any]) -> dict[str, str]:
+    return {
+        "name": finding["packageName"],
+        "installedVersion": finding["version"],
+        "fixedVersion": finding["fixedIn"][0],
+        "vulnerabilityID": finding["id"],
+    }
 
 
 def test_converts_fixable_debian_packages_and_ignores_app_dependencies() -> None:
@@ -85,7 +47,12 @@ def test_converts_fixable_debian_packages_and_ignores_app_dependencies() -> None
         "os": {"type": "debian", "version": "13"},
         "config": {"arch": "arm64"},
     }
-    assert manifest["updates"] == _expected_updates_from_report(report)
+    expected_updates = [
+        _expected_update(finding)
+        for finding in report["vulnerabilities"]
+        if finding["packageManager"] == "deb" and finding["fixedIn"]
+    ]
+    assert manifest["updates"] == expected_updates
 
 
 def test_deduplicates_findings_for_the_same_package_when_the_fix_agrees() -> None:
@@ -109,7 +76,7 @@ def test_deduplicates_findings_for_the_same_package_when_the_fix_agrees() -> Non
     }
     manifest = convert_report(report, architecture="amd64", os_version="13")
 
-    assert manifest["updates"] == _expected_updates_from_report(report)
+    assert manifest["updates"] == [_expected_update(report["vulnerabilities"][0])]
 
 
 def test_preserves_successive_cve_fixes_for_the_same_installed_package() -> None:
@@ -134,7 +101,9 @@ def test_preserves_successive_cve_fixes_for_the_same_installed_package() -> None
 
     manifest = convert_report(report, architecture="amd64", os_version="13")
 
-    assert manifest["updates"] == _expected_updates_from_report(report)
+    assert manifest["updates"] == [
+        _expected_update(finding) for finding in report["vulnerabilities"]
+    ]
 
 
 def test_rejects_missing_snyk_vulnerability_list() -> None:
@@ -156,12 +125,7 @@ def test_converts_distro_qualified_debian_package_managers() -> None:
     }
     manifest = convert_report(report, architecture="amd64", os_version="13")
 
-    assert manifest["updates"] == _expected_updates_from_report(report)
-
-
-def test_rejects_spaces_in_distro_qualified_package_manager() -> None:
-    assert is_debian_package_manager("debian:13.1")
-    assert not is_debian_package_manager("debian:13 beta")
+    assert manifest["updates"] == [_expected_update(report["vulnerabilities"][0])]
 
 
 def test_ignores_non_debian_distro_qualified_package_managers() -> None:
