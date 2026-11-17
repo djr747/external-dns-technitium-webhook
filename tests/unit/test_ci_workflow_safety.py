@@ -171,6 +171,13 @@ def test_snyk_container_reports_reach_json_gate_after_scan_errors() -> None:
         assert "exit 1" in workflow
 
 
+def test_snyk_sarif_security_severity_is_numeric_or_removed() -> None:
+    for workflow_path in (SECURITY_WORKFLOW, SCHEDULED_REBUILD_WORKFLOW, RELEASE_WORKFLOW):
+        workflow = workflow_path.read_text(encoding="utf-8")
+        assert "try tonumber catch null" in workflow
+        assert "select(.value != null)" in workflow
+
+
 def test_release_snyk_gate_has_no_zlib_exception() -> None:
     release = RELEASE_WORKFLOW.read_text(encoding="utf-8")
     assert "SNYK-WOLFILATEST-ZLIB-19698962" not in release

@@ -303,7 +303,17 @@ jobs:
         if: always()
         run: |
           if [ -f snyk-release-scan.sarif ]; then
-            if jq 'walk(if type == "object" then with_entries(select(.key != "security-severity" or .value != null)) else . end)' \
+            if jq 'walk(
+              if type == "object" then
+                with_entries(
+                  if .key != "security-severity" then .
+                  elif (.value | type) == "number" then .
+                  elif (.value | type) == "string" then
+                    .value |= (try tonumber catch null) | select(.value != null)
+                  else empty end
+                )
+              else . end
+            )' \
                 snyk-release-scan.sarif > snyk-release-scan.normalized.sarif; then
               mv snyk-release-scan.normalized.sarif snyk-release-scan.sarif
             else
