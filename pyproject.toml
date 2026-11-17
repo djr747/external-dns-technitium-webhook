@@ -190,6 +190,7 @@ addopts = [
     "-m", "not integration",  # Skip integration tests by default (run with -m integration or -m "" to include them)
 ]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 markers = [
     "unit: Unit tests",
     "integration: Integration tests",
