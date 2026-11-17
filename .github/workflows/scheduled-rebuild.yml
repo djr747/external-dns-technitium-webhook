@@ -231,7 +231,7 @@ jobs:
 
       - name: Upload candidate Snyk SARIF (amd64)
         if: always() && hashFiles('snyk-amd64.sarif') != ''
-        uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
         continue-on-error: true
         with:
           sarif_file: snyk-amd64.sarif
@@ -239,7 +239,7 @@ jobs:
 
       - name: Upload candidate Snyk SARIF (arm64)
         if: always() && hashFiles('snyk-arm64.sarif') != ''
-        uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
         continue-on-error: true
         with:
           sarif_file: snyk-arm64.sarif
@@ -247,7 +247,7 @@ jobs:
 
       - name: Upload final Snyk SARIF (amd64)
         if: always() && hashFiles('snyk-final-amd64.sarif') != ''
-        uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
         continue-on-error: true
         with:
           sarif_file: snyk-final-amd64.sarif
@@ -255,7 +255,7 @@ jobs:
 
       - name: Upload final Snyk SARIF (arm64)
         if: always() && hashFiles('snyk-final-arm64.sarif') != ''
-        uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
         continue-on-error: true
         with:
           sarif_file: snyk-final-arm64.sarif
@@ -301,7 +301,7 @@ jobs:
           cluster_name: security-rebuild
 
       - name: Set up Python for integration tests
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: '3.14'
           cache: pip
