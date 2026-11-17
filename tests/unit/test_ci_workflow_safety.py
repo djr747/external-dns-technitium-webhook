@@ -95,6 +95,20 @@ def test_scheduled_rebuild_only_opens_issue_for_a_positive_critical_count() -> N
     assert "fromJSON(steps.vuln-check.outputs.critical) > 0" in condition
 
 
+def test_manual_rebuild_uses_selected_commit_without_promoting_non_main_images() -> None:
+    workflow = SCHEDULED_REBUILD_WORKFLOW.read_text(encoding="utf-8")
+    assert "ref: ${{ github.sha }}" in workflow
+    assert "ref: main" not in workflow
+
+    promote_step = workflow[
+        workflow.index("- name: Promote tested image tags") :
+    ].split("- name: Create issue if critical findings remain", maxsplit=1)[0]
+    assert "if: github.ref == 'refs/heads/main'" in promote_step
+
+    monitor_job = workflow[workflow.index("  snyk-monitor:") :]
+    assert "github.ref == 'refs/heads/main'" in monitor_job
+
+
 def test_integration_runner_exposes_webhook_and_exports_webhook_url() -> None:
     runner = INTEGRATION_RUNNER.read_text(encoding="utf-8")
     assert '"${WEBHOOK_FORWARD_PORT}:8888"' in runner

@@ -58,7 +58,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: main
+          ref: ${{ github.sha }}
           fetch-depth: 0
 
       - name: Set up QEMU
@@ -349,6 +349,7 @@ jobs:
           push-to-registry: true
 
       - name: Promote tested image tags
+        if: github.ref == 'refs/heads/main'
         env:
           IMAGE_TO_TEST: ${{ steps.patched-image.outputs.image || steps.candidate-image.outputs.image }}
           DATE_TAG: ${{ steps.version.outputs.date-tag }}
@@ -413,7 +414,7 @@ jobs:
     name: Snyk Container Monitoring
     runs-on: ubuntu-26.04
     needs: [check-for-updates, rebuild-image]
-    if: ${{ needs.check-for-updates.outputs.rebuild-needed == 'true' && needs.rebuild-image.result == 'success' }}
+    if: ${{ github.ref == 'refs/heads/main' && needs.check-for-updates.outputs.rebuild-needed == 'true' && needs.rebuild-image.result == 'success' }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
