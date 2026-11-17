@@ -22,8 +22,7 @@ def is_debian_package_manager(value: str) -> bool:
         distro == "debian"
         and bool(separator)
         and bool(version)
-        and all(character.isalnum() or character in ". _+-" for character in version)
-        and " " not in version
+        and all(character.isalnum() or character in ".+-" for character in version)
     )
 
 
@@ -62,6 +61,8 @@ def convert_report(report: dict[str, Any], *, architecture: str, os_version: str
         ):
             raise ValueError("fixable Debian findings need package, installed version, and ID")
 
+        # Snyk puts the minimum fixed version for this finding first; alternate
+        # fixed versions are not separate package updates for the same CVE.
         fixed_version = fixed_versions[0]
         key = (name, installed, fixed_version)
         update = {

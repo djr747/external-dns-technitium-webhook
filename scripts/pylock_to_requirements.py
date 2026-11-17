@@ -10,6 +10,8 @@ from pathlib import Path
 from typing import Any
 
 PACKAGE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+# pylock stores concrete PEP 440 versions, not specifiers: allow common epoch,
+# prerelease, postrelease, and local-version characters while rejecting `*`.
 PACKAGE_VERSION = re.compile(r"^[A-Za-z0-9][A-Za-z0-9.+!_-]*$")
 
 

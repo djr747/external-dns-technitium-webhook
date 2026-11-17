@@ -122,26 +122,7 @@ jobs:
 
       - name: Normalize Snyk container SARIF
         if: always()
-        run: |
-          if [ -f snyk-container.sarif ]; then
-            if jq 'walk(
-              if type == "object" then
-                with_entries(
-                  if .key != "security-severity" then .
-                  elif (.value | type) == "number" then .
-                  elif (.value | type) == "string" then
-                    .value |= (try tonumber catch null) | select(.value != null)
-                  else empty end
-                )
-              else . end
-            )' \
-                snyk-container.sarif > snyk-container.normalized.sarif; then
-              mv snyk-container.normalized.sarif snyk-container.sarif
-            else
-              echo "Snyk SARIF normalization failed; preserving the original report"
-              rm -f snyk-container.normalized.sarif
-            fi
-          fi
+        run: python3 scripts/normalize_sarif.py snyk-container.sarif
 
       - name: Upload Snyk container SARIF to GitHub Security
         uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
@@ -376,26 +357,7 @@ jobs:
 
       - name: Normalize Snyk container SARIF
         if: always()
-        run: |
-          if [ -f snyk-container.sarif ]; then
-            if jq 'walk(
-              if type == "object" then
-                with_entries(
-                  if .key != "security-severity" then .
-                  elif (.value | type) == "number" then .
-                  elif (.value | type) == "string" then
-                    .value |= (try tonumber catch null) | select(.value != null)
-                  else empty end
-                )
-              else . end
-            )' \
-                snyk-container.sarif > snyk-container.normalized.sarif; then
-              mv snyk-container.normalized.sarif snyk-container.sarif
-            else
-              echo "Snyk SARIF normalization failed; preserving the original report"
-              rm -f snyk-container.normalized.sarif
-            fi
-          fi
+        run: python3 scripts/normalize_sarif.py snyk-container.sarif
 
       - name: Upload Snyk container SARIF to GitHub Security
         uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3

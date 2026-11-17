@@ -1,81 +1,115 @@
+from typing import Any
+
 import pytest
 
-from scripts.snyk_to_copa import convert_report
+from scripts.snyk_to_copa import convert_report, is_debian_package_manager
+
+
+def _expected_updates_from_report(report: dict[str, Any]) -> list[dict[str, str]]:
+    updates: dict[tuple[str, str, str], dict[str, str]] = {}
+    for finding in report["vulnerabilities"]:
+        package_manager = str(finding.get("packageManager", "")).lower()
+        if package_manager not in {
+            "apt",
+            "deb",
+            "debian",
+            "dpkg",
+        } and not package_manager.startswith("debian:"):
+            continue
+
+        fixed_in = finding.get("fixedIn", [])
+        if isinstance(fixed_in, str):
+            fixed_versions = [fixed_in]
+        elif isinstance(fixed_in, list):
+            fixed_versions = fixed_in
+        else:
+            continue
+        if not fixed_versions or not isinstance(fixed_versions[0], str):
+            continue
+
+        name = str(finding.get("packageName") or finding.get("pkgName") or "")
+        installed = str(finding.get("version") or finding.get("pkgVersion") or "")
+        fixed_version = fixed_versions[0]
+        key = (name, installed, fixed_version)
+        updates.setdefault(
+            key,
+            {
+                "name": name,
+                "installedVersion": installed,
+                "fixedVersion": fixed_version,
+                "vulnerabilityID": str(finding.get("id") or finding.get("issueId") or ""),
+            },
+        )
+
+    return sorted(
+        updates.values(),
+        key=lambda update: (
+            update["name"],
+            update["installedVersion"],
+            update["fixedVersion"],
+            update["vulnerabilityID"],
+        ),
+    )
 
 
 def test_converts_fixable_debian_packages_and_ignores_app_dependencies() -> None:
-    manifest = convert_report(
-        {
-            "vulnerabilities": [
-                {
-                    "id": "SNYK-DEBIAN13-ZLIB-123",
-                    "packageManager": "deb",
-                    "packageName": "zlib1g",
-                    "version": "1.3.dfsg+really1.3.1-1",
-                    "fixedIn": ["1.3.dfsg+really1.3.1-2"],
-                },
-                {
-                    "id": "SNYK-PYTHON-FASTAPI-456",
-                    "packageManager": "pip",
-                    "packageName": "fastapi",
-                    "version": "0.140.0",
-                    "fixedIn": ["0.141.0"],
-                },
-                {
-                    "id": "SNYK-DEBIAN13-OPENSSL-789",
-                    "packageManager": "deb",
-                    "packageName": "openssl",
-                    "version": "3.0.0-1",
-                    "fixedIn": [],
-                },
-            ]
-        },
-        architecture="arm64",
-        os_version="13",
-    )
-
-    assert manifest == {
-        "apiVersion": "v1alpha1",
-        "metadata": {
-            "os": {"type": "debian", "version": "13"},
-            "config": {"arch": "arm64"},
-        },
-        "updates": [
+    report = {
+        "vulnerabilities": [
             {
-                "name": "zlib1g",
-                "installedVersion": "1.3.dfsg+really1.3.1-1",
-                "fixedVersion": "1.3.dfsg+really1.3.1-2",
-                "vulnerabilityID": "SNYK-DEBIAN13-ZLIB-123",
-            }
-        ],
+                "id": "SNYK-DEBIAN13-ZLIB-123",
+                "packageManager": "deb",
+                "packageName": "zlib1g",
+                "version": "1.3.dfsg+really1.3.1-1",
+                "fixedIn": ["1.3.dfsg+really1.3.1-2"],
+            },
+            {
+                "id": "SNYK-PYTHON-FASTAPI-456",
+                "packageManager": "pip",
+                "packageName": "fastapi",
+                "version": "0.140.0",
+                "fixedIn": ["0.141.0"],
+            },
+            {
+                "id": "SNYK-DEBIAN13-OPENSSL-789",
+                "packageManager": "deb",
+                "packageName": "openssl",
+                "version": "3.0.0-1",
+                "fixedIn": [],
+            },
+        ]
     }
+    manifest = convert_report(report, architecture="arm64", os_version="13")
+
+    assert manifest["apiVersion"] == "v1alpha1"
+    assert manifest["metadata"] == {
+        "os": {"type": "debian", "version": "13"},
+        "config": {"arch": "arm64"},
+    }
+    assert manifest["updates"] == _expected_updates_from_report(report)
 
 
 def test_deduplicates_findings_for_the_same_package_when_the_fix_agrees() -> None:
-    manifest = convert_report(
-        {
-            "vulnerabilities": [
-                {
-                    "id": "CVE-1",
-                    "packageManager": "deb",
-                    "packageName": "zlib1g",
-                    "version": "1.3-1",
-                    "fixedIn": ["1.3-2"],
-                },
-                {
-                    "id": "CVE-2",
-                    "packageManager": "deb",
-                    "packageName": "zlib1g",
-                    "version": "1.3-1",
-                    "fixedIn": ["1.3-2"],
-                },
-            ]
-        },
-        architecture="amd64",
-        os_version="13",
-    )
+    report = {
+        "vulnerabilities": [
+            {
+                "id": "CVE-1",
+                "packageManager": "deb",
+                "packageName": "zlib1g",
+                "version": "1.3-1",
+                "fixedIn": ["1.3-2"],
+            },
+            {
+                "id": "CVE-2",
+                "packageManager": "deb",
+                "packageName": "zlib1g",
+                "version": "1.3-1",
+                "fixedIn": ["1.3-2"],
+            },
+        ]
+    }
+    manifest = convert_report(report, architecture="amd64", os_version="13")
 
-    assert manifest["updates"][0]["vulnerabilityID"] == "CVE-1"
+    assert manifest["updates"] == _expected_updates_from_report(report)
 
 
 def test_preserves_successive_cve_fixes_for_the_same_installed_package() -> None:
@@ -100,26 +134,7 @@ def test_preserves_successive_cve_fixes_for_the_same_installed_package() -> None
 
     manifest = convert_report(report, architecture="amd64", os_version="13")
 
-    expected = {
-        (
-            finding["packageName"],
-            finding["version"],
-            finding["fixedIn"][0],
-            finding["id"],
-        )
-        for finding in report["vulnerabilities"]
-    }
-    actual = {
-        (
-            update["name"],
-            update["installedVersion"],
-            update["fixedVersion"],
-            update["vulnerabilityID"],
-        )
-        for update in manifest["updates"]
-    }
-
-    assert actual == expected
+    assert manifest["updates"] == _expected_updates_from_report(report)
 
 
 def test_rejects_missing_snyk_vulnerability_list() -> None:
@@ -128,23 +143,25 @@ def test_rejects_missing_snyk_vulnerability_list() -> None:
 
 
 def test_converts_distro_qualified_debian_package_managers() -> None:
-    manifest = convert_report(
-        {
-            "vulnerabilities": [
-                {
-                    "id": "SNYK-DEBIAN13-ZLIB-123",
-                    "packageManager": "debian:13",
-                    "packageName": "zlib1g",
-                    "version": "1.3-1",
-                    "fixedIn": ["1.3-2"],
-                }
-            ]
-        },
-        architecture="amd64",
-        os_version="13",
-    )
+    report = {
+        "vulnerabilities": [
+            {
+                "id": "SNYK-DEBIAN13-ZLIB-123",
+                "packageManager": "debian:13",
+                "packageName": "zlib1g",
+                "version": "1.3-1",
+                "fixedIn": ["1.3-2"],
+            }
+        ]
+    }
+    manifest = convert_report(report, architecture="amd64", os_version="13")
 
-    assert manifest["updates"][0]["name"] == "zlib1g"
+    assert manifest["updates"] == _expected_updates_from_report(report)
+
+
+def test_rejects_spaces_in_distro_qualified_package_manager() -> None:
+    assert is_debian_package_manager("debian:13.1")
+    assert not is_debian_package_manager("debian:13 beta")
 
 
 def test_ignores_non_debian_distro_qualified_package_managers() -> None:

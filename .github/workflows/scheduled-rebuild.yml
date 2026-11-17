@@ -218,23 +218,7 @@ jobs:
 
       - name: Normalize Snyk SARIF reports
         if: always()
-        run: |
-          for report in snyk-amd64.sarif snyk-arm64.sarif snyk-final-amd64.sarif snyk-final-arm64.sarif; do
-            if [ -f "$report" ]; then
-              jq 'walk(
-                if type == "object" then
-                  with_entries(
-                    if .key != "security-severity" then .
-                    elif (.value | type) == "number" then .
-                    elif (.value | type) == "string" then
-                      .value |= (try tonumber catch null) | select(.value != null)
-                    else empty end
-                  )
-                else . end
-              )' \
-                "$report" > "$report.normalized" && mv "$report.normalized" "$report"
-            fi
-          done
+        run: python3 scripts/normalize_sarif.py snyk-amd64.sarif snyk-arm64.sarif snyk-final-amd64.sarif snyk-final-arm64.sarif
 
       - name: Upload candidate Snyk SARIF (amd64)
         if: always() && hashFiles('snyk-amd64.sarif') != ''
