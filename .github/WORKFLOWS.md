@@ -43,16 +43,19 @@ This repository uses a comprehensive CI/CD pipeline with security best practices
 
 **Triggers:** Daily at 02:00 UTC, manual dispatch
 
-**Purpose:** Automated security patching from base image updates
+**Purpose:** Rebuild, scan, optionally patch eligible OS packages, and test the candidate before moving public tags
 
 **Jobs:**
 - **Check for Updates**: Inspect the DHI Python base image
-- **Rebuild Image**: Force a multi-architecture rebuild with the latest base-image patches
-- **Vulnerability Scan**: Post-rebuild security check
+- **Rebuild Image**: Build a multi-architecture candidate from the latest DHI base
+- **Vulnerability Remediation**: Convert Snyk Debian OS findings to Copa's native report format and patch packages with a published fix
+- **Validation**: Rescan both architectures with Snyk, run the Kind integration suite against the tested candidate, and only then move `latest`, `latest-patched`, and the dated tag
 - **Snyk Monitor**: Track vulnerabilities over time
 
 **Key Features:**
-- Automatic daily rebuilds for CVE patching
+- Automatic daily rebuilds with a Snyk-only scanner path; Copa is explicitly invoked with its native report scanner
+- Candidate tags are kept separate until both the fixable high/critical Snyk gate and Kubernetes integration tests pass
+- Build provenance and an SPDX SBOM are attested for the tested image before promotion
 - No-cache builds to pull latest base images
 - Issue creation for critical vulnerabilities
 - Updates the mutable `latest` and `latest-patched` tags; release-version tags are not retagged
@@ -144,7 +147,7 @@ Add these secrets to your repository settings:
 
 Release builds create `1.2.3`, `1.2`, and `1` tags. The exact version tag is the stable release-specific image; the minor and major tags move only when a newer matching release is published.
 
-The scheduled security rebuild publishes `latest`, `latest-patched`, and a dated `latest-patched-<YYYYMMDD>` tag for both `linux/amd64` and `linux/arm64`. The first two are mutable and rebuilt daily from `main` to incorporate the latest Docker Hardened Images base-image patches. They do not retag release-version images.
+The scheduled security rebuild first publishes an isolated candidate tag for both `linux/amd64` and `linux/arm64`. It scans each platform with Snyk, optionally applies fixable Debian OS package updates with Copa's native report input, scans the tested image again, and runs the Kubernetes integration suite. Only after those checks pass does it move `latest`, `latest-patched`, and a dated `latest-patched-<YYYYMMDD>` tag. Release-version tags are not retagged. Copa is pinned in the workflow and is never allowed to select a default scanner.
 
 Pin an exact version tag (for example, `1.2.3`) or a digest for reproducible production deployments.
 

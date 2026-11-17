@@ -64,13 +64,13 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+        uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
         with:
           languages: ${{ matrix.language }}
           queries: security-extended,security-and-quality
 
       - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: '3.14'
           cache: 'pip'
@@ -81,7 +81,7 @@ jobs:
           python -m pip install --only-binary=:all: '.[dev]'
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+        uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
         with:
           category: "/language:${{matrix.language}}"
 
@@ -122,19 +122,10 @@ jobs:
 
       - name: Normalize Snyk container SARIF
         if: always()
-        run: |
-          if [ -f snyk-container.sarif ]; then
-            if jq 'walk(if type == "object" then with_entries(select(.key != "security-severity" or .value != null)) else . end)' \
-                snyk-container.sarif > snyk-container.normalized.sarif; then
-              mv snyk-container.normalized.sarif snyk-container.sarif
-            else
-              echo "Snyk SARIF normalization failed; preserving the original report"
-              rm -f snyk-container.normalized.sarif
-            fi
-          fi
+        run: python3 scripts/normalize_sarif.py snyk-container.sarif
 
       - name: Upload Snyk container SARIF to GitHub Security
-        uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
         if: always()
         continue-on-error: true
         with:
@@ -215,7 +206,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: '3.14'
 
@@ -260,7 +251,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: '3.14'
 
@@ -311,36 +302,35 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: '3.14'
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install --only-binary=:all: .
+          python scripts/pylock_to_requirements.py pylock.toml snyk-requirements.txt
+          python -m pip install --only-binary=:all: -r snyk-requirements.txt
+
+      - name: Set up Snyk CLI
+        uses: snyk/actions/setup@9adf32b1121593767fc3c057af55b55db032dc04 # v1.0.0
 
       - name: Run Snyk to check for vulnerabilities
-        uses: snyk/actions/python@9adf32b1121593767fc3c057af55b55db032dc04 # v1.0.0
+        run: snyk test --file=snyk-requirements.txt --package-manager=pip --severity-threshold=medium --sarif-file-output=snyk-code.sarif
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        with:
-          args: --severity-threshold=medium --sarif-file-output=snyk-code.sarif
 
       - name: Upload Snyk results to GitHub Security
-        uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
-        if: always()
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        if: always() && hashFiles('snyk-code.sarif') != ''
         with:
           sarif_file: snyk-code.sarif
 
       - name: Run Snyk monitor (track over time)
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: snyk/actions/python@9adf32b1121593767fc3c057af55b55db032dc04 # v1.0.0
+        run: snyk monitor --file=snyk-requirements.txt --package-manager=pip --project-name=${{ github.repository }}
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        with:
-          command: monitor
-          args: --project-name=${{ github.repository }}
 
       # Container scanning with Snyk
       # The base image lives in Docker's Hardened Images registry, which
@@ -367,26 +357,17 @@ jobs:
 
       - name: Normalize Snyk container SARIF
         if: always()
-        run: |
-          if [ -f snyk-container.sarif ]; then
-            if jq 'walk(if type == "object" then with_entries(select(.key != "security-severity" or .value != null)) else . end)' \
-                snyk-container.sarif > snyk-container.normalized.sarif; then
-              mv snyk-container.normalized.sarif snyk-container.sarif
-            else
-              echo "Snyk SARIF normalization failed; preserving the original report"
-              rm -f snyk-container.normalized.sarif
-            fi
-          fi
+        run: python3 scripts/normalize_sarif.py snyk-container.sarif
 
       - name: Upload Snyk container SARIF to GitHub Security
-        uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
         if: always()
         continue-on-error: true
         with:
           sarif_file: snyk-container.sarif
 
       - name: Set up Node.js for Snyk CLI
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '18'
 
@@ -411,7 +392,14 @@ jobs:
 
       - name: Fail on HIGH or CRITICAL Snyk vulnerabilities
         run: |
-          if [ ! -f snyk-container.json ]; then echo "snyk-container.json not found"; exit 0; fi
+          if [ ! -s snyk-container.json ]; then
+            echo "Snyk JSON report is missing or empty"
+            exit 1
+          fi
+          if ! jq -e '[.. | objects | .vulnerabilities? | select(type == "array")] | length > 0' snyk-container.json >/dev/null; then
+            echo "Snyk JSON report has no vulnerabilities array"
+            exit 1
+          fi
           # Gate policy (mirrors the container job): block only high/critical
           # findings that have a published fix; unfixable findings stay visible
           # in the SARIF/JSON artifacts and become blocking once a fix ships.
@@ -495,7 +483,7 @@ jobs:
           severity-cutoff: high
 
       - name: Upload Grype results
-        uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
         if: always()
         with:
           sarif_file: ${{ steps.grype.outputs.sarif }}

@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v2.0.1] - 2026-11-16
+
+### Changed
+
+- Scheduled security rebuilds now patch eligible Debian OS packages from Snyk
+  findings with Copa, scan both architectures, and run the Kubernetes
+  integration suite before promoting mutable image tags. Automatic runs are
+  limited to `main`; manual runs may also use `develop`, where tags are not
+  promoted.
+- Refresh runtime and development dependency pins, lock data, and GitHub
+  Actions used by CI and security workflows.
+
+### Fixed
+
+- Use Copa's supported `--version` flag so remediation can proceed.
+- Fail the security rebuild when either final Snyk report is missing, invalid,
+  or contains a scan error instead of counting it as zero vulnerabilities.
+
 ## [v2.0.0] - 2026-10-14
 
 ### Added

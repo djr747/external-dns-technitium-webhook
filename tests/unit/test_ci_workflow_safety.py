@@ -10,6 +10,7 @@ HELM_EXAMPLE = Path(__file__).parents[2] / "helm" / "values-webhook-example.yaml
 INTEGRATION_HELM_VALUES = (
     Path(__file__).parents[2] / "tests" / "integration" / "helm" / "external-dns-values.yaml"
 )
+INTEGRATION_RUNNER = Path(__file__).parents[2] / "local-ci-setup" / "run-integration-tests.sh"
 
 
 def test_ci_skips_push_jobs_only_when_the_branch_has_an_open_pr() -> None:
@@ -30,10 +31,22 @@ def test_security_skips_push_jobs_only_when_the_branch_has_an_open_pr() -> None:
 
 def test_security_workflow_uses_one_codeql_action_revision() -> None:
     workflow = SECURITY_WORKFLOW.read_text(encoding="utf-8")
-    codeql_action_sha = "24c54180a607b1449ed407dd24f251e4e9147c8d"
     codeql_lines = [line for line in workflow.splitlines() if "uses: github/codeql-action/" in line]
+    revisions = {line.split("@", 1)[1].split()[0] for line in codeql_lines if "@" in line}
+    versions = {line.rsplit("#", 1)[1].strip() for line in codeql_lines if "#" in line}
+
     assert codeql_lines
-    assert all(f"@{codeql_action_sha}" in line for line in codeql_lines)
+    assert len(revisions) == 1
+    assert len(versions) == 1
+
+
+def test_snyk_python_scan_uses_the_committed_lock_with_supported_cli() -> None:
+    workflow = SECURITY_WORKFLOW.read_text(encoding="utf-8")
+    assert "uses: snyk/actions/setup@9adf32b1121593767fc3c057af55b55db032dc04" in workflow
+    assert "scripts/pylock_to_requirements.py pylock.toml snyk-requirements.txt" in workflow
+    assert "python -m pip install --only-binary=:all: -r snyk-requirements.txt" in workflow
+    assert "snyk test --file=snyk-requirements.txt --package-manager=pip" in workflow
+    assert "uses: snyk/actions/python@" not in workflow
 
 
 def test_snyk_monitor_reads_outputs_from_declared_dependencies() -> None:
@@ -43,6 +56,81 @@ def test_snyk_monitor_reads_outputs_from_declared_dependencies() -> None:
         "needs.check-for-updates.outputs.rebuild-needed == 'true'"
         " && needs.rebuild-image.result == 'success'"
     ) in workflow
+
+
+def test_scheduled_rebuild_uses_snyk_native_copa_and_tests_before_promotion() -> None:
+    workflow = SCHEDULED_REBUILD_WORKFLOW.read_text(encoding="utf-8")
+    assert "--scanner native" in workflow
+    assert "copa --version" in workflow
+    assert "copa version" not in workflow
+    assert "scripts/snyk_to_copa.py" in workflow
+    assert "snyk-final-amd64.json" in workflow
+    assert "snyk-final-arm64.json" in workflow
+    assert "trivy" not in workflow.lower()
+
+    gate = workflow.index("- name: Enforce final Snyk fixable high/critical gate")
+    integration = workflow.index("bash local-ci-setup/run-integration-tests.sh")
+    promotion = workflow.index("- name: Promote tested image tags")
+    assert gate < integration < promotion
+
+
+def test_scheduled_rebuild_fails_closed_on_invalid_final_snyk_reports() -> None:
+    workflow = SCHEDULED_REBUILD_WORKFLOW.read_text(encoding="utf-8")
+    gate = workflow.split("- name: Enforce final Snyk fixable high/critical gate", 1)[1]
+    validation = gate.split("FIX=", 1)[0]
+
+    assert "for REPORT in snyk-final-amd64.json snyk-final-arm64.json" in validation
+    assert '.vulnerabilities | type == "array"' in validation
+    assert ".error? == null" in validation
+    assert "refusing to promote an unverified image" in validation
+
+
+def test_scheduled_rebuild_attests_tested_image_before_tag_promotion() -> None:
+    workflow = SCHEDULED_REBUILD_WORKFLOW.read_text(encoding="utf-8")
+    sbom = workflow.index("- name: Generate SBOM for tested image")
+    provenance = workflow.index("- name: Attest tested image provenance")
+    sbom_attestation = workflow.index("- name: Attest tested image SBOM")
+    promotion = workflow.index("- name: Promote tested image tags")
+    assert sbom < provenance < promotion
+    assert sbom_attestation < promotion
+
+
+def test_scheduled_rebuild_reads_base_digest_from_buildx_manifest() -> None:
+    workflow = SCHEDULED_REBUILD_WORKFLOW.read_text(encoding="utf-8")
+    assert "docker buildx imagetools inspect dhi.io/python:3.14-debian13" in workflow
+    assert "--format '{{json .Manifest}}' | jq -er '.digest'" in workflow
+    assert "^sha256:[0-9a-f]{64}$" in workflow
+
+
+def test_scheduled_rebuild_only_opens_issue_for_a_positive_critical_count() -> None:
+    workflow = SCHEDULED_REBUILD_WORKFLOW.read_text(encoding="utf-8")
+    issue_step = workflow[workflow.index("- name: Create issue if critical findings remain") :]
+    condition = issue_step.split("\n        uses:", maxsplit=1)[0]
+
+    assert "steps.vuln-check.outputs.critical != ''" in condition
+    assert "fromJSON(steps.vuln-check.outputs.critical) > 0" in condition
+
+
+def test_manual_rebuild_uses_selected_commit_without_promoting_non_main_images() -> None:
+    workflow = SCHEDULED_REBUILD_WORKFLOW.read_text(encoding="utf-8")
+    assert "ref: ${{ github.sha }}" in workflow
+    assert "ref: main" not in workflow
+
+    promote_step = workflow[workflow.index("- name: Promote tested image tags") :].split(
+        "- name: Create issue if critical findings remain", maxsplit=1
+    )[0]
+    assert "if: github.ref == 'refs/heads/main'" in promote_step
+
+    monitor_job = workflow[workflow.index("  snyk-monitor:") :]
+    assert "github.ref == 'refs/heads/main'" in monitor_job
+
+
+def test_integration_runner_exposes_webhook_and_exports_webhook_url() -> None:
+    runner = INTEGRATION_RUNNER.read_text(encoding="utf-8")
+    assert '"${WEBHOOK_FORWARD_PORT}:8888"' in runner
+    assert 'WEBHOOK_URL="http://localhost:${WEBHOOK_FORWARD_PORT}"' in runner
+    assert "export WEBHOOK_URL" in runner
+    assert 'wait_for_forward "$WEBHOOK_URL/"' in runner
 
 
 def test_external_dns_v023_helm_values_are_explicit_and_supported() -> None:
@@ -90,13 +178,38 @@ def test_v023_controller_chart_and_ga_annotations_are_used() -> None:
 
 
 def test_snyk_container_reports_reach_json_gate_after_scan_errors() -> None:
+    normalizer = Path(__file__).parents[2] / "scripts" / "normalize_sarif.py"
+    assert "security-severity" in normalizer.read_text(encoding="utf-8")
     for workflow_path in (SECURITY_WORKFLOW, SCHEDULED_REBUILD_WORKFLOW, RELEASE_WORKFLOW):
         workflow = workflow_path.read_text(encoding="utf-8")
         assert "Normalize Snyk" in workflow
         assert "continue-on-error: true" in workflow
-        assert "security-severity" in workflow
         assert "high/critical" in workflow
         assert "exit 1" in workflow
+
+
+def test_snyk_sarif_normalization_is_shared_across_workflows() -> None:
+    for workflow_path in (SECURITY_WORKFLOW, SCHEDULED_REBUILD_WORKFLOW, RELEASE_WORKFLOW):
+        workflow = workflow_path.read_text(encoding="utf-8")
+        assert "scripts/normalize_sarif.py" in workflow
+
+
+def test_snyk_pr_gate_fails_closed_when_report_is_missing_or_invalid() -> None:
+    security = SECURITY_WORKFLOW.read_text(encoding="utf-8")
+    gate = security.split("- name: Fail on HIGH or CRITICAL Snyk vulnerabilities", 1)[1]
+    gate = gate.split("\n      - name:", 1)[0]
+
+    assert "if [ ! -s snyk-container.json ]" in gate
+    assert "no vulnerabilities array" in gate
+    assert "exit 1" in gate
+    assert "exit 0" not in gate
+
+
+def test_scheduled_rebuild_is_limited_to_main_or_manual_develop() -> None:
+    workflow = " ".join(SCHEDULED_REBUILD_WORKFLOW.read_text(encoding="utf-8").split())
+    allowed_branches = "github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/develop')"
+
+    assert workflow.count(allowed_branches) == 2
 
 
 def test_release_snyk_gate_has_no_zlib_exception() -> None:

@@ -80,19 +80,29 @@ def test_local_runner_uses_direct_technitium_tls_and_http_health() -> None:
     assert "pkill -f" not in runner
     assert "HEALTH_FORWARD_PID=$!" in runner
     assert "TECHNITIUM_FORWARD_PID=$!" in runner
-    assert 'kill "${HEALTH_FORWARD_PID}"' in runner
-    assert 'kill "${TECHNITIUM_FORWARD_PID}"' in runner
-    assert 'kill "${EXTERNAL_DNS_LOG_PID}"' in runner
+    assert 'kill "$HEALTH_FORWARD_PID"' in runner
+    assert 'kill "$TECHNITIUM_FORWARD_PID"' in runner
+    assert 'kill "$EXTERNAL_DNS_LOG_PID"' in runner
     assert "TECHNITIUM_USERNAME=$TECHNITIUM_USERNAME" not in runner
 
 
 def test_local_setup_provisions_native_technitium_tls_without_proxy() -> None:
     setup = (REPOSITORY_ROOT / "local-ci-setup/setup.sh").read_text()
 
-    assert "cert-manager/releases/download/v1.16.3/cert-manager.yaml" in setup
+    assert "cert-manager/releases/download/v1.21.2/cert-manager.yaml" in setup
     assert "technitium-pkcs12-password" in setup
     assert "certificate/technitium-https" in setup
     assert "technitium-tls-proxy" not in setup
+    assert 'KIND_CONTROL_PLANE="${CLUSTER_NAME}-control-plane"' in setup
+    assert (
+        'docker exec "${KIND_CONTROL_PLANE}" ctr --namespace=k8s.io images pull '
+        "docker.io/technitium/dns-server:15.4.0" in setup
+    )
+    assert (
+        'docker exec "${KIND_CONTROL_PLANE}" ctr --namespace=k8s.io images tag '
+        "docker.io/technitium/dns-server:15.4.0 docker.io/technitium/dns-server:latest" in setup
+    )
+    assert "kind load docker-image technitium/dns-server:latest" not in setup
 
 
 def test_ci_uses_native_technitium_tls_and_http_health() -> None:

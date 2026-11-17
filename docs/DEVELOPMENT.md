@@ -45,6 +45,7 @@ and push the refresh. The image build installs from `pylock.toml` with
 
 - Python 3.14+ (production uses the Docker Hardened Image `dhi.io/python:3.14-debian13`; 3.14 is also recommended for local development)
 - pip and virtualenv
+- uv (used to refresh `pylock.toml` and run the isolated Semgrep security scan)
 - Git
 - (Optional) kind, kubectl, helm - For local integration testing
 
