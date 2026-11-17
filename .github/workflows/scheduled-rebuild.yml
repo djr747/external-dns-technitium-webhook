@@ -14,6 +14,9 @@ jobs:
   check-for-updates:
     name: Check for Base Image Updates
     runs-on: ubuntu-26.04
+    if: >-
+      github.ref == 'refs/heads/main' ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/develop')
     outputs:
       rebuild-needed: ${{ steps.check.outputs.rebuild }}
       base-image-digest: ${{ steps.base-digest.outputs.digest }}
@@ -44,7 +47,10 @@ jobs:
     name: Rebuild, Patch, Test, and Promote
     runs-on: ubuntu-26.04
     needs: check-for-updates
-    if: needs.check-for-updates.outputs.rebuild-needed == 'true'
+    if: >-
+      needs.check-for-updates.outputs.rebuild-needed == 'true' &&
+      (github.ref == 'refs/heads/main' ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/develop'))
     permissions:
       actions: read
       attestations: write

@@ -392,7 +392,14 @@ jobs:
 
       - name: Fail on HIGH or CRITICAL Snyk vulnerabilities
         run: |
-          if [ ! -f snyk-container.json ]; then echo "snyk-container.json not found"; exit 0; fi
+          if [ ! -s snyk-container.json ]; then
+            echo "Snyk JSON report is missing or empty"
+            exit 1
+          fi
+          if ! jq -e '[.. | objects | .vulnerabilities? | select(type == "array")] | length > 0' snyk-container.json >/dev/null; then
+            echo "Snyk JSON report has no vulnerabilities array"
+            exit 1
+          fi
           # Gate policy (mirrors the container job): block only high/critical
           # findings that have a published fix; unfixable findings stay visible
           # in the SARIF/JSON artifacts and become blocking once a fix ships.

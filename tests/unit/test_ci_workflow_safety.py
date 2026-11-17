@@ -178,6 +178,24 @@ def test_snyk_sarif_normalization_is_shared_across_workflows() -> None:
         assert "scripts/normalize_sarif.py" in workflow
 
 
+def test_snyk_pr_gate_fails_closed_when_report_is_missing_or_invalid() -> None:
+    security = SECURITY_WORKFLOW.read_text(encoding="utf-8")
+    gate = security.split("- name: Fail on HIGH or CRITICAL Snyk vulnerabilities", 1)[1]
+    gate = gate.split("\n      - name:", 1)[0]
+
+    assert "if [ ! -s snyk-container.json ]" in gate
+    assert "no vulnerabilities array" in gate
+    assert "exit 1" in gate
+    assert "exit 0" not in gate
+
+
+def test_scheduled_rebuild_is_limited_to_main_or_manual_develop() -> None:
+    workflow = " ".join(SCHEDULED_REBUILD_WORKFLOW.read_text(encoding="utf-8").split())
+    allowed_branches = "github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/develop')"
+
+    assert workflow.count(allowed_branches) == 2
+
+
 def test_release_snyk_gate_has_no_zlib_exception() -> None:
     release = RELEASE_WORKFLOW.read_text(encoding="utf-8")
     assert "SNYK-WOLFILATEST-ZLIB-19698962" not in release
