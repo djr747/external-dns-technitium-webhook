@@ -100,9 +100,9 @@ def test_manual_rebuild_uses_selected_commit_without_promoting_non_main_images()
     assert "ref: ${{ github.sha }}" in workflow
     assert "ref: main" not in workflow
 
-    promote_step = workflow[
-        workflow.index("- name: Promote tested image tags") :
-    ].split("- name: Create issue if critical findings remain", maxsplit=1)[0]
+    promote_step = workflow[workflow.index("- name: Promote tested image tags") :].split(
+        "- name: Create issue if critical findings remain", maxsplit=1
+    )[0]
     assert "if: github.ref == 'refs/heads/main'" in promote_step
 
     monitor_job = workflow[workflow.index("  snyk-monitor:") :]
