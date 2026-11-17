@@ -29,11 +29,11 @@ dependencies = [
     # Bumped to releases that declare support for modern Python (>=3.8) and
     # are known to be compatible with CPython 3.14 when no upper bound
     # is present in their metadata.
-    "fastapi==0.162.0",
+    "fastapi==0.162.2",
     "uvicorn[standard]==0.54.0",
     "httpx2==2.16.0",
-    "pydantic==2.14.2",
-    "pydantic-settings==2.16.1",
+    "pydantic==2.14.3",
+    "pydantic-settings==2.16.2",
     "prometheus-client==0.26.0",
 ]
 
@@ -45,7 +45,7 @@ dev = [
     # and commit pyproject.toml and pylock.toml together.
     "pytest==9.2.0",
     "pytest-cov==7.1.0",
-    "coverage==7.17.0",
+    "coverage==7.17.2",
     "pytest-asyncio==1.4.1.post1",
     "pytest-mock==3.17.0",
     "httpx2==2.16.0",
@@ -53,7 +53,7 @@ dev = [
     "ruff==0.17.4",
     "mypy==2.4.1",
     "pyright==1.1.414",
-    "tox==4.67.1",
+    "tox==4.67.13",
     "types-urllib3",
     "prometheus-client==0.26.0",
     # Pin the transitive HTTP primitive to a release that declares support
