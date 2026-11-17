@@ -174,7 +174,7 @@ jobs:
           mkdir -p /tmp/copa-release
           tar -xzf /tmp/copa_0.15.0_linux_amd64.tar.gz -C /tmp/copa-release
           sudo install /tmp/copa-release/copa /usr/local/bin/copa
-          copa version
+          copa --version
 
       - name: Patch eligible OS packages with Copa
         id: patched-image
@@ -266,6 +266,12 @@ jobs:
         run: |
           test -s snyk-final-amd64.json
           test -s snyk-final-arm64.json
+          for REPORT in snyk-final-amd64.json snyk-final-arm64.json; do
+            if ! jq -e 'type == "object" and (.vulnerabilities | type == "array") and (.error? == null)' "$REPORT" >/dev/null; then
+              echo "Snyk report $REPORT is invalid or contains a scan error; refusing to promote an unverified image."
+              exit 1
+            fi
+          done
           FIX='(((.fixedIn // []) | length) > 0) or ((.fixInfo.name // "") != "") or ((.fixInfo.version // "") != "") or (.isPatchable // false) or (.isUpgradable // false)'
           SEVERITY='(((.severity // "") | ascii_downcase) == "high") or (((.severity // "") | ascii_downcase) == "critical")'
           CRITICAL=$(jq '[.. | .vulnerabilities? // [] | .[]? | select((.severity // "" | ascii_downcase) == "critical")] | unique_by(.id) | length' snyk-final-amd64.json)

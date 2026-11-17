@@ -61,6 +61,8 @@ def test_snyk_monitor_reads_outputs_from_declared_dependencies() -> None:
 def test_scheduled_rebuild_uses_snyk_native_copa_and_tests_before_promotion() -> None:
     workflow = SCHEDULED_REBUILD_WORKFLOW.read_text(encoding="utf-8")
     assert "--scanner native" in workflow
+    assert "copa --version" in workflow
+    assert "copa version" not in workflow
     assert "scripts/snyk_to_copa.py" in workflow
     assert "snyk-final-amd64.json" in workflow
     assert "snyk-final-arm64.json" in workflow
@@ -70,6 +72,17 @@ def test_scheduled_rebuild_uses_snyk_native_copa_and_tests_before_promotion() ->
     integration = workflow.index("bash local-ci-setup/run-integration-tests.sh")
     promotion = workflow.index("- name: Promote tested image tags")
     assert gate < integration < promotion
+
+
+def test_scheduled_rebuild_fails_closed_on_invalid_final_snyk_reports() -> None:
+    workflow = SCHEDULED_REBUILD_WORKFLOW.read_text(encoding="utf-8")
+    gate = workflow.split("- name: Enforce final Snyk fixable high/critical gate", 1)[1]
+    validation = gate.split("FIX=", 1)[0]
+
+    assert "for REPORT in snyk-final-amd64.json snyk-final-arm64.json" in validation
+    assert '.vulnerabilities | type == "array"' in validation
+    assert ".error? == null" in validation
+    assert "refusing to promote an unverified image" in validation
 
 
 def test_scheduled_rebuild_attests_tested_image_before_tag_promotion() -> None:
