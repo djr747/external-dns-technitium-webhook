@@ -93,6 +93,16 @@ def test_local_setup_provisions_native_technitium_tls_without_proxy() -> None:
     assert "technitium-pkcs12-password" in setup
     assert "certificate/technitium-https" in setup
     assert "technitium-tls-proxy" not in setup
+    assert 'KIND_CONTROL_PLANE="${CLUSTER_NAME}-control-plane"' in setup
+    assert (
+        'docker exec "${KIND_CONTROL_PLANE}" ctr --namespace=k8s.io images pull '
+        "docker.io/technitium/dns-server:15.4.0" in setup
+    )
+    assert (
+        'docker exec "${KIND_CONTROL_PLANE}" ctr --namespace=k8s.io images tag '
+        "docker.io/technitium/dns-server:15.4.0 docker.io/technitium/dns-server:latest" in setup
+    )
+    assert "kind load docker-image technitium/dns-server:latest" not in setup
 
 
 def test_ci_uses_native_technitium_tls_and_http_health() -> None:

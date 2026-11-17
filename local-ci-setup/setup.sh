@@ -75,9 +75,12 @@ fi
 
 echo "--- Loading images into kind cluster ---"
 kind load docker-image "${IMAGE_TAG}" --name "${CLUSTER_NAME}"
-docker pull technitium/dns-server:15.4.0
-docker tag technitium/dns-server:15.4.0 technitium/dns-server:latest
-kind load docker-image technitium/dns-server:latest --name "${CLUSTER_NAME}"
+# Docker 29's containerd-backed image store can make `kind load` fail for
+# registry-pulled images with "content digest ... not found". Pull directly
+# into the Kind node and retag it to the reference used by the deployment.
+KIND_CONTROL_PLANE="${CLUSTER_NAME}-control-plane"
+docker exec "${KIND_CONTROL_PLANE}" ctr --namespace=k8s.io images pull docker.io/technitium/dns-server:15.4.0
+docker exec "${KIND_CONTROL_PLANE}" ctr --namespace=k8s.io images tag docker.io/technitium/dns-server:15.4.0 docker.io/technitium/dns-server:latest
 
 echo "--- Deploying Technitium DNS ---"
 export ADMIN_PASSWORD=$(openssl rand -base64 12)
