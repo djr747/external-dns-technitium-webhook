@@ -353,20 +353,26 @@ jobs:
       - name: Combine Snyk findings across architectures
         run: |
           # Keep the existing GitHub analysis category for this image.
-          jq -es --arg category "Snyk/Container/docker-image|$REGISTRY/$IMAGE_NAME/0/" '
+          jq -es --arg image "$REGISTRY/$IMAGE_NAME" '
             def valid_report:
               .version == "2.1.0" and (.runs | type == "array" and length > 0)
               and all(.runs[]; .tool.driver.name == "Snyk Container"
                 and (.tool.driver.rules | type == "array") and (.results | type == "array"));
+
+            def finding_key:
+              [.ruleId, .message.text, ([.locations[]?.physicalLocation
+                | [((.artifactLocation.uri // "")
+                  | if startswith($image + "@") then sub("@sha256[:_][0-9a-f]{64}"; "") else . end), .region]
+              ] | sort)];
 
             if length != 2 or any(.[]; valid_report | not) or .[0]."$schema" != .[1]."$schema"
             then error("Expected two compatible Snyk Container SARIF reports") else . end
             | [.[].runs[]] as $runs
             | .[0]
             | .runs = [($runs[0]
-              | .automationDetails = {id: $category}
+              | .automationDetails = {id: ("Snyk/Container/docker-image|" + $image + "/0/")}
               | .tool.driver.rules = ([$runs[].tool.driver.rules[]] | unique_by(.id))
-              | .results = ([$runs[].results[] | del(.ruleIndex, .rule.index)] | unique_by(.ruleId)))]
+              | .results = ([$runs[].results[] | del(.ruleIndex, .rule.index)] | unique_by(finding_key)))]
             | .runs[0] as $combined
             | if all($combined.results[]; .ruleId as $id |
                 ($id | type == "string" and length > 0) and any($combined.tool.driver.rules[]; .id == $id))

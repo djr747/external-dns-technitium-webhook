@@ -87,6 +87,7 @@ jobs:
           category: "/language:${{matrix.language}}"
 
   container-scan:
+    # The security rebuild scans the image promoted on main.
     # GitHub does not provide repository secrets to Dependabot-triggered workflows.
     needs: check-open-pr
     if: ${{ needs.check-open-pr.outputs.should-run == 'true' && github.ref != 'refs/heads/main' && github.actor != 'dependabot[bot]' }}
@@ -118,6 +119,7 @@ jobs:
         with:
           image: external-dns-technitium-webhook:${{ github.sha }}
           command: test
+          # The image tag is the scan target. --file adds base image remediation advice.
           args: --sarif-file-output=snyk-container.sarif --json-file-output=snyk-container.json --severity-threshold=low
 
       - name: Normalize Snyk container SARIF
