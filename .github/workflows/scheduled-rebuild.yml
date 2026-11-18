@@ -379,8 +379,8 @@ jobs:
               then . else error("Combined SARIF has a finding without a matching rule") end
           ' snyk-final-amd64.sarif snyk-final-arm64.sarif > snyk-promoted.sarif
 
-      - name: Upload promoted image Snyk SARIF
-        if: steps.promote.outcome == 'success' && hashFiles('snyk-promoted.sarif') != ''
+      - name: Upload tested image Snyk SARIF
+        if: (github.ref == 'refs/heads/develop' || steps.promote.outcome == 'success') && hashFiles('snyk-promoted.sarif') != ''
         uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
         continue-on-error: true
         with:
