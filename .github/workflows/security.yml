@@ -2,7 +2,7 @@ name: Security Scanning
 
 on:
   schedule:
-    - cron: '0 0 * * *'  # Daily at midnight (run container rebuild/scan daily)
+    - cron: '0 0 * * *'
   workflow_dispatch:
   pull_request:
     branches:
@@ -14,6 +14,7 @@ on:
       - pylock.toml
       - '**/*.py'
       - 'Dockerfile'
+      - '.github/workflows/security.yml'
 
 jobs:
   check-open-pr:
@@ -86,14 +87,14 @@ jobs:
           category: "/language:${{matrix.language}}"
 
   container-scan:
+    # The security rebuild scans the image promoted on main.
     # GitHub does not provide repository secrets to Dependabot-triggered workflows.
     needs: check-open-pr
-    if: ${{ needs.check-open-pr.outputs.should-run == 'true' && github.actor != 'dependabot[bot]' }}
+    if: ${{ needs.check-open-pr.outputs.should-run == 'true' && github.ref != 'refs/heads/main' && github.actor != 'dependabot[bot]' }}
     name: Container Scan (Snyk)
     runs-on: ubuntu-26.04
     permissions:
       contents: read
-      security-events: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -118,33 +119,39 @@ jobs:
         with:
           image: external-dns-technitium-webhook:${{ github.sha }}
           command: test
+          # The image tag is the scan target. --file adds base image remediation advice.
           args: --sarif-file-output=snyk-container.sarif --json-file-output=snyk-container.json --severity-threshold=low
 
       - name: Normalize Snyk container SARIF
         if: always()
         run: python3 scripts/normalize_sarif.py snyk-container.sarif
 
-      - name: Upload Snyk container SARIF to GitHub Security
-        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
-        if: always()
-        continue-on-error: true
-        with:
-          sarif_file: snyk-container.sarif
-
       - name: Upload Snyk JSON results
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: snyk-container-json
-          path: snyk-container.json
+          path: |
+            snyk-container.json
+            snyk-container.sarif
           retention-days: 90
 
-      - name: Generate Snyk container summary
+      - name: Fail on HIGH or CRITICAL Snyk vulnerabilities
         if: always()
         run: |
           echo "### Snyk Container Vulnerability Scan Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          if [ ! -f snyk-container.json ]; then echo "No Snyk JSON output found" >> $GITHUB_STEP_SUMMARY; exit 0; fi
+          if [ ! -s snyk-container.json ]; then
+            echo "Snyk JSON report is missing or empty"
+            exit 1
+          fi
+          if ! jq -e '
+            def report: type == "object" and (.vulnerabilities | type == "array") and (.error? == null);
+            if type == "array" then length > 0 and all(.[]; report) else report end
+          ' snyk-container.json >/dev/null; then
+            echo "Invalid Snyk JSON report: scan error or no vulnerabilities array"
+            exit 1
+          fi
           SEV='(((.severity // "") | ascii_downcase) == "high") or (((.severity // "") | ascii_downcase) == "critical")'
           FIX='(((.fixInfo.name // "") != "") or ((.fixInfo.version // "") != "") or (((.fixedIn // []) | length) > 0) or (((.patches // []) | length) > 0) or (.isPatchable // false) or (.isUpgradable // false))'
           CRITICAL=$(jq '[.. | .vulnerabilities? // [] | .[]? | select((.severity // "") | ascii_downcase=="critical")] | unique_by(.id) | length' snyk-container.json)
@@ -169,30 +176,34 @@ jobs:
               [ -n "$line" ] && echo "- \`$line\`" >> $GITHUB_STEP_SUMMARY
             done
           fi
-
-      - name: Enforce Snyk container vulnerability gate
-        if: always()
-        run: |
-          # Gate policy: block a high/critical finding only when a published fix
-          # exists for the affected package. A high/critical finding with no
-          # published fix version (Debian has not shipped it yet) is reported but
-          # does not block, because there is no version this build can move to;
-          # the instant Snyk reports a fixed version it becomes blocking again.
-          if [ ! -s snyk-container.json ]; then
-            echo "Snyk did not produce a readable JSON report"
-            exit 1
-          fi
-          SEV='(((.severity // "") | ascii_downcase) == "high") or (((.severity // "") | ascii_downcase) == "critical")'
-          FIX='(((.fixInfo.name // "") != "") or ((.fixInfo.version // "") != "") or (((.fixedIn // []) | length) > 0) or (((.patches // []) | length) > 0) or (.isPatchable // false) or (.isUpgradable // false))'
-          BLOCKING=$(jq "[.. | .vulnerabilities? // [] | .[]? | select(($SEV) and ($FIX))] | unique_by(.id) | length" snyk-container.json)
           if [ "$BLOCKING" -gt 0 ]; then
-            echo "Failing because Snyk found $BLOCKING high/critical vulnerabilities WITH a published fix:"
-            jq -r "[.. | .vulnerabilities? // [] | .[]? | select((($SEV) and ($FIX)))] | unique_by(.id) | .[] | .id + \" \" + (.packageName // \"?\") + \" \" + (.version // \"?\")" snyk-container.json
+            echo "High/critical findings with a published fix:"
+            jq -r "[.. | .vulnerabilities? // [] | .[]? | select(($SEV) and ($FIX))] | unique_by(.id) | .[] | .id + \" \" + (.packageName // \"?\") + \" \" + (.version // \"?\")" snyk-container.json
             exit 1
           fi
-          echo "No blocking high/critical findings (every high/critical finding has no published fix yet; see the summary for the bypassed list)."
 
-      # Trivy artifact step removed; Snyk JSON is uploaded earlier as 'snyk-container-json'
+      - name: Generate SBOM with Syft
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+        with:
+          image: external-dns-technitium-webhook:${{ github.sha }}
+          format: spdx-json
+          output-file: sbom.spdx.json
+
+      - name: Generate SBOM in CycloneDX format
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+        with:
+          image: external-dns-technitium-webhook:${{ github.sha }}
+          format: cyclonedx-json
+          output-file: sbom.cyclonedx.json
+
+      - name: Upload SBOM artifacts
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sbom-reports
+          path: |
+            sbom.spdx.json
+            sbom.cyclonedx.json
+          retention-days: 90
 
   dependency-scan:
     name: Dependency Security Scan
@@ -332,166 +343,10 @@ jobs:
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
 
-      # Container scanning with Snyk
-      # The base image lives in Docker's Hardened Images registry, which
-      # requires a login to pull. Read-only Docker Hub credentials are
-      # sufficient (pull scope only).
-      - name: Log in to Docker Hardened Images registry
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
-        with:
-          registry: dhi.io
-          username: ${{ secrets.DOCKER_HUB_RO_USER }}
-          password: ${{ secrets.DOCKER_HUB_RO_PAT }}
-
-      - name: Build Docker image for Snyk container scan
-        run: docker build -t external-dns-technitium-webhook:${{ github.sha }} .
-
-      - name: Run Snyk Container Scan (SARIF)
-        uses: snyk/actions/docker@9adf32b1121593767fc3c057af55b55db032dc04 # v1.0.0
-        continue-on-error: true
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        with:
-          image: external-dns-technitium-webhook:${{ github.sha }}
-          args: --severity-threshold=high --sarif-file-output=snyk-container.sarif
-
-      - name: Normalize Snyk container SARIF
-        if: always()
-        run: python3 scripts/normalize_sarif.py snyk-container.sarif
-
-      - name: Upload Snyk container SARIF to GitHub Security
-        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
-        if: always()
-        continue-on-error: true
-        with:
-          sarif_file: snyk-container.sarif
-
-      - name: Set up Node.js for Snyk CLI
-        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: '18'
-
-      - name: Install Snyk CLI
-        run: npm install -g snyk
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-
-      - name: Run Snyk container test (JSON)
-        id: snyk-json
-        run: |
-          # run test and write JSON output; allow non-zero exit so we can inspect results
-          snyk container test external-dns-technitium-webhook:${{ github.sha }} --json > snyk-container.json || true
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-
-      - name: Upload Snyk JSON results
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: snyk-container-json
-          path: snyk-container.json
-
-      - name: Fail on HIGH or CRITICAL Snyk vulnerabilities
-        run: |
-          if [ ! -s snyk-container.json ]; then
-            echo "Snyk JSON report is missing or empty"
-            exit 1
-          fi
-          if ! jq -e '[.. | objects | .vulnerabilities? | select(type == "array")] | length > 0' snyk-container.json >/dev/null; then
-            echo "Snyk JSON report has no vulnerabilities array"
-            exit 1
-          fi
-          # Gate policy (mirrors the container job): block only high/critical
-          # findings that have a published fix; unfixable findings stay visible
-          # in the SARIF/JSON artifacts and become blocking once a fix ships.
-          SEV='(((.severity // "") | ascii_downcase) == "high") or (((.severity // "") | ascii_downcase) == "critical")'
-          FIX='(((.fixInfo.name // "") != "") or ((.fixInfo.version // "") != "") or (((.fixedIn // []) | length) > 0) or (((.patches // []) | length) > 0) or (.isPatchable // false) or (.isUpgradable // false))'
-          BLOCKING=$(jq "[.. | .vulnerabilities? // [] | .[]? | select(($SEV) and ($FIX))] | unique_by(.id) | length" snyk-container.json)
-          echo "Found $BLOCKING blocking (fixable high/critical) Snyk vulnerabilities"
-          if [ "$BLOCKING" -gt 0 ]; then
-            echo "Failing because Snyk found high/critical vulnerabilities WITH a published fix:"
-            jq -r "[.. | .vulnerabilities? // [] | .[]? | select((($SEV) and ($FIX)))] | unique_by(.id) | .[] | .id + \" \" + (.packageName // \"?\") + \" \" + (.version // \"?\")" snyk-container.json
-            exit 1
-          fi
-
-      - name: Run Snyk container monitor (track over time)
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: snyk/actions/docker@9adf32b1121593767fc3c057af55b55db032dc04 # v1.0.0
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        with:
-          image: external-dns-technitium-webhook:${{ github.sha }}
-          command: monitor
-          args: --project-name=${{ github.repository }}-container
-
-  sbom-generation:
-    name: SBOM Generation and Analysis
-    needs: check-open-pr
-    if: ${{ needs.check-open-pr.outputs.should-run == 'true' }}
-    runs-on: ubuntu-26.04
-    permissions:
-      contents: read
-      security-events: write
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      # The base image lives in Docker's Hardened Images registry, which
-      # requires a login to pull. Read-only Docker Hub credentials are
-      # sufficient (pull scope only).
-      - name: Log in to Docker Hardened Images registry
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
-        with:
-          registry: dhi.io
-          username: ${{ secrets.DOCKER_HUB_RO_USER }}
-          password: ${{ secrets.DOCKER_HUB_RO_PAT }}
-
-      - name: Build Docker image
-        run: docker build -t external-dns-technitium-webhook:${{ github.sha }} .
-
-      - name: Generate SBOM with Syft
-        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
-        with:
-          image: external-dns-technitium-webhook:${{ github.sha }}
-          format: spdx-json
-          output-file: sbom.spdx.json
-
-      - name: Generate SBOM in CycloneDX format
-        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
-        with:
-          image: external-dns-technitium-webhook:${{ github.sha }}
-          format: cyclonedx-json
-          output-file: sbom.cyclonedx.json
-
-      - name: Upload SBOM artifacts
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: sbom-reports
-          path: |
-            sbom.spdx.json
-            sbom.cyclonedx.json
-          retention-days: 90
-
-      - name: Scan SBOM with Grype
-# Scope: This annotation applies only to the Anchore scan-action `uses:` line.
-# Rationale: Latest v7.4.2 SHA pin; the rule mistakes an immutable commit for a mutable tag.
-# Expires/review: 2026-12-19
-# Compensating control: verified immutable 40-character SHA pin
-        uses: anchore/scan-action@27805bf3b4e84b4a5c980df22ed233c00390a439 # v7.4.2  # nosemgrep: yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag
-        id: grype
-        with:
-          sbom: sbom.spdx.json
-          fail-build: false
-          severity-cutoff: high
-
-      - name: Upload Grype results
-        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
-        if: always()
-        with:
-          sarif_file: ${{ steps.grype.outputs.sarif }}
-
   security-summary:
     name: Security Summary Report
     runs-on: ubuntu-26.04
-    needs: [check-open-pr, container-scan, dependency-scan, code-scan, sbom-generation]
+    needs: [check-open-pr, container-scan, dependency-scan, code-scan, snyk-security]
     if: ${{ always() && needs.check-open-pr.outputs.should-run == 'true' }}
     permissions:
       contents: read
@@ -501,11 +356,4 @@ jobs:
         run: |
           echo "### 🔒 Security Scan Complete" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "All security scans have completed. Check the Security tab for detailed results." >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Scans performed:**" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ Container vulnerability scan (Snyk)" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ Dependency CVE check (pip-audit)" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ Code security analysis (Bandit, Semgrep)" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ Snyk vulnerability detection" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ SBOM generation and analysis" >> $GITHUB_STEP_SUMMARY
+          echo "See individual jobs for scan status and reports, and Code scanning for uploaded alerts." >> $GITHUB_STEP_SUMMARY

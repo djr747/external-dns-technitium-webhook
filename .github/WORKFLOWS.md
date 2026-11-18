@@ -21,19 +21,17 @@ This repository uses a comprehensive CI/CD pipeline with security best practices
 
 ### 🔒 Security Scanning (`security.yml`)
 
-**Triggers:** Daily (midnight UTC), pushes to non-`main` branches without an open PR, pull requests targeting any branch, manual
+**Triggers:** Daily (midnight UTC), pushes to non-`main` branches without an open PR, pull requests, and manual dispatch
 
 **Jobs:**
 - **CodeQL Analysis**: GitHub's semantic code analysis
- - **Container Scan (Snyk)**: Container vulnerability scanning
+- **Container Scan (Snyk)**: One image build for Snyk and Syft SBOM generation
 - **Dependency Scan**: pip-audit for Python CVEs
 - **Code Scan**: Bandit and Semgrep static analysis
-- **Snyk Security**: Multi-layer vulnerability detection
-- **SBOM Generation**: Syft SBOM + Grype analysis
+- **Snyk Security**: Python dependency scanning
 - **Security Summary**: Aggregated report
 
 **Key Features:**
-- 7 different security tools
 - SARIF uploads to GitHub Security tab
 - Artifact retention (90 days)
 - Comprehensive summary reports
@@ -49,7 +47,7 @@ This repository uses a comprehensive CI/CD pipeline with security best practices
 - **Check for Updates**: Inspect the DHI Python base image
 - **Rebuild Image**: Build a multi-architecture candidate from the latest DHI base
 - **Vulnerability Remediation**: Convert Snyk Debian OS findings to Copa's native report format and patch packages with a published fix
-- **Validation**: Rescan both architectures with Snyk, run the Kind integration suite against the tested candidate, and only then move `latest`, `latest-patched`, and the dated tag
+- **Validation**: Rescan both architectures when Copa changes the image, run the Kind integration suite against the tested candidate, and only then move `latest`, `latest-patched`, and the dated tag on `main`
 - **Snyk Monitor**: Track vulnerabilities over time
 
 **Key Features:**
@@ -86,8 +84,7 @@ The pipeline includes multiple layers of CVE detection:
 
 1. **Snyk** - Container, code, and dependency vulnerability scanning
 2. **pip-audit** - Python dependency CVE database
-3. **Grype** - SBOM-based vulnerability detection
-4. **GitHub Dependabot** - Automated dependency updates
+3. **GitHub Dependabot** - Automated dependency updates
 
 ### Secret Protection
 
@@ -104,7 +101,7 @@ The pipeline includes multiple layers of CVE detection:
 
 ### Security Tab Integration
 
-All security findings are uploaded to GitHub Security tab via SARIF:
+CodeQL and Snyk upload findings to GitHub Code scanning via SARIF. The security rebuild uploads container findings after it promotes the tested image on `main`. PR, rebuild, and release scan reports are stored with their workflow runs.
 - Navigate to **Security** → **Code scanning alerts**
 - View aggregated results from all scanners
 - Track remediation over time

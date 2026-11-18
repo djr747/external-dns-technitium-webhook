@@ -58,7 +58,7 @@ dev = [
     "prometheus-client==0.26.0",
     # Pin the transitive HTTP primitive to a release that declares support
     # for modern Python (>=3.9).
-    "multidict==7.1.0",
+    "multidict==7.2.1",
     # Semgrep stays out of this shared environment because its pinned
     # OpenTelemetry range conflicts with FastAPI's supported range. CI runs
     # Semgrep in the isolated security workflow; `make security` uses uvx.

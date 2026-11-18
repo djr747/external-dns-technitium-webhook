@@ -7,8 +7,8 @@ This project implements enterprise-grade CI/CD pipelines with comprehensive secu
 | Workflow | File | Triggers | Purpose |
 | ---------- | ------ | ---------- | --------- |
 | CI | `.github/workflows/ci.yml` | Push to any branch without an open PR; PR to any branch | Lints (Ruff), type-checks (mypy, pyright), runs tests with coverage validation (95% minimum), uploads coverage to Codecov, builds multi-arch Docker images for commit, validates `pylock.toml` is in sync with `pyproject.toml` |
-| Security Scanning | `.github/workflows/security.yml` | Daily schedule (UTC midnight); push to non-`main` branches without an open PR; PR to any branch; manual | CodeQL semantic code analysis, Snyk container vulnerability scan (SARIF + JSON), generates Snyk summary, uploads to GitHub Security tab |
-| Scheduled Security Rebuild | `.github/workflows/scheduled-rebuild.yml` | Daily at 02:00 UTC on `main`; manual on `main` or `develop` | Builds an isolated multi-architecture candidate from the selected ref, scans it with Snyk, optionally patches fixable Debian OS packages from Snyk JSON using Copa's native-report mode, rescans and runs the Kind integration suite, then promotes mutable tags only from `main`. Release-version tags are not changed. |
+| Security Scanning | `.github/workflows/security.yml` | Daily at midnight UTC, PRs, pushes to non-`main` branches without an open PR, and manual | Checks Python code and dependencies, and gates PR images |
+| Scheduled Security Rebuild | `.github/workflows/scheduled-rebuild.yml` | Daily at 02:00 UTC on `main`; manual on `main` or `develop` | Builds and scans an isolated multi-architecture candidate, uses Copa to apply available Debian package updates, and rescans if Copa patches the image. The Kind integration suite runs before promotion of mutable tags on `main`. |
 | Release | `.github/workflows/release.yml` | Push to `main` that changes `pyproject.toml`; manual | Validates the requested version, creates the Git tag and GitHub release, builds multi-platform Docker images, publishes to GHCR, generates an SBOM, and signs the image |
 
 ## Security Scanning Strategy
@@ -20,20 +20,20 @@ The project employs **multi-layer security scanning** for defense-in-depth:
 1. **Ruff** (CI) - Fast Python linter with security-aware rules (format, lint, unused imports)
 2. **mypy & pyright** (CI) - Strict static type checking to catch type-related bugs
 3. **CodeQL** (Security.yml) - Semantic code analysis for security vulnerabilities in Python
-4. **Snyk** (Security.yml & Release.yml) - Container image and SBOM vulnerability scanner for CVEs
+4. **Snyk** - Container image and Python dependency scanning
 5. **SonarCloud** (CI) - Code quality and security-hotspot analysis; runs on `main` pushes and decorates same-repo pull requests
 6. **Docker build provenance** (CI & Release) - SBOM and attestation generation with build signatures
 
 ### Code & Supply Chain Security
 
 - **CodeQL** - GitHub's semantic analysis tool for security vulnerabilities
-- **Snyk scanning** - Multi-stage: SARIF format for GitHub Security integration + JSON for detailed analysis
-- **Snyk gate policy** - Only fixable critical/high findings block the pipeline; unfixable findings are listed in the job summary for triage
-- **Nightly remediation gate** - Snyk is the only scanner in the Copa path; the converter rejects ambiguous package fixes, and Copa's output is rescanned and integration-tested before tag promotion. Both final architecture reports must contain a valid vulnerabilities array and no scan error; missing or invalid reports fail closed. Fixable high/critical findings block the rebuild. Scheduled runs are on `main`; manual runs can target `main` or `develop`, but only `main` promotes tags.
+- **Snyk scanning** - Snyk scans the built PR image by tag and emits JSON for the gate and SARIF for run artifacts. Syft generates the SBOM from the same image. On `main`, the security rebuild handles the container scan.
+- **Snyk gate policy** - PR and rebuild gates block high or critical findings with a published fix. The release gate blocks any high or critical finding.
+- **Nightly remediation gate** - The rebuild reuses the candidate's Snyk reports when there are no package updates. When Copa patches the candidate, Snyk rescans both architectures. Both final architecture reports must contain a valid vulnerabilities array and no scan error. Fixable high or critical findings block the rebuild, and Kind integration tests must pass before promotion.
 - **Build provenance** - SBOM generation and artifact attestation tracking in Release workflow
 - **GitHub Dependabot** - Automated dependency update suggestions (not automated in CI)
 
-Snyk scans upload SARIF results to GitHub's Security tab for visibility and tracking.
+The security rebuild uploads one combined SARIF report after a successful manual rebuild on `develop` or a successful promotion on `main`. Findings shared by both architectures appear once. The original scan reports are available in the workflow artifacts.
 
 ## Required Secrets & Configuration
 
@@ -45,7 +45,7 @@ Core CI/CD runs on GitHub's built-in features plus a small set of repository sec
 |--------|----------|---------|
 | `DOCKER_HUB_RO_USER` / `DOCKER_HUB_RO_PAT` | Yes | Read-only Docker Hub credentials for pulling the `dhi.io` Hardened Python base image (CI builds, scheduled rebuilds, release builds) |
 | `SONAR_TOKEN` | Recommended | SonarCloud analysis on `main` pushes and PR-decorating scans (steps skip gracefully when unset) |
-| `SNYK_TOKEN` | Recommended | Snyk container/SBOM scanning |
+| `SNYK_TOKEN` | Recommended | Snyk container and dependency scanning |
 
 ### GitHub Actions Built-ins
 

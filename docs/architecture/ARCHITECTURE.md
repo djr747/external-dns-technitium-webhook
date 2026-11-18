@@ -331,7 +331,7 @@ graph LR
     Push --> Actions["GitHub Actions"]
     
     Actions --> CI["ci.yml<br/>- Lint ruff<br/>- Type check mypy<br/>- Test pytest<br/>- Coverage ≥95%"]
-    Actions --> Security["security.yml<br/>- Snyk scan<br/>- Semgrep analysis<br/>- CodeQL<br/>- Grype"]
+    Actions --> Security["security.yml<br/>- Snyk scan<br/>- Semgrep analysis<br/>- CodeQL"]
     
     CI --> Test{Tests<br/>Pass?}
     Security --> Test
@@ -391,7 +391,6 @@ graph TB
         
         subgraph DepSec["3. Dependency Security"]
             Snyk["Snyk<br/>Container scanning"]
-            Grype["Grype<br/>CVE scanning"]
             PipAudit["pip-audit<br/>Package audit"]
             Snyk["Snyk<br/>Vulnerability DB"]
         end
