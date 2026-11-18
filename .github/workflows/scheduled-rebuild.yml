@@ -136,7 +136,7 @@ jobs:
         with:
           image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
           command: test
-          args: --file=Dockerfile --platform=linux/amd64 --sarif-file-output=snyk-amd64.sarif --json-file-output=snyk-amd64.json
+          args: --platform=linux/amd64 --sarif-file-output=snyk-amd64.sarif --json-file-output=snyk-amd64.json
 
       - name: Scan candidate with Snyk (arm64)
         uses: snyk/actions/docker@9adf32b1121593767fc3c057af55b55db032dc04 # v1.0.0
@@ -146,7 +146,7 @@ jobs:
         with:
           image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
           command: test
-          args: --file=Dockerfile --platform=linux/arm64 --sarif-file-output=snyk-arm64.sarif --json-file-output=snyk-arm64.json
+          args: --platform=linux/arm64 --sarif-file-output=snyk-arm64.sarif --json-file-output=snyk-arm64.json
 
       - name: Convert Snyk findings to Copa native reports
         id: reports
@@ -211,7 +211,7 @@ jobs:
         with:
           image: ${{ steps.patched-image.outputs.image }}
           command: test
-          args: --file=Dockerfile --platform=linux/amd64 --sarif-file-output=snyk-final-amd64.sarif --json-file-output=snyk-final-amd64.json
+          args: --platform=linux/amd64 --sarif-file-output=snyk-final-amd64.sarif --json-file-output=snyk-final-amd64.json
 
       - name: Scan tested candidate with Snyk (arm64)
         if: steps.reports.outputs.patch-required == 'true'
@@ -222,7 +222,7 @@ jobs:
         with:
           image: ${{ steps.patched-image.outputs.image }}
           command: test
-          args: --file=Dockerfile --platform=linux/arm64 --sarif-file-output=snyk-final-arm64.sarif --json-file-output=snyk-final-arm64.json
+          args: --platform=linux/arm64 --sarif-file-output=snyk-final-arm64.sarif --json-file-output=snyk-final-arm64.json
 
       - name: Reuse scan reports for the unmodified candidate
         if: steps.reports.outputs.patch-required == 'false'
@@ -240,26 +240,6 @@ jobs:
           python3 scripts/normalize_sarif.py
           snyk-amd64.sarif snyk-arm64.sarif
           snyk-final-amd64.sarif snyk-final-arm64.sarif
-
-      - name: Upload final Snyk SARIF (amd64)
-        if: always() && hashFiles('snyk-final-amd64.sarif') != ''
-        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
-        continue-on-error: true
-        with:
-          sarif_file: snyk-final-amd64.sarif
-
-      - name: Set a separate category for the arm64 SARIF
-        if: always() && hashFiles('snyk-final-arm64.sarif') != ''
-        run: |
-          # Snyk emits the same category for both architectures. Keep its category for amd64.
-          jq '.runs[].automationDetails.id |= "arm64/" + .' snyk-final-arm64.sarif > snyk-arm64-upload.sarif
-
-      - name: Upload final Snyk SARIF (arm64)
-        if: always() && hashFiles('snyk-arm64-upload.sarif') != ''
-        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
-        continue-on-error: true
-        with:
-          sarif_file: snyk-arm64-upload.sarif
 
       - name: Enforce final Snyk fixable high/critical gate
         id: vuln-check
@@ -358,6 +338,7 @@ jobs:
           push-to-registry: true
 
       - name: Promote tested image tags
+        id: promote
         if: github.ref == 'refs/heads/main'
         env:
           IMAGE_TO_TEST: ${{ steps.patched-image.outputs.image || steps.candidate-image.outputs.image }}
@@ -368,6 +349,26 @@ jobs:
             docker buildx imagetools create --tag "$IMAGE:$tag" "$IMAGE_TO_TEST"
           done
           echo "Promoted tested image: $IMAGE_TO_TEST"
+
+      - name: Upload promoted image Snyk SARIF (amd64)
+        if: steps.promote.outcome == 'success' && hashFiles('snyk-final-amd64.sarif') != ''
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        continue-on-error: true
+        with:
+          sarif_file: snyk-final-amd64.sarif
+
+      - name: Set a separate category for the arm64 SARIF
+        if: steps.promote.outcome == 'success' && hashFiles('snyk-final-arm64.sarif') != ''
+        run: |
+          # Snyk emits the same category for both architectures.
+          jq '.runs[].automationDetails.id |= "arm64/" + .' snyk-final-arm64.sarif > snyk-arm64-upload.sarif
+
+      - name: Upload promoted image Snyk SARIF (arm64)
+        if: steps.promote.outcome == 'success' && hashFiles('snyk-arm64-upload.sarif') != ''
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        continue-on-error: true
+        with:
+          sarif_file: snyk-arm64-upload.sarif
 
       - name: Create issue if critical findings remain
         if: >-

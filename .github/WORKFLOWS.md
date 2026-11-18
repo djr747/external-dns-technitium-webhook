@@ -21,7 +21,7 @@ This repository uses a comprehensive CI/CD pipeline with security best practices
 
 ### 🔒 Security Scanning (`security.yml`)
 
-**Triggers:** Daily (midnight UTC), pushes to non-`main` branches without an open PR, pull requests targeting any branch, manual
+**Triggers:** Daily (midnight UTC), pushes to non-`main` branches without an open PR, pull requests, and manual dispatch
 
 **Jobs:**
 - **CodeQL Analysis**: GitHub's semantic code analysis
@@ -101,7 +101,7 @@ The pipeline includes multiple layers of CVE detection:
 
 ### Security Tab Integration
 
-CodeQL and Snyk upload findings to GitHub Code scanning via SARIF:
+CodeQL and Snyk upload findings to GitHub Code scanning via SARIF. The security rebuild uploads container findings after it promotes the tested image on `main`. PR, rebuild, and release scan reports are stored with their workflow runs.
 - Navigate to **Security** → **Code scanning alerts**
 - View aggregated results from all scanners
 - Track remediation over time

@@ -7,7 +7,7 @@ This project implements enterprise-grade CI/CD pipelines with comprehensive secu
 | Workflow | File | Triggers | Purpose |
 | ---------- | ------ | ---------- | --------- |
 | CI | `.github/workflows/ci.yml` | Push to any branch without an open PR; PR to any branch | Lints (Ruff), type-checks (mypy, pyright), runs tests with coverage validation (95% minimum), uploads coverage to Codecov, builds multi-arch Docker images for commit, validates `pylock.toml` is in sync with `pyproject.toml` |
-| Security Scanning | `.github/workflows/security.yml` | Daily schedule (UTC midnight); push to non-`main` branches without an open PR; PR to any branch; manual | CodeQL semantic code analysis, Snyk container vulnerability scan (SARIF + JSON), generates Snyk summary, uploads to GitHub Security tab |
+| Security Scanning | `.github/workflows/security.yml` | Daily at midnight UTC, PRs, pushes to non-`main` branches without an open PR, and manual | Checks Python code and dependencies, and gates PR images |
 | Scheduled Security Rebuild | `.github/workflows/scheduled-rebuild.yml` | Daily at 02:00 UTC on `main`; manual on `main` or `develop` | Builds and scans an isolated multi-architecture candidate, uses Copa to apply available Debian package updates, and rescans if Copa patches the image. The Kind integration suite runs before promotion of mutable tags on `main`. |
 | Release | `.github/workflows/release.yml` | Push to `main` that changes `pyproject.toml`; manual | Validates the requested version, creates the Git tag and GitHub release, builds multi-platform Docker images, publishes to GHCR, generates an SBOM, and signs the image |
 
@@ -27,13 +27,13 @@ The project employs **multi-layer security scanning** for defense-in-depth:
 ### Code & Supply Chain Security
 
 - **CodeQL** - GitHub's semantic analysis tool for security vulnerabilities
-- **Snyk scanning** - One scan of the PR image emits both SARIF for GitHub Code scanning and JSON for the gate. Syft generates the SBOM from the same image.
+- **Snyk scanning** - One scan of the PR image emits JSON for the gate and SARIF for run artifacts. Syft generates the SBOM from the same image.
 - **Snyk gate policy** - Only fixable critical/high findings block the pipeline; unfixable findings are listed in the job summary for triage
 - **Nightly remediation gate** - The rebuild reuses the candidate's Snyk reports when there are no package updates. When Copa patches the candidate, Snyk rescans both architectures. Both final architecture reports must contain a valid vulnerabilities array and no scan error. Fixable high or critical findings block the rebuild, and Kind integration tests must pass before promotion.
 - **Build provenance** - SBOM generation and artifact attestation tracking in Release workflow
 - **GitHub Dependabot** - Automated dependency update suggestions (not automated in CI)
 
-Snyk scans upload SARIF results to GitHub's Security tab for visibility and tracking.
+After a successful promotion on `main`, the security rebuild uploads the SARIF reports from the scans that supplied the vulnerability gate for both architectures. PR, rebuild candidate, and release scan reports are available in their run artifacts.
 
 ## Required Secrets & Configuration
 

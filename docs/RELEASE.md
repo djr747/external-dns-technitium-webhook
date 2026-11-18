@@ -178,7 +178,7 @@ The scheduled security rebuild later refreshes the mutable `latest` and `latest-
 
 3. **Security Scan Results**
    - Snyk scan: Known CVE vulnerabilities
-   - SARIF report: Upload to GitHub Security tab
+   - JSON and SARIF reports: Available in the release workflow artifacts.
 
 4. **GitHub Release**
    - Auto-generated from CHANGELOG.md
@@ -191,7 +191,6 @@ The release workflow requires:
 
 - `contents: write` - Create tags, releases, push changes
 - `packages: write` - Push Docker images
-- `security-events: write` - Upload security scans
 - `id-token: write` - Cosign image signing
 
 ## Troubleshooting

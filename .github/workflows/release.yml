@@ -211,7 +211,6 @@ jobs:
     permissions:
       contents: write
       packages: write
-      security-events: write
       id-token: write
     env:
       REGISTRY: ghcr.io
@@ -304,11 +303,15 @@ jobs:
         run: python3 scripts/normalize_sarif.py snyk-release-scan.sarif
 
       - name: Upload Snyk results
-        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          sarif_file: 'snyk-release-scan.sarif'
-          category: 'release-snyk'
-        continue-on-error: true
+          name: release-snyk-reports
+          path: |
+            snyk-release-report.json
+            snyk-release-scan.sarif
+          if-no-files-found: ignore
+          retention-days: 90
 
       - name: Enforce release Snyk vulnerability gate
         if: always()
