@@ -351,16 +351,26 @@ jobs:
           echo "Promoted tested image: $IMAGE_TO_TEST"
 
       - name: Combine Snyk findings across architectures
-        if: hashFiles('snyk-final-amd64.sarif') != '' && hashFiles('snyk-final-arm64.sarif') != ''
         run: |
-          # The last part of each Snyk analysis ID is its scan timestamp.
-          jq -s '
-            .[0].runs = (
-              [.[].runs[]] | group_by(.automationDetails.id | sub("/[^/]+$"; ""))
-              | map(. as $runs | .[0]
-                | .tool.driver.rules = ([$runs[].tool.driver.rules[]?] | unique_by(.id))
-                | .results = ([$runs[].results[]?] | unique_by([.ruleId, .locations])))
-            ) | .[0]
+          # Keep the existing GitHub analysis category for this image.
+          jq -es --arg category "Snyk/Container/docker-image|$REGISTRY/$IMAGE_NAME/0/" '
+            def valid_report:
+              .version == "2.1.0" and (.runs | type == "array" and length > 0)
+              and all(.runs[]; .tool.driver.name == "Snyk Container"
+                and (.tool.driver.rules | type == "array") and (.results | type == "array"));
+
+            if length != 2 or any(.[]; valid_report | not) or .[0]."$schema" != .[1]."$schema"
+            then error("Expected two compatible Snyk Container SARIF reports") else . end
+            | [.[].runs[]] as $runs
+            | .[0]
+            | .runs = [($runs[0]
+              | .automationDetails = {id: $category}
+              | .tool.driver.rules = ([$runs[].tool.driver.rules[]] | unique_by(.id))
+              | .results = ([$runs[].results[] | del(.ruleIndex, .rule.index)] | unique_by(.ruleId)))]
+            | .runs[0] as $combined
+            | if all($combined.results[]; .ruleId as $id |
+                ($id | type == "string" and length > 0) and any($combined.tool.driver.rules[]; .id == $id))
+              then . else error("Combined SARIF has a finding without a matching rule") end
           ' snyk-final-amd64.sarif snyk-final-arm64.sarif > snyk-promoted.sarif
 
       - name: Upload promoted image Snyk SARIF

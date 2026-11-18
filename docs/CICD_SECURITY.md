@@ -27,8 +27,8 @@ The project employs **multi-layer security scanning** for defense-in-depth:
 ### Code & Supply Chain Security
 
 - **CodeQL** - GitHub's semantic analysis tool for security vulnerabilities
-- **Snyk scanning** - One scan of the PR image emits JSON for the gate and SARIF for run artifacts. Syft generates the SBOM from the same image.
-- **Snyk gate policy** - Only fixable critical/high findings block the pipeline; unfixable findings are listed in the job summary for triage
+- **Snyk scanning** - Snyk scans the built PR image by tag and emits JSON for the gate and SARIF for run artifacts. Syft generates the SBOM from the same image. On `main`, the security rebuild handles the container scan.
+- **Snyk gate policy** - PR and rebuild gates block high or critical findings with a published fix. The release gate blocks any high or critical finding.
 - **Nightly remediation gate** - The rebuild reuses the candidate's Snyk reports when there are no package updates. When Copa patches the candidate, Snyk rescans both architectures. Both final architecture reports must contain a valid vulnerabilities array and no scan error. Fixable high or critical findings block the rebuild, and Kind integration tests must pass before promotion.
 - **Build provenance** - SBOM generation and artifact attestation tracking in Release workflow
 - **GitHub Dependabot** - Automated dependency update suggestions (not automated in CI)
