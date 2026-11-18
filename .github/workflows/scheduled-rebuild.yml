@@ -350,25 +350,25 @@ jobs:
           done
           echo "Promoted tested image: $IMAGE_TO_TEST"
 
-      - name: Upload promoted image Snyk SARIF (amd64)
-        if: steps.promote.outcome == 'success' && hashFiles('snyk-final-amd64.sarif') != ''
-        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
-        continue-on-error: true
-        with:
-          sarif_file: snyk-final-amd64.sarif
-
-      - name: Set a separate category for the arm64 SARIF
-        if: steps.promote.outcome == 'success' && hashFiles('snyk-final-arm64.sarif') != ''
+      - name: Combine Snyk findings across architectures
+        if: hashFiles('snyk-final-amd64.sarif') != '' && hashFiles('snyk-final-arm64.sarif') != ''
         run: |
-          # Snyk emits the same category for both architectures.
-          jq '.runs[].automationDetails.id |= "arm64/" + .' snyk-final-arm64.sarif > snyk-arm64-upload.sarif
+          # The last part of each Snyk analysis ID is its scan timestamp.
+          jq -s '
+            .[0].runs = (
+              [.[].runs[]] | group_by(.automationDetails.id | sub("/[^/]+$"; ""))
+              | map(. as $runs | .[0]
+                | .tool.driver.rules = ([$runs[].tool.driver.rules[]?] | unique_by(.id))
+                | .results = ([$runs[].results[]?] | unique_by([.ruleId, .locations])))
+            ) | .[0]
+          ' snyk-final-amd64.sarif snyk-final-arm64.sarif > snyk-promoted.sarif
 
-      - name: Upload promoted image Snyk SARIF (arm64)
-        if: steps.promote.outcome == 'success' && hashFiles('snyk-arm64-upload.sarif') != ''
+      - name: Upload promoted image Snyk SARIF
+        if: steps.promote.outcome == 'success' && hashFiles('snyk-promoted.sarif') != ''
         uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
         continue-on-error: true
         with:
-          sarif_file: snyk-arm64-upload.sarif
+          sarif_file: snyk-promoted.sarif
 
       - name: Create issue if critical findings remain
         if: >-

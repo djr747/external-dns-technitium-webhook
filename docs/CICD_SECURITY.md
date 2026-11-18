@@ -33,7 +33,7 @@ The project employs **multi-layer security scanning** for defense-in-depth:
 - **Build provenance** - SBOM generation and artifact attestation tracking in Release workflow
 - **GitHub Dependabot** - Automated dependency update suggestions (not automated in CI)
 
-After a successful promotion on `main`, the security rebuild uploads the SARIF reports from the scans that supplied the vulnerability gate for both architectures. PR, rebuild candidate, and release scan reports are available in their run artifacts.
+After a successful promotion on `main`, the security rebuild uploads one combined SARIF report from the scans used by the vulnerability gate. Findings shared by both architectures appear once. The original scan reports are available in the workflow artifacts.
 
 ## Required Secrets & Configuration
 
