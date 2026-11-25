@@ -53,7 +53,7 @@ dev = [
     "ruff==0.17.4",
     "mypy==2.4.1",
     "pyright==1.1.414",
-    "tox==4.67.13",
+    "tox==4.67.15",
     "types-urllib3",
     "prometheus-client==0.26.0",
     # Pin the transitive HTTP primitive to a release that declares support
